@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:openai.github.io)",
+      "WebFetch(domain:pypi.org)",
+      "WebFetch(domain:platform.openai.com)",
+      "WebSearch",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:codesignal.com)",
+      "WebFetch(domain:developers.openai.com)",
+      "WebFetch(domain:gist.github.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:community.openai.com)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:docs.temporal.io)",
+      "Bash(test:*)",
+      "Bash(echo:*)",
+      "Bash(cd /c/Users/takano.ryoma/Downloads/sco/product-management/jan-lookup-poc && pip install openai-agents pydantic python-dotenv 2>&1)",
+      "Bash(cd:*)",
+      "Bash(tail:*)",
+      "Bash(curl:*)",
+      "Bash(curl -s http://localhost:8000/openapi.json 2>&1 | python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'OpenAPI: {d[\\\\\"info\\\\\"][\\\\\"title\\\\\"]} v{d[\\\\\"info\\\\\"][\\\\\"version\\\\\"]}'\\)\" 2>&1)",
+      "Bash(cd /c/Users/takano.ryoma/Downloads/sco/product-management/backend && sleep 3 && docker compose exec api python -m app.seed 2>&1)",
+      "Bash(cd /c/Users/takano.ryoma/Downloads/sco/product-management/backend && docker compose exec db mysql -u appuser -papppass product_management -e \"\nSET FOREIGN_KEY_CHECKS=0;\nTRUNCATE TABLE product_tags;\nTRUNCATE TABLE product_images;\nTRUNCATE TABLE product_variants;\nTRUNCATE TABLE products;\nTRUNCATE TABLE tags;\nTRUNCATE TABLE categories;\nTRUNCATE TABLE vendors;\nTRUNCATE TABLE branches;\nTRUNCATE TABLE stores;\nSET FOREIGN_KEY_CHECKS=1;\n\" 2>&1)",
+      "Bash(cd /c/Users/takano.ryoma/Downloads/sco/product-management/backend && sleep 2 && docker compose exec api python -m app.seed 2>&1)",
+      "Bash(python:*)"
+    ]
+  }
+}
