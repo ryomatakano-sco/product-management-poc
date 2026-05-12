@@ -1,0 +1,19 @@
+[project]
+name = "product-management-backend"
+version = "0.1.0"
+description = "Product management backend for Japanese dental clinics"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy[asyncio]>=2.0",
+    "aiomysql>=0.2",
+    "alembic>=1.13",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "python-dotenv>=1.0",
+    "openai-agents>=0.0.7",
+]
+
+[tool.setuptools]
+packages = ["app"]

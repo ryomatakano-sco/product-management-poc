@@ -1,0 +1,7 @@
+.env
+outputs/results/
+outputs/all_results.json
+outputs/summary.md
+__pycache__/
+*.pyc
+.venv/

@@ -1,0 +1,13 @@
+[project]
+name = "jan-lookup-poc"
+version = "0.1.0"
+description = "JAN code lookup feasibility measurement for dental product management"
+requires-python = ">=3.11"
+dependencies = [
+    "openai-agents>=0.0.7",
+    "pydantic>=2.0",
+    "python-dotenv>=1.0",
+]
+
+[project.scripts]
+jan-lookup = "src.main:cli"

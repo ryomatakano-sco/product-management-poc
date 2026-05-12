@@ -1,0 +1,7 @@
+# Product names for dental product lookup feasibility test
+# One product name per line. These are well-known Japanese dental products.
+
+CURAPROX　CSスマート				
+ruscello B-20				
+フッ素洗口液				
+
