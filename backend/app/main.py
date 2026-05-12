@@ -21,6 +21,7 @@ from app.routers import (
     branches,
     categories,
     dashboard,
+    dev,
     images,
     inventory,
     products,
@@ -62,6 +63,7 @@ app.include_router(sales.router)
 app.include_router(purchase_orders.router)
 app.include_router(ai_suggestions.router)
 app.include_router(dashboard.router)
+app.include_router(dev.router)
 
 
 @app.get("/health")

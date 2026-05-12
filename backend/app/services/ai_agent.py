@@ -18,7 +18,22 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "gpt-4.1"
+# Model selection — kept split so we can use a cheap model for the trivial
+# extraction step without compromising search quality.
+#
+# - SEARCH_MODEL drives the WebSearchTool agent. It needs decent reasoning and
+#   solid Japanese to follow the prompt; gpt-4.1-mini is the sweet spot
+#   (~5x cheaper than gpt-4.1 with no observable quality drop for this PoC).
+# - EXTRACTION_MODEL does plain text -> JSON at temperature 0. That's the
+#   easiest possible LLM task, so gpt-4.1-nano (cheapest of the 4.1 family)
+#   is enough.
+#
+# DEFAULT_MODEL is kept as an alias so the existing import in
+# routers/ai_suggestions.py (which records it as the session's `model_name`)
+# keeps working without changes.
+SEARCH_MODEL = "gpt-4.1-mini"
+EXTRACTION_MODEL = "gpt-4.1-nano"
+DEFAULT_MODEL = SEARCH_MODEL
 
 
 def _ai_enabled() -> bool:
@@ -136,20 +151,26 @@ def _create_extraction_agent(model: str):
 async def run_product_lookup(
     jan: str | None = None,
     title: str | None = None,
-    model: str = DEFAULT_MODEL,
+    model: str | None = None,
+    extraction_model: str | None = None,
 ) -> ExtractionResult:
     """Run the two-agent pipeline for product data extraction.
 
     Returns an ExtractionResult with candidates and raw_search_notes.
     Falls back to ``_mock_lookup`` when ``OPENAI_API_KEY`` is unset.
+
+    ``model`` overrides ``SEARCH_MODEL`` (the web-search agent), and
+    ``extraction_model`` overrides ``EXTRACTION_MODEL`` (the structured-output
+    agent). Both default to their module-level constants — see the comments
+    near the top of this file for the rationale.
     """
     if not _ai_enabled():
         logger.info("AI lookup running in MOCK mode (no OPENAI_API_KEY)")
         return _mock_lookup(jan=jan, title=title)
 
     from agents import Runner  # lazy
-    search_agent = _create_search_agent(model)
-    extraction_agent = _create_extraction_agent(model)
+    search_agent = _create_search_agent(model or SEARCH_MODEL)
+    extraction_agent = _create_extraction_agent(extraction_model or EXTRACTION_MODEL)
 
     parts = []
     if jan:

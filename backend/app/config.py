@@ -18,9 +18,28 @@ when it's empty (see ``app/services/ai_agent.py``).
 
 from __future__ import annotations
 
+from pathlib import Path
 from urllib.parse import quote_plus
 
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
+
+
+# Load .env files into os.environ at import time. We do this explicitly
+# (rather than relying on Pydantic's env_file alone) because several modules —
+# e.g. app/services/ai_agent.py and app/routers/dev.py — read os.environ
+# directly. Pydantic's env_file only populates the Settings instance.
+#
+# Search order, later files OVERRIDE earlier ones (so backend/.env wins when
+# both define the same key):
+#   1. <repo-root>/.env   — canonical file, also used by docker-compose
+#   2. backend/.env       — native-uvicorn-only overrides (e.g. DB_HOST=127.0.0.1)
+_BACKEND_DIR = Path(__file__).resolve().parent.parent  # .../backend
+_REPO_ROOT = _BACKEND_DIR.parent
+ENV_FILES = [_REPO_ROOT / ".env", _BACKEND_DIR / ".env"]
+for _f in ENV_FILES:
+    if _f.is_file():
+        load_dotenv(_f, override=True)
 
 
 class Settings(BaseSettings):
@@ -38,7 +57,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     mock_ai: str = ""  # "1" forces mock mode even when OPENAI_API_KEY is set
 
-    model_config = {"env_file": ".env", "extra": "ignore"}
+    model_config = {"env_file": [str(p) for p in ENV_FILES], "extra": "ignore"}
 
     @property
     def resolved_database_url(self) -> str:
