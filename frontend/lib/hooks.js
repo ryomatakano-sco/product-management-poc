@@ -54,6 +54,19 @@ function parseHash() {
   if (h === "/products/new") return { name: "create", query };
   const m = h.match(/^\/products\/(\d+)$/);
   if (m) return { name: "detail", id: m[1], query };
+  // Under-construction stub routes (paylight X brief §5).
+  // Sidebar links exist; pages are placeholders.
+  const stub = {
+    "/categories":      { navId: "categories", title: "カテゴリ",   breadcrumbs: ["ホーム", "カテゴリ"] },
+    "/inventory":       { navId: "inventory",  title: "在庫",       breadcrumbs: ["ホーム", "在庫"] },
+    "/purchase-orders": { navId: "po",         title: "発注書",     breadcrumbs: ["ホーム", "発注書"] },
+    "/sales":           { navId: "sales",      title: "販売記録",   breadcrumbs: ["ホーム", "販売記録"] },
+    "/vendors":         { navId: "vendors",    title: "仕入先",     breadcrumbs: ["ホーム", "仕入先"] },
+    "/branches":        { navId: "branches",   title: "院・店舗",   breadcrumbs: ["ホーム", "院・店舗"] },
+    "/settings":        { navId: "settings",   title: "設定",       breadcrumbs: ["ホーム", "設定"] },
+    "/support":         { navId: "support",    title: "サポート",   breadcrumbs: ["ホーム", "サポート"] },
+  };
+  if (stub[h]) return { name: "stub", stub: stub[h], query };
   return { name: "dashboard", query };
 }
 

@@ -25,33 +25,47 @@ function Dashboard() {
       .slice(0, 5);
   }, [productsQ.data]);
 
-  const headerRight = (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <span style={{
-        fontSize: 11, fontWeight: 600, color: PLX_MUTED,
-        background: PLX_GREEN_50, border: `1px solid ${PLX_GREEN_LIGHT}`,
-        padding: "6px 12px", borderRadius: 9999,
-        display: "inline-flex", alignItems: "center", gap: 6,
-      }}>
-        <span style={{ width: 6, height: 6, borderRadius: "50%", background: PLX_GREEN }} />
-        {summary ? `更新: ${new Date(summary.generated_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}` : "読み込み中…"}
-      </span>
-    </div>
-  );
-
   const alertCount = kpis.low_stock + kpis.expiring_soon;
 
+  // Brief §4.4: friendly greeting (おはようございます…) + today's date in JP,
+  // with a date-range pill in the top-right of the page (not the topbar).
+  const today = new Date();
+  const jpDate = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日（${"日月火水木金土"[today.getDay()]}）`;
+  const hour = today.getHours();
+  const greet = hour < 11 ? "おはようございます" : hour < 18 ? "こんにちは" : "こんばんは";
+
   return (
-    <AdminShell title="ダッシュボード" currentNav="dashboard" headerRight={headerRight}
-      breadcrumbs={["ホーム", "ダッシュボード"]}>
-      <SectionLabel>本日の概況</SectionLabel>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 14, marginBottom: 18, marginTop: 6 }}>
-        <h2 style={{ fontSize: 24, fontWeight: 700, margin: 0, letterSpacing: "-.01em" }}>
-          こんにちは、田中さん
-        </h2>
-        <span style={{ fontSize: 13, color: PLX_MUTED }}>
-          にしかわデンタル · {loading ? "読み込み中…" : alertCount > 0 ? `本日のアラート ${alertCount} 件` : "すべて良好です"}
-        </span>
+    <AdminShell currentNav="dashboard" breadcrumbs={["ホーム"]}>
+      {/* Page header — greeting + date-range pill */}
+      <div style={{
+        display: "flex", alignItems: "flex-end", justifyContent: "space-between",
+        gap: 16, marginBottom: 20,
+      }}>
+        <div>
+          <h1 style={{
+            margin: 0, fontSize: 28, fontWeight: 700,
+            color: T.PLX_INK_900, letterSpacing: "-0.01em",
+          }}>{greet}、山田さん 👋</h1>
+          <div style={{ marginTop: 6, fontSize: 14, color: T.PLX_INK_500 }}>
+            本日は {jpDate}。本院の商品管理サマリーをお届けします。
+          </div>
+        </div>
+        <div style={{
+          display: "inline-flex", alignItems: "center", gap: 8,
+          height: 36, padding: "0 14px",
+          background: "#fff", border: `1px solid ${T.PLX_LINE_200}`,
+          borderRadius: 9999, fontSize: 13, fontWeight: 600, color: T.PLX_INK_700,
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.PLX_INK_500}
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+          本日
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.PLX_INK_500}
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </div>
       </div>
 
       {/* AI Summary card */}
@@ -134,49 +148,67 @@ function renderInlineMarkdown(text) {
 function AiSummaryCard({ summary }) {
   const isOk = summary.ai_status === "ok";
   const paragraphs = summary.ai_summary.split(/\n{2,}/);
+  // Brief §4.4: AI summary card has a 3 px PLX_GREEN_600 left edge + green wash.
   return (
     <div style={{
-      background: "linear-gradient(110deg, #E6F7F2 0%, #F4FBF8 60%, #FFFFFF 100%)",
-      border: `1px solid ${PLX_GREEN_LIGHT}`,
-      borderRadius: 16, padding: "20px 24px", marginTop: 8, position: "relative",
+      position: "relative",
+      background: T.PLX_GREEN_050, border: `1px solid ${T.PLX_GREEN_100}`,
+      borderRadius: T.RADIUS_LG, padding: "20px 24px", marginTop: 8,
+      overflow: "hidden",
     }}>
+      <div style={{
+        position: "absolute", left: 0, top: 0, bottom: 0, width: 3,
+        background: T.PLX_GREEN_600,
+      }} />
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-        <div style={{
-          width: 34, height: 34, borderRadius: 10, background: "#fff",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          boxShadow: "0 4px 12px rgba(26,166,138,.15)",
-        }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={PLX_GREEN}
-            strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6z"/>
-            <circle cx="19" cy="18" r="1.5"/><circle cx="5" cy="18" r="1"/>
-          </svg>
-        </div>
-        <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>今日の在庫サマリー</h3>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.PLX_GREEN_600}
+          strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z"/>
+        </svg>
         <span style={{
-          fontSize: 10, fontWeight: 700, color: PLX_GREEN, background: "#fff",
-          padding: "3px 9px", borderRadius: 9999, letterSpacing: ".05em",
-          border: `1px solid ${PLX_GREEN_LIGHT}`,
-        }}>✨ AI</span>
+          fontSize: 12, fontWeight: 600, color: T.PLX_INK_500, letterSpacing: "0.02em",
+        }}>AIサマリー — 1日1回 朝6:00 更新</span>
         <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 11, color: PLX_MUTED }}>1 日 1 回 09:00 に自動更新</span>
+        <button style={{
+          background: "transparent", border: "none",
+          display: "inline-flex", alignItems: "center", gap: 6,
+          color: T.PLX_GREEN_700, fontSize: 12, fontWeight: 600,
+          cursor: "pointer", fontFamily: "inherit",
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.PLX_GREEN_700}
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="23 4 23 10 17 10"/>
+            <polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+          再生成
+        </button>
       </div>
       <div style={{
         display: "flex", flexDirection: "column", gap: 10,
-        fontSize: 13, lineHeight: 1.85, color: PLX_TEXT, maxWidth: 920,
+        fontSize: 14, lineHeight: 1.8, color: T.PLX_INK_700, maxWidth: 980,
       }}>
         {paragraphs.map((p, i) => (
-          <p key={i}>{renderInlineMarkdown(p)}</p>
+          <p key={i} style={{ margin: 0 }}>{renderInlineMarkdown(p)}</p>
         ))}
       </div>
-      {!isOk && (
-        <div style={{ display: "flex", alignItems: "center", marginTop: 14 }}>
+      <div style={{
+        marginTop: 14, display: "flex",
+        justifyContent: "space-between", alignItems: "center",
+      }}>
+        <span style={{ fontSize: 12, color: T.PLX_INK_500 }}>
+          最終更新: {new Date(summary.generated_at).toLocaleString("ja-JP", {
+            year: "numeric", month: "2-digit", day: "2-digit",
+            hour: "2-digit", minute: "2-digit",
+          })}
+        </span>
+        {!isOk && (
           <a href="#" onClick={(e) => { e.preventDefault(); navigate("/products?stock=low"); }}
-            style={{ fontSize: 13, fontWeight: 700, color: PLX_GREEN, textDecoration: "none" }}>
+            style={{ fontSize: 13, fontWeight: 700, color: T.PLX_GREEN_700, textDecoration: "none" }}>
             詳細を見る →
           </a>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

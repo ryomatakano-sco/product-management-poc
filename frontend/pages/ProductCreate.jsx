@@ -98,8 +98,9 @@ function ProductCreate() {
   );
 
   return (
-    <AdminShell title="新しい商品を追加" currentNav="products" headerRight={headerRight}
-      breadcrumbs={["商品", "新規追加"]}>
+    // Brief §4.3: breadcrumb 「ホーム / 商品一覧 / 新規登録」.
+    <AdminShell currentNav="products" headerRight={headerRight}
+      breadcrumbs={["ホーム", "商品一覧", "新規登録"]}>
       <button onClick={() => navigate("/products")} style={{
         background: "none", border: "none", color: PLX_MUTED,
         fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0, marginBottom: 14,

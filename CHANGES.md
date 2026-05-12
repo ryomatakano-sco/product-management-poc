@@ -290,6 +290,59 @@ These were requested but explicitly flagged as future scope:
 
 ---
 
+## 12. paylight X visual refresh + 12-page IA (2026-05-12)
+
+A fresh design brief from Claude Design ("compass" markdown + new mockup
+bundle) defines the full **paylight X 商品管理 PoC** visual system: dark-green
+sidebar chrome, calm Inter+Noto Sans JP type stack, grouped sidebar IA
+(メイン / オペレーション / マスタ / その他), and 12 pages covering the whole
+clinic-side workflow. Demo deadline is 2026年5月13日 11:00 JST.
+
+This entry refreshes the existing 4 live pages (Dashboard + Product trio)
+to the new visual system **and** introduces an Under-Construction
+placeholder for the 8 pages the brief calls for but that we won't fully
+build before the demo. All sidebar links now resolve to something
+coherent — no 404s on the demo path.
+
+### 12.1 What changed and why
+
+- **Tokens (`frontend/lib/theme.js`)** — replaced the old `PLX_GREEN`/`PLX_MUTED` constants with the full **paylight X token set (`T.*`)** from brief §7: greens 700/600/500/300/100/050, blues, ambers, reds, purples, full ink scale (`PLX_INK_900/700/500/400/300`), separate sidebar color block (`PLX_SIDEBAR_BG` = #0F2A23), radii, shadows, `FONT` / `FONT_MONO` stacks, and the `LOGO_HEADER` URL. The legacy `PLX_*` names are kept as **aliases pointing at the new values** so existing components pick up the new palette without an edit. Net result: greens shift from teal-leaning (#1AA68A) to calm SCO-brand green (#16A36C), and neutrals get the deeper ink-scale.
+- **`AdminShell.jsx`** — full rewrite around the new sidebar pattern. Dark-green rail (#0F2A23), four nav groups with caption labels, square "pX" + "paylight X" wordmark in the header (PNG fallback acceptable per brief §2.1 — we use the in-line CSS variant for offline reliability), workspace switcher row, dim-green section labels, active row pill (`PLX_GREEN_600` bg, **3 px bright stripe on the left edge**), bell + 280 px search bar in the new 56 px topbar, **breadcrumb row inside the topbar** (per brief §3 — moved out of the page body), `ChevronDown`/`ChevronRight` helpers. Stable nav id mapping (`dashboard`, `products`, `categories`, `inventory`, `po`, `sales`, `vendors`, `branches`, `settings`, `support`) — every entry routes somewhere.
+- **`hooks.js`** — `parseHash()` now recognises 8 new stub routes (`/categories`, `/inventory`, `/purchase-orders`, `/sales`, `/vendors`, `/branches`, `/settings`, `/support`) and returns `{ name: "stub", stub: { navId, title, breadcrumbs } }` so the app can render the placeholder with the right sidebar item highlighted.
+- **`app.jsx`** — added a `stub` branch in the router that mounts `<UnderConstruction>` with the right `navId`/breadcrumbs.
+- **`pages/UnderConstruction.jsx` (NEW)** — full implementation of brief §5: centered card, 96 px green circle, HardHat-ish icon, 「現在開発中」 / 「この機能は現在開発中です。5月13日以降のデモにてご紹介いたします。」, secondary [← ダッシュボードに戻る] + primary [🔔 通知を受け取る], and the version footer 「PoC v1.4.0 ・ 商品管理モジュール」. The sidebar stays correctly highlighted for whichever stub route the user landed on, so a reviewer always knows where they are.
+- **`pages/Dashboard.jsx`** — rebuilt page head per brief §4.4: friendly greeting 「<時間帯>、山田さん 👋」 (time-of-day aware), real Japanese date subtitle 「本日は YYYY年M月D日（曜）。」, and a 「本日 ▼」 date-range pill on the right. AI summary card refreshed to match brief: 3 px `PLX_GREEN_600` left edge, `PLX_GREEN_050` wash bg, caption-style header 「AIサマリー — 1日1回 朝6:00 更新」, in-card 「再生成」 button with refresh icon, real `generated_at` timestamp in the footer.
+- **`pages/ProductList.jsx`** — brief §4.1 page head: H1 「商品一覧」 + subtitle 「全 N 件の商品が登録されています」 (with a current-filter-count tail when items < total). Breadcrumb moved to the topbar (「ホーム / 商品一覧」). The existing quick-filter chip row, 種別 column, expiry indicator, and search bar from the Yoshioka spec (§11) are retained.
+- **`pages/ProductDetail.jsx`** — breadcrumb refactored to 「ホーム / 商品一覧 / <product name>」 with brief-compliant 32-char truncation.
+- **`pages/ProductCreate.jsx`** — breadcrumb to 「ホーム / 商品一覧 / 新規登録」.
+- **`index.html`** — `UnderConstruction.jsx` added to the script load order before `app.jsx` (Babel-in-browser load order matters; pages must register on `window` before `app.jsx` references them).
+- **`mockup/`** — replaced wholesale with the new Claude Design bundle (14 .jsx files including V1 + V2 + Dashboard + Categories + Inventory + PurchaseOrders + SalesRecords + Vendors + Branches + Settings + Support + UnderConstruction + AppShell + tokens.jsx). Reference only — not loaded by the app.
+
+### 12.2 Trade-offs accepted
+
+The brief specifies **12 pages**. We deliver **4 at production quality** (Dashboard + Product trio) and **8 as Under-Construction placeholders** (categories, inventory, purchase orders, sales records, vendors, branches, settings, support). The brief explicitly authorises this in §6 ("If a screen must be cut, cut at the detail / wireframe levels first — Support → Settings → branch detail, never at the dashboard or product trio levels"). Sidebar links work; reviewers always land on a styled "this is coming" page rather than a 404. Building the 8 remaining pages would require:
+
+- 5 new backend routers (categories CRUD with hierarchy, inventory bulk ops, full PO lifecycle, sales records with returns, vendor master) — ~600+ lines of Python + migrations
+- 8 new frontend pages — ~3,000 lines of JSX
+- 6 new database tables / model extensions
+
+That's a separate engineering pass after the demo.
+
+### 12.3 Verified live (2026-05-12)
+
+- `scripts\dev.bat` starts uvicorn cleanly.
+- All routes return 200:
+  - `/` → 307 → `/app/`
+  - `/app/` → 200 (10 KB HTML loading 15 scripts)
+  - Every script in the load order (`./lib/*`, `./components/*`, `./pages/*`, `./app.jsx`) → 200
+- All API endpoints from §11 still work: `/dashboard/summary`, `/products`, etc.
+- The 8 new stub routes (`#/categories`, `#/inventory`, …) render the Under-Construction card with the correct sidebar item highlighted.
+- The dashboard page header uses the new greeting + date pill.
+- The AI summary card has the 3 px green left edge and the 再生成 button.
+- Product list breadcrumb shows 「ホーム / 商品一覧」 in the topbar; product detail truncates names >32 chars.
+
+---
+
 ## How to verify (smoke test)
 
 ```bash

@@ -37,9 +37,11 @@ function ProductDetail({ productId }) {
 
   const sales = p.sales_summary;
 
+  // Brief §4.2: breadcrumb 「ホーム / 商品一覧 / <product>」, truncate after 32 chars.
+  const truncatedName = p.name.length > 32 ? p.name.slice(0, 31) + "…" : p.name;
   return (
-    <AdminShell title={p.name} currentNav="products" headerRight={headerRight}
-      breadcrumbs={["商品", p.category_name ?? "未分類", p.name]}>
+    <AdminShell currentNav="products" headerRight={headerRight}
+      breadcrumbs={["ホーム", "商品一覧", truncatedName]}>
       <button onClick={() => navigate("/products")} style={{
         background: "none", border: "none", color: PLX_MUTED,
         fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0, marginBottom: 14,

@@ -66,15 +66,27 @@ function ProductList({ initialQuery }) {
   const toggleQuick = (k) => setQuickFilters((s) => s.includes(k) ? s.filter(x => x !== k) : [...s, k]);
 
   return (
-    <AdminShell title="商品一覧" currentNav="products" headerRight={headerRight}>
-      <SectionLabel>商品マスタ</SectionLabel>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 14, marginBottom: 18, marginTop: 6 }}>
-        <h2 style={{ fontSize: 24, fontWeight: 700, margin: 0, letterSpacing: "-.01em" }}>
-          すべての商品
-        </h2>
-        <span style={{ fontSize: 13, color: PLX_MUTED }}>
-          {items.length} 件 / 全 {total} 件
-        </span>
+    <AdminShell currentNav="products" breadcrumbs={["ホーム", "商品一覧"]}>
+      {/* Brief §4.1: page header — H1 + subtitle, primary CTA right-aligned */}
+      <div style={{
+        display: "flex", alignItems: "flex-end", justifyContent: "space-between",
+        gap: 16, marginBottom: 16,
+      }}>
+        <div>
+          <h1 style={{
+            margin: 0, fontSize: 28, fontWeight: 700,
+            color: T.PLX_INK_900, letterSpacing: "-0.01em",
+          }}>商品一覧</h1>
+          <div style={{ marginTop: 6, fontSize: 14, color: T.PLX_INK_500 }}>
+            全 {total} 件の商品が登録されています
+            {items.length !== total && (
+              <span style={{ marginLeft: 8, color: T.PLX_GREEN_700, fontWeight: 600 }}>
+                · 現在 {items.length} 件を表示中
+              </span>
+            )}
+          </div>
+        </div>
+        <div>{headerRight}</div>
       </div>
 
       {/* Filter bar */}
