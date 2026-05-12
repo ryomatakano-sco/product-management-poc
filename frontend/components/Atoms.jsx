@@ -1,0 +1,110 @@
+// Shared visual atoms: SectionLabel, Pill, Select, SegmentedControl, FormRow, buttons.
+
+function SectionLabel({ children }) {
+  return (
+    <div style={{
+      display: "inline-flex", alignItems: "center", gap: 8,
+      fontSize: 12, fontWeight: 700, color: PLX_GREEN, letterSpacing: ".05em",
+    }}>
+      <span style={{ width: 7, height: 7, borderRadius: "50%", background: PLX_GREEN }} />
+      {children}
+    </div>
+  );
+}
+
+function Pill({ children, color, bg }) {
+  return (
+    <span style={{
+      fontSize: 11, fontWeight: 700, color, background: bg,
+      padding: "3px 10px", borderRadius: 9999, whiteSpace: "nowrap", display: "inline-block",
+    }}>{children}</span>
+  );
+}
+
+function StatusPill({ status }) {
+  if (status === "active") return <Pill color={PLX_GREEN} bg={PLX_GREEN_LIGHT}>公開中</Pill>;
+  if (status === "draft")  return <Pill color={PLX_MUTED} bg="#F3F4F6">下書き</Pill>;
+  return <Pill color={PLX_SUBTLE} bg="#F3F4F6">アーカイブ</Pill>;
+}
+
+function Select({ value, onChange, options, minWidth = 160 }) {
+  return (
+    <div style={{ position: "relative" }}>
+      <select value={value} onChange={(e) => onChange(e.target.value)} style={{
+        height: 38, padding: "0 32px 0 14px", borderRadius: 9,
+        border: `1px solid ${PLX_BORDER}`, fontSize: 13, background: "#fff",
+        cursor: "pointer", appearance: "none", WebkitAppearance: "none",
+        color: PLX_TEXT, minWidth,
+      }}>
+        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+      <svg style={{ position: "absolute", right: 12, top: 14, pointerEvents: "none" }}
+        width="10" height="10" viewBox="0 0 12 12" fill="none" stroke={PLX_MUTED}
+        strokeWidth="1.8" strokeLinecap="round"><path d="M2 4l4 4 4-4" /></svg>
+    </div>
+  );
+}
+
+function SegmentedControl({ value, onChange, options }) {
+  return (
+    <div style={{
+      display: "inline-flex", background: PLX_SURFACE, borderRadius: 9999,
+      padding: 3, border: `1px solid ${PLX_BORDER}`,
+    }}>
+      {options.map((o) => {
+        const on = value === o.value;
+        return (
+          <button key={o.value} onClick={() => onChange(o.value)} style={{
+            fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 9999,
+            border: "none",
+            background: on ? "#fff" : "transparent",
+            color: on ? PLX_GREEN : PLX_MUTED,
+            boxShadow: on ? "0 1px 3px rgba(0,0,0,.06)" : "none",
+            cursor: "pointer",
+          }}>{o.label}</button>
+        );
+      })}
+    </div>
+  );
+}
+
+function FormRow({ label, children, hint }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: PLX_TEXT, marginBottom: 6 }}>
+        {label}
+      </label>
+      {children}
+      {hint && <div style={{ fontSize: 11, color: PLX_MUTED, marginTop: 5 }}>{hint}</div>}
+    </div>
+  );
+}
+
+const formInput = {
+  width: "100%", height: 38, border: `1px solid ${PLX_BORDER}`, borderRadius: 9,
+  padding: "0 14px", fontSize: 13, outline: "none", background: "#fff",
+  boxSizing: "border-box", color: PLX_TEXT,
+};
+
+const btnPrimary = {
+  height: 38, padding: "0 20px", borderRadius: 9999,
+  background: PLX_GREEN, color: "#fff", border: "none",
+  fontWeight: 700, fontSize: 13, cursor: "pointer",
+};
+
+const btnSecondary = {
+  height: 38, padding: "0 18px", borderRadius: 9999,
+  background: "#fff", color: PLX_TEXT, border: `1px solid ${PLX_BORDER}`,
+  fontWeight: 700, fontSize: 13, cursor: "pointer",
+};
+
+const btnGhost = {
+  height: 38, padding: "0 14px", borderRadius: 9999,
+  background: "transparent", color: PLX_MUTED, border: "none",
+  fontWeight: 700, fontSize: 13, cursor: "pointer",
+};
+
+Object.assign(window, {
+  SectionLabel, Pill, StatusPill, Select, SegmentedControl,
+  FormRow, formInput, btnPrimary, btnSecondary, btnGhost,
+});

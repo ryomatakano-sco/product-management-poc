@@ -1,0 +1,48 @@
+# Root compose: brings up the FastAPI backend in one shot.
+# Connects to a MySQL instance running directly on the host machine
+# (configured via DB_* env vars in .env). The backend container also serves
+# the no-build frontend as static files at /app/.
+#
+# Open http://localhost:8000 to use the app.
+#
+# Run:
+#   cp .env.example .env       # fill in DB_* + (optional) OPENAI_API_KEY
+#   docker compose up -d
+#   docker compose exec api alembic upgrade head
+#   docker compose exec api python -m app.seed
+#
+# Note: this assumes MySQL 8 is reachable on the host. The api container
+# reaches the host via `host.docker.internal` (Docker Desktop on Windows/Mac
+# resolves this automatically; the extra_hosts entry below makes it work on
+# plain Linux too).
+
+services:
+  api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      # Database — pass DB_* vars through from .env.
+      # An explicit DATABASE_URL in .env overrides these (see backend/app/config.py).
+      DB_HOST: "${DB_HOST:-host.docker.internal}"
+      DB_PORT: "${DB_PORT:-3306}"
+      DB_USER: "${DB_USER:-root}"
+      DB_PASSWORD: "${DB_PASSWORD:-admin}"
+      DB_NAME: "${DB_NAME:-maindb}"
+      DATABASE_URL: "${DATABASE_URL:-}"
+
+      # AI Assist mode. Unset key + unset MOCK_AI = mock mode (free).
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      MOCK_AI: "${MOCK_AI:-}"
+
+      # Where the api should look for the frontend static files.
+      FRONTEND_DIR: /frontend
+
+    extra_hosts:
+      # Makes `host.docker.internal` resolvable inside the container on
+      # native-Linux Docker (Docker Desktop already provides this mapping).
+      - "host.docker.internal:host-gateway"
+
+    volumes:
+      - ./backend:/backend         # hot-reload backend code
+      - ./frontend:/frontend:ro    # serve frontend as static (read-only)

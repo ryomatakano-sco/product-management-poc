@@ -1,0 +1,125 @@
+/* paylight X — Design Tokens
+   Import this file to get brand colors, typography, spacing, radii, and shadows. */
+
+/* Brand font: Noto Sans JP (variable + subsetted weights) */
+@font-face {
+  font-family: "Noto Sans JP";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./fonts/NotoSansJP-VariableFont_wght.ttf") format("truetype-variations"),
+       url("./fonts/NotoSansJP-VariableFont_wght.ttf") format("truetype");
+}
+@import url('./fonts/noto-sans-jp.css');
+
+:root {
+  /* ---------- Brand ---------- */
+  --color-primary: #1AA68A;
+  --color-primary-dark: #0E8A72;
+  --color-primary-light: #E6F7F2;
+  --color-primary-50: #F4FBF8;
+
+  /* ---------- Accent (承認/対応のみ) ---------- */
+  --color-accent-blue: #2EA7E0;
+
+  /* ---------- Neutrals ---------- */
+  --color-text: #1F2937;
+  --color-text-muted: #6B7280;
+  --color-text-subtle: #9CA3AF;
+  --color-bg: #FFFFFF;
+  --color-surface: #F8FAF9;
+  --color-border: #E5E7EB;
+  --color-divider: #F0F0F0;
+
+  /* ---------- CTA ---------- */
+  --color-cta-text: #FFFFFF;
+
+  /* ---------- Typography ---------- */
+  --font-sans: "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+
+  --fs-display: 52px;
+  --fs-h1: 38px;
+  --fs-h2: 30px;
+  --fs-h3: 20px;
+  --fs-body: 16px;
+  --fs-caption: 12px;
+  --fs-numeric-hero: 120px;   /* 数値ハイライト (巨大) */
+  --fs-numeric-large: 72px;   /* カード内の数値 */
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+
+  --lh-tight: 1.3;
+  --lh-body: 1.75;
+
+  /* ---------- Spacing ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 80px;
+  --space-10: 120px;
+
+  /* ---------- Radius ---------- */
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-pill: 9999px;
+
+  /* ---------- Shadow ---------- */
+  --shadow-card: 0 4px 20px rgba(26, 166, 138, 0.08);
+  --shadow-cta: 0 6px 16px rgba(26, 166, 138, 0.25);
+  --shadow-float: 0 8px 28px rgba(17, 24, 39, 0.08);
+
+  /* ---------- Layout ---------- */
+  --container-max: 1120px;
+}
+
+/* ---------- Base ---------- */
+html, body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-text);
+  background: var(--color-bg);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 { margin: 0; line-height: var(--lh-tight); font-weight: var(--fw-bold); color: var(--color-text); }
+h1 { font-size: var(--fs-h1); }
+h2 { font-size: var(--fs-h2); }
+h3 { font-size: var(--fs-h3); font-weight: var(--fw-semibold); }
+p  { margin: 0; }
+
+.display { font-size: var(--fs-display); font-weight: var(--fw-bold); line-height: var(--lh-tight); letter-spacing: -0.01em; }
+.muted   { color: var(--color-text-muted); }
+.subtle  { color: var(--color-text-subtle); font-size: var(--fs-caption); }
+
+/* Numerical highlight: 数値訴求 pattern */
+.num-hero {
+  font-size: var(--fs-numeric-hero);
+  font-weight: var(--fw-black);
+  color: var(--color-primary);
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+.num-unit { font-size: 0.32em; font-weight: var(--fw-bold); color: var(--color-text); margin-left: 0.1em; }
+
+/* Section label (ドット付き) */
+.label-dot {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: var(--fw-bold); color: var(--color-primary);
+  letter-spacing: 0.02em;
+}
+.label-dot::before {
+  content: ""; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--color-primary);
+}
