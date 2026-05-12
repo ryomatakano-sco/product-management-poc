@@ -72,36 +72,81 @@ function ProductDetail({ productId }) {
         </div>
 
         <div style={{ minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
             <SectionLabel>{p.category_name ?? "未分類"}</SectionLabel>
+            {/* Yoshioka 2026-05-11: 種別 badge next to category */}
+            {p.item_type === "consumable"
+              ? <Pill color="#2563EB" bg={PLX_BLUE_LIGHT}>消耗品</Pill>
+              : <Pill color={PLX_GREEN} bg={PLX_GREEN_LIGHT}>物販</Pill>}
             <StatusPill status={p.status} />
           </div>
           <h2 style={{
-            fontSize: 28, fontWeight: 700, margin: 0,
+            fontSize: 26, fontWeight: 700, margin: 0,
             letterSpacing: "-.01em", lineHeight: 1.25,
           }}>{p.name}</h2>
           {p.name_kana && <div style={{ fontSize: 13, color: PLX_MUTED, marginTop: 4 }}>{p.name_kana}</div>}
           {p.description && (
-            <div style={{ fontSize: 13, color: PLX_TEXT, marginTop: 14, lineHeight: 1.7 }}>
+            <div style={{ fontSize: 13, color: PLX_TEXT, marginTop: 12, lineHeight: 1.7 }}>
               {p.description}
             </div>
           )}
-          <div style={{ display: "flex", gap: 6, marginTop: 14, flexWrap: "wrap" }}>
-            {(p.tags ?? []).map((t) => (
-              <span key={t} style={{
-                fontSize: 11, fontWeight: 600, color: PLX_GREEN,
-                background: PLX_GREEN_LIGHT, padding: "4px 10px", borderRadius: 9999,
-              }}>{t}</span>
-            ))}
-          </div>
+
+          {/* Basic info card (Yoshioka 2026-05-11): vendor / SKU / JAN + conditional rows */}
           <div style={{
-            display: "grid", gridTemplateColumns: "repeat(3,auto)",
-            gap: "6px 28px", marginTop: 18, fontSize: 12,
+            marginTop: 16, padding: "12px 16px", borderRadius: 10,
+            background: PLX_SURFACE, border: `1px solid ${PLX_BORDER}`,
+            display: "flex", flexDirection: "column", gap: 9,
           }}>
-            <KV k="仕入先" v={p.vendor_name ?? "—"} />
-            <KV k="主要 SKU" v={heroVariant?.sku ?? "—"} mono />
-            <KV k="JAN" v={heroVariant?.barcode ?? "—"} mono />
+            <BasicRow k="仕入先" v={p.vendor_name ?? "—"} />
+            <BasicRow k="主要 SKU" v={heroVariant?.sku ?? "—"} mono />
+            <BasicRow k="JAN" v={heroVariant?.barcode ?? "—"} mono />
+            {p.item_type === "consumable" && p.expiry_date && (
+              <BasicRow
+                k="使用期限"
+                v={formatJpDate(p.expiry_date)}
+                mono
+                right={(() => {
+                  const days = daysUntil(p.expiry_date);
+                  const tone = expiryTone(days);
+                  const color = tone === "red" ? PLX_RED : tone === "amber" ? PLX_WARN : PLX_MUTED;
+                  const bg    = tone === "red" ? PLX_RED_LIGHT : tone === "amber" ? PLX_WARN_BG : "#F3F4F6";
+                  return <Pill color={color} bg={bg}>{days < 0 ? "期限切れ" : `期限まで ${days} 日`}</Pill>;
+                })()}
+              />
+            )}
+            {p.item_type === "consumable" && p.lot_number && (
+              <BasicRow k="ロット番号" v={p.lot_number} mono />
+            )}
+            {p.unit && (
+              <BasicRow k="単位" v={p.unit} />
+            )}
+            {p.reorder_url && (
+              <BasicRow
+                k="発注先 URL"
+                v={<UrlLink url={p.reorder_url} />}
+                right={
+                  <a href={p.reorder_url} target="_blank" rel="noopener noreferrer" style={{
+                    height: 30, padding: "0 12px", borderRadius: 9999,
+                    background: PLX_GREEN, color: "#fff", border: "none",
+                    fontWeight: 700, fontSize: 11, cursor: "pointer",
+                    display: "inline-flex", alignItems: "center", gap: 5, textDecoration: "none",
+                    boxShadow: "0 4px 10px rgba(26,166,138,.22)",
+                  }}>🔗 再発注する</a>
+                }
+              />
+            )}
           </div>
+
+          {(p.tags ?? []).length > 0 && (
+            <div style={{ display: "flex", gap: 6, marginTop: 14, flexWrap: "wrap" }}>
+              {(p.tags ?? []).map((t) => (
+                <span key={t} style={{
+                  fontSize: 11, fontWeight: 600, color: PLX_GREEN,
+                  background: PLX_GREEN_LIGHT, padding: "4px 10px", borderRadius: 9999,
+                }}>{t}</span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div style={{
@@ -155,6 +200,8 @@ function ProductDetail({ productId }) {
           {[
             { id: "variants", label: "バリアント" },
             { id: "history",  label: "在庫履歴" },
+            // ロット履歴 tab only for consumables (Yoshioka 2026-05-11)
+            ...(p.item_type === "consumable" ? [{ id: "lots", label: "ロット履歴" }] : []),
             { id: "sales",    label: "売上推移" },
           ].map((t) => (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
@@ -170,6 +217,7 @@ function ProductDetail({ productId }) {
           <VariantsTable variants={variants} onAdjust={setAdjustVariant} />
         )}
         {tab === "history" && variants[0] && <InventoryHistory variantId={variants[0].id} />}
+        {tab === "lots" && p.item_type === "consumable" && <LotHistory product={p} />}
         {tab === "sales" && sales && (
           <SalesChart quantity={sales.last_90_days_quantity} revenue={sales.last_90_days_revenue} />
         )}
@@ -186,15 +234,30 @@ function ProductDetail({ productId }) {
   );
 }
 
-function KV({ k, v, mono }) {
+// BasicRow: 90px label + flex value + optional right-aligned button/pill.
+// Used in the basic info card on the hero (vendor / SKU / JAN / expiry / lot / reorder URL).
+function BasicRow({ k, v, mono, right }) {
   return (
-    <>
-      <span style={{ color: PLX_MUTED }}>{k}</span>
+    <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 12 }}>
+      <span style={{ color: PLX_MUTED, minWidth: 90 }}>{k}</span>
       <span style={{
-        fontWeight: 700,
+        fontWeight: 700, flex: 1, minWidth: 0,
         fontFamily: mono ? "ui-monospace,SFMono-Regular,monospace" : "inherit",
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
       }}>{v}</span>
-    </>
+      {right}
+    </div>
+  );
+}
+
+function UrlLink({ url }) {
+  const truncated = url.length > 42 ? url.slice(0, 40) + "…" : url;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" title={url} style={{
+      color: PLX_GREEN, textDecoration: "none",
+      fontFamily: "ui-monospace,SFMono-Regular,monospace",
+      fontSize: 11, fontWeight: 600,
+    }}>{truncated}</a>
   );
 }
 
@@ -486,6 +549,61 @@ function InventoryAdjustModal({ variant, onClose, onApplied }) {
             ...btnPrimary, minWidth: 120, opacity: submitting ? 0.5 : 1,
           }}>{submitting ? "送信中..." : "調整を確定"}</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Lot history tab (Yoshioka 2026-05-11). The PoC tracks one expiry per product;
+// real per-lot tracking is future scope. We synthesize a current/depleted/expired
+// row set from the product's current expiry + lot number so the tab isn't empty.
+function LotHistory({ product }) {
+  const rows = [
+    {
+      lot: product.lot_number || "—",
+      date: product.expiry_date,
+      qty: product.variants.reduce((s, v) => s + v.on_hand, 0),
+      status: "current",
+      arrived: null,
+    },
+    { lot: "LOT-2026A-012", date: "2026-04-02", qty: 0, status: "depleted", arrived: "2025-12-08" },
+    { lot: "LOT-2025D-091", date: "2025-12-20", qty: 0, status: "expired",  arrived: "2025-08-15" },
+  ];
+  return (
+    <div>
+      <div style={{
+        display: "grid", gridTemplateColumns: "160px 140px 100px 1fr 140px",
+        padding: "12px 22px", fontSize: 11, fontWeight: 700, color: PLX_MUTED,
+        background: PLX_GREEN_50, letterSpacing: ".03em",
+        borderBottom: `1px solid ${PLX_BORDER}`, gap: 10,
+      }}>
+        <span>ロット番号</span>
+        <span>使用期限</span>
+        <span style={{ textAlign: "right" }}>残数</span>
+        <span>ステータス</span>
+        <span>入荷日</span>
+      </div>
+      {rows.map((r, i) => (
+        <div key={i} style={{
+          display: "grid", gridTemplateColumns: "160px 140px 100px 1fr 140px",
+          padding: "12px 22px", alignItems: "center", fontSize: 12, gap: 10,
+          borderBottom: i < rows.length - 1 ? `1px solid ${PLX_BORDER}` : "none",
+        }}>
+          <span style={{ fontFamily: "ui-monospace,SFMono-Regular,monospace", fontSize: 11, fontWeight: 700 }}>{r.lot}</span>
+          <span style={{ fontFamily: "ui-monospace,SFMono-Regular,monospace" }}>{formatJpDate(r.date)}</span>
+          <span style={{ textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums", color: r.qty === 0 ? PLX_MUTED : PLX_TEXT }}>{r.qty}</span>
+          <span>
+            {r.status === "current"  && <Pill color={PLX_GREEN} bg={PLX_GREEN_LIGHT}>● 使用中</Pill>}
+            {r.status === "depleted" && <Pill color={PLX_MUTED} bg="#F3F4F6">使い切り</Pill>}
+            {r.status === "expired"  && <Pill color={PLX_RED} bg={PLX_RED_LIGHT}>期限切れ</Pill>}
+          </span>
+          <span style={{ fontSize: 11, color: PLX_MUTED, fontFamily: "ui-monospace,SFMono-Regular,monospace" }}>
+            {r.arrived ? formatJpDate(r.arrived) : "—"}
+          </span>
+        </div>
+      ))}
+      <div style={{ padding: "14px 22px", fontSize: 11, color: PLX_MUTED, lineHeight: 1.6 }}>
+        ※ ロット単位の在庫追跡は今後対応予定です（FUTURE SCOPE — see CHANGES.md）。現状は商品単位の使用期限のみ管理しています。
       </div>
     </div>
   );

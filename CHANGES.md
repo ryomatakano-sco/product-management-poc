@@ -181,6 +181,115 @@ User asked to stop using Docker for the inner dev loop — every code change cyc
 
 ---
 
+## 11. Post-D5 spec additions (Yoshioka 2026-05-11)
+
+Six features added to the May-7 baseline based on Yoshioka's requests during the
+2026-05-11 review. All implemented mock-first so the demo works offline; real
+data and live AI generation are layered on top where possible.
+
+### 11.1 `item_type` (物販品 / 消耗品) classification
+
+- **Where**:
+  - `backend/app/models/product.py` — new `ItemType` enum + column on `Product`
+  - `backend/app/schemas/product.py` — `item_type` on `ProductCreate`, `ProductUpdate`, `ProductListItem`, `ProductDetail`
+  - `backend/app/routers/products.py` — `?item_type=` filter on list; create/list pass-through
+  - `backend/alembic/versions/002_yoshioka_2026_05_11_additions.py` — `ADD COLUMN item_type ENUM('product','consumable') NOT NULL DEFAULT 'product'`, then drop server default
+  - `backend/app/seed.py` — 4 consumables added (paper cups, gloves, anesthetic, sterile bags)
+  - `frontend/pages/ProductList.jsx` — 種別 segmented filter, 種別 column with `KindPill` (green=物販 / blue=消耗品), quick-filter chips `在庫低下` / `期限間近` / `再発注済`
+  - `frontend/pages/ProductDetail.jsx` — 種別 badge in hero next to category
+  - `frontend/pages/ProductCreate.jsx` — `ItemKindToggle` at top of basic info, payload sends `item_type`
+- **Why**: Yoshioka explicitly requested separating retail products from treatment consumables ("そっちの方が良さそう" on May 11). Drives expiry tracking, dashboard filtering, and which fields are required at creation time.
+
+### 11.2 `expiry_date`, `lot_number`, `unit` for consumables
+
+- **Where**:
+  - `backend/app/models/product.py` — three new columns (`Date`, `String(100)`, `String(20)`)
+  - `backend/app/schemas/product.py` — `expiry_date: date | None`, `lot_number`, `unit` on all four schemas; `expiry_date` also on `ProductListItem` for the inline indicator
+  - `backend/app/routers/products.py` — new `?expiring_within_days=N` query param filters `expiry_date <= today + N days`
+  - `backend/app/seed.py` — consumables seeded with realistic expiries spanning the "critical" (12d), "warning" (22d, 45d), and "safe" (78d) buckets so the demo shows every state
+  - `frontend/pages/ProductList.jsx` — `ExpiryIndicator` shows `あと N 日` pill below the stock cell (red <30d / amber <60d / nothing >60d / "期限切れ" for past dates)
+  - `frontend/pages/ProductDetail.jsx` — `使用期限`, `ロット番号`, `単位` rows added to the new basic-info card on the hero, all conditional on the data being present
+  - `frontend/pages/ProductCreate.jsx` — conditional "消耗品の追加情報" section appears below basic info when `itemType === "consumable"`, with native `<input type="date">`, lot text input, and unit `<select>` (個 / 箱 / mL / g / 本)
+  - `frontend/lib/theme.js` — `daysUntil()`, `expiryTone()`, `formatJpDate()` helpers shared by list + detail
+- **Why**: Yoshioka requested expiry management for drugs, paper cups, anesthetic agents ("使用期限のあるものは管理したい" on May 11). Kept simple: one expiry per product, not per lot. Per-lot tracking is in section 11.3 (lot tab is mocked).
+
+### 11.3 `reorder_url` for one-click reorder
+
+- **Where**:
+  - `backend/app/models/product.py` — `reorder_url String(2000)`
+  - `backend/app/schemas/product.py` — `reorder_url` on `ProductCreate`/`ProductUpdate`/`ProductDetail`; `has_reorder_url: bool` on `ProductListItem` (a cheap signal for future quick-filter chips, avoids shipping full URLs in list view)
+  - `backend/app/routers/products.py` — `_build_list_item()` computes `has_reorder_url = bool(p.reorder_url)`
+  - `backend/app/seed.py` — product 1 and product 6 get reorder URLs
+  - `frontend/pages/ProductDetail.jsx` — `発注先 URL` row in basic-info card with truncated link + green `🔗 再発注する` button (opens new tab via `target="_blank" rel="noopener noreferrer"`)
+  - `frontend/pages/ProductCreate.jsx` — `発注先 URL` field with inline `🔗 開く` button that validates and opens
+- **Why**: Yoshioka asked for a one-click jump to the supplier site so receptionists/hygienists can reorder without leaving the app. May-11 spec.
+
+### 11.4 Barcode-first AI Assist UX
+
+- **Where**:
+  - `frontend/pages/ProductCreate.jsx` — `AiAssistModal` rewritten:
+    - New `mode` state (`jan` | `name`), defaulting to `jan` per Yoshioka's "そっちの方が良さそう"
+    - Centered segmented control `ジャンルコード / 商品名` at the top of the input phase
+    - Single large 54px-tall input (numeric `inputMode` in JAN mode), with monospace font and tighter letter-spacing for code legibility
+    - Disabled `📷 カメラで読み取る` button overlaid in the JAN field with a 準備中 badge — visually present, no scanner code (FUTURE SCOPE)
+    - Helper text under the input: "ジャンルコードでの検索の方が精度が高いです"
+    - Primary search button moved into the body (full-width green CTA) rather than the modal footer
+  - **No backend changes** — `_mock_lookup()` already returns sensible data when called with a JAN code; the real OpenAI path is fine too.
+- **Why**: Yoshioka loved the barcode/JAN-first approach during the May-11 demo. Defaulting to JAN-mode + a giant single input matches the muscle memory of physical scanners. Camera scan is intentionally just visual — real device-camera access is future scope.
+
+### 11.5 Dashboard page
+
+- **Where**:
+  - `backend/app/routers/dashboard.py` — new `GET /dashboard/summary` endpoint returning real KPIs computed from the DB:
+    - `total_products`: count of active products
+    - `low_stock`: distinct active products with at least one variant where `available <= 10`
+    - `expiring_soon`: count of consumables with `expiry_date BETWEEN today AND today+30d`
+    - `monthly_sales_jpy`: hard-coded mock (PoC; sales aggregation is future scope)
+    - `ai_summary`: deterministic Japanese paragraphs stitched from the KPIs ("本日、在庫が補充ポイントを下回る商品が **N 件** あります…"). Real OpenAI generation is FUTURE SCOPE.
+    - `ai_status`: `"ok"` if no alerts, `"alert"` otherwise (drives empty-vs-ready UI variant)
+    - `generated_at`: ISO timestamp so the header pill can show update time
+  - `backend/app/main.py` — `app.include_router(dashboard.router)`
+  - `frontend/lib/api.js` — `getDashboardSummary()` helper
+  - `frontend/pages/Dashboard.jsx` — full page: AI summary card with `**bold**` → `<strong>` markdown helper, 4 KPI tiles (登録商品数 / 在庫低下 / 期限切れ間近 / 今月の販売), 要対応の商品 table (top-5 lowest-available, real data via `api.listProducts`), 最近の活動 (mock — TODO post-demo), category bars (mock — TODO post-demo). Skeleton loading state per Yoshioka's mockup.
+- **Why**: Yoshioka asked for a top-level summary that surfaces the day's actions on May 11. AI generation is mocked because (a) cost control, (b) deterministic demo. KPI counts are real so seeded data flows through.
+
+### 11.6 Dashboard navigation polish
+
+- **Where**:
+  - `frontend/lib/hooks.js` — `parseHash()` now defaults to `dashboard` instead of `list`, accepts `?query=` strings, returns `{ name, id?, query }`. New `#/dashboard` route.
+  - `frontend/app.jsx` — added `Dashboard` case and passes `route.query` to `ProductList` as `initialQuery`.
+  - `frontend/pages/ProductList.jsx` — `initialQuery.stock === "low"` and `initialQuery.expiry === "soon"` preselect the matching quick-filter chips on mount. KPI tiles deep-link to `#/products?stock=low` / `#/products?expiry=soon` so the click-through from the dashboard activates the filter automatically.
+  - `frontend/components/AdminShell.jsx` — dashboard nav item gets `to: "/dashboard"` so the sidebar link works; active-row highlight works automatically via the existing `currentNav` prop.
+  - `frontend/index.html` — added `<script>` tag for `Dashboard.jsx` in dependency order.
+- **Why**: Make the dashboard the default landing page, and make every KPI on it actionable in one click.
+
+### Verified live (2026-05-12)
+
+- `scripts\reset-db.bat` drops + recreates `product_management_dev`, applies both migrations (001 + 002), seeds 9 products (5 retail + 4 consumables).
+- `scripts\dev.bat` starts uvicorn cleanly. All endpoints return 200:
+  - `GET /` → 307 → `/app/`
+  - `GET /app/` and every `/app/lib/*.js`, `/app/pages/*.jsx`, `/app/app.jsx` → 200
+  - `GET /dashboard/summary` → `{"ai_status":"alert","kpis":{"total_products":8,"low_stock":2,"expiring_soon":2,...}}`
+  - `GET /products?item_type=consumable&expiring_within_days=30` → returns the 2 expected consumables (paper cups + sterile bags) with all new fields populated
+  - `GET /products/6` → consumable detail includes `item_type`, `expiry_date`, `lot_number`, `unit`, `reorder_url`
+  - `POST /products` with `item_type=consumable + expiry_date + lot_number + unit + reorder_url` succeeds and returns the created product (id=10) with all fields round-tripped correctly
+
+### Out of scope (intentionally not implemented)
+
+These were requested but explicitly flagged as future scope:
+
+- Real AI summary generation (the canned text is good enough for demo)
+- Per-lot expiry tracking with a separate `lots` table (only one expiry per product right now; the ロット履歴 tab is mocked from the current expiry)
+- Camera/QR barcode scanning (the 📷 button is visual only)
+- "再発注済" quick-filter (needs a `reorder_requested_at` column — the chip is wired, the filter is a no-op + console.log)
+- Real "最近の活動" (mocked — needs to read from `inventory_adjustments` + a broader audit log)
+- Real category bars (mocked — needs `/categories` aggregate with variant rollup)
+- Patient-based product recommendations
+- Market data ("全国で何位")
+- Category master with clinic-editable taxonomy
+
+---
+
 ## How to verify (smoke test)
 
 ```bash

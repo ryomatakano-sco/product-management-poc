@@ -27,19 +27,34 @@ function useFetch(fn, deps) {
   return { ...state, refetch };
 }
 
-// useHashRoute() — parses window.location.hash into { name, params } and re-renders on change.
+// useHashRoute() — parses window.location.hash into { name, params, query } and re-renders on change.
 // Routes:
-//   ""              → { name: "list" }
-//   "#/products"    → { name: "list" }
-//   "#/products/new"→ { name: "create" }
-//   "#/products/123"→ { name: "detail", id: "123" }
+//   ""               → { name: "dashboard" }  (default landing per Yoshioka 2026-05-11)
+//   "#/dashboard"    → { name: "dashboard" }
+//   "#/products"     → { name: "list" }
+//   "#/products?stock=low"  → { name: "list", query: { stock: "low" } }
+//   "#/products/new" → { name: "create" }
+//   "#/products/123" → { name: "detail", id: "123" }
 function parseHash() {
-  const h = window.location.hash.replace(/^#/, "");
-  if (!h || h === "/" || h === "/products") return { name: "list" };
-  if (h === "/products/new") return { name: "create" };
+  let h = window.location.hash.replace(/^#/, "");
+  // Split off query string (after ?).
+  const qIdx = h.indexOf("?");
+  const query = {};
+  if (qIdx >= 0) {
+    const qs = h.slice(qIdx + 1);
+    h = h.slice(0, qIdx);
+    for (const pair of qs.split("&")) {
+      if (!pair) continue;
+      const [k, v = ""] = pair.split("=");
+      query[decodeURIComponent(k)] = decodeURIComponent(v);
+    }
+  }
+  if (!h || h === "/" || h === "/dashboard") return { name: "dashboard", query };
+  if (h === "/products") return { name: "list", query };
+  if (h === "/products/new") return { name: "create", query };
   const m = h.match(/^\/products\/(\d+)$/);
-  if (m) return { name: "detail", id: m[1] };
-  return { name: "list" };
+  if (m) return { name: "detail", id: m[1], query };
+  return { name: "dashboard", query };
 }
 
 function useHashRoute() {

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import enum
+from datetime import date
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    Date,
     DateTime,
     Enum,
     ForeignKey,
@@ -23,6 +25,17 @@ class ProductStatus(str, enum.Enum):
     active = "active"
     draft = "draft"
     archived = "archived"
+
+
+class ItemType(str, enum.Enum):
+    """Yoshioka (2026-05-11): retail products vs treatment consumables.
+
+    Consumables (paper cups, anesthetic agents, etc.) get expiry tracking
+    on the product list and dashboard; retail products don't.
+    """
+
+    product = "product"      # 物販品
+    consumable = "consumable"  # 消耗品
 
 
 class WeightUnit(str, enum.Enum):
@@ -75,6 +88,32 @@ class Product(Base, TimestampMixin):
     status: Mapped[ProductStatus] = mapped_column(
         Enum(ProductStatus), default=ProductStatus.active, nullable=False
     )
+
+    # Yoshioka spec additions (2026-05-11). See CHANGES.md section 11.
+    # - item_type: product/consumable classification. Drives list filter,
+    #   detail badge, and which fields show in the create form.
+    # - expiry_date / lot_number / unit: only meaningful for consumables, but
+    #   not enforced at the schema level so retail items can also use unit if
+    #   they want to.
+    # - reorder_url: one-click supplier reorder link.
+    item_type: Mapped[ItemType] = mapped_column(
+        Enum(ItemType), default=ItemType.product, nullable=False,
+        comment="物販品 (product) or 消耗品 (consumable)",
+    )
+    expiry_date: Mapped[date | None] = mapped_column(
+        Date, nullable=True,
+        comment="Expiry date for consumables (Yoshioka 2026-05-11)",
+    )
+    lot_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    unit: Mapped[str | None] = mapped_column(
+        String(20), nullable=True,
+        comment="Counting unit: 個, 箱, mL, g, 本, etc.",
+    )
+    reorder_url: Mapped[str | None] = mapped_column(
+        String(2000), nullable=True,
+        comment="Supplier URL for one-click reordering (Yoshioka 2026-05-11)",
+    )
+
     ai_session_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("ai_suggestion_sessions.id"), nullable=True
     )

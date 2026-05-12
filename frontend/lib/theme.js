@@ -25,9 +25,42 @@ function formatYen(v) {
   return n.toLocaleString("ja-JP");
 }
 
+// Yoshioka 2026-05-11 — consumable expiry helpers
+const PLX_RED = "#DC2626";
+const PLX_RED_LIGHT = "#FEE2E2";
+const PLX_BLUE_LIGHT = "#DBEAFE";
+
+// Days from today until `expiryDateStr` (YYYY-MM-DD). Returns null if no date.
+function daysUntil(expiryDateStr) {
+  if (!expiryDateStr) return null;
+  // Compare midnight-to-midnight so timezone wobble doesn't shift a day.
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(expiryDateStr);
+  target.setHours(0, 0, 0, 0);
+  return Math.round((target - today) / 86400000);
+}
+
+// Returns one of "red" | "amber" | "ok" | null based on days-to-expiry.
+function expiryTone(days) {
+  if (days == null) return null;
+  if (days <= 30) return "red";
+  if (days <= 60) return "amber";
+  return "ok";
+}
+
+// YYYY-MM-DD -> YYYY年MM月DD日
+function formatJpDate(dateStr) {
+  if (!dateStr) return "—";
+  // Accept either "YYYY-MM-DD" (ISO) or "YYYY/MM/DD"
+  const parts = dateStr.split(/[-\/]/);
+  if (parts.length !== 3) return dateStr;
+  return `${parts[0]}年${parts[1]}月${parts[2]}日`;
+}
+
 Object.assign(window, {
   PLX_GREEN, PLX_GREEN_DARK, PLX_GREEN_LIGHT, PLX_GREEN_50,
-  PLX_BLUE, PLX_TEXT, PLX_MUTED, PLX_SUBTLE, PLX_BORDER, PLX_SURFACE,
-  PLX_WARN, PLX_WARN_BG,
-  available, formatYen,
+  PLX_BLUE, PLX_BLUE_LIGHT, PLX_TEXT, PLX_MUTED, PLX_SUBTLE, PLX_BORDER, PLX_SURFACE,
+  PLX_WARN, PLX_WARN_BG, PLX_RED, PLX_RED_LIGHT,
+  available, formatYen, daysUntil, expiryTone, formatJpDate,
 });
