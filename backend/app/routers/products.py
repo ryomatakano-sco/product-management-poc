@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Query
@@ -11,7 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from app.deps import DB, StoreId
 from app.models.category import Category
-from app.models.product import Product, ProductImage, ProductStatus, ProductVariant
+from app.models.product import ItemType, Product, ProductImage, ProductStatus, ProductVariant
 from app.models.sale import SalesRecord
 from app.models.tag import ProductTag, Tag
 from app.models.vendor import Vendor
@@ -66,6 +66,10 @@ def _build_list_item(p: Product) -> ProductListItem:
         thumbnail_url=thumbnail,
         status=p.status,
         default_amount_at_payment=p.default_amount_at_payment,
+        # Yoshioka 2026-05-11 additions
+        item_type=p.item_type,
+        expiry_date=p.expiry_date,
+        has_reorder_url=bool(p.reorder_url),
     )
 
 
@@ -80,6 +84,12 @@ async def list_products(
     vendor_id: int | None = Query(None),
     tag: list[str] | None = Query(None),
     status: ProductStatus | None = Query(None),
+    item_type: ItemType | None = Query(None, description="Filter by 物販品 / 消耗品"),
+    expiring_within_days: int | None = Query(
+        None,
+        ge=0,
+        description="Only return products with expiry_date within N days (consumables only)",
+    ),
 ):
     stmt = (
         select(Product)
@@ -104,6 +114,11 @@ async def list_products(
         stmt = stmt.where(Product.status == status)
     if tag:
         stmt = stmt.where(Product.tags.any(Tag.name.in_(tag)))
+    if item_type is not None:
+        stmt = stmt.where(Product.item_type == item_type)
+    if expiring_within_days is not None:
+        cutoff = date.today() + timedelta(days=expiring_within_days)
+        stmt = stmt.where(Product.expiry_date.is_not(None), Product.expiry_date <= cutoff)
 
     # Exclude archived by default
     if status is None:
@@ -205,6 +220,12 @@ async def get_product(product_id: int, db: DB, store_id: StoreId):
         is_pinned=product.is_pinned,
         default_insurance_point_at_payment=product.default_insurance_point_at_payment,
         status=product.status,
+        # Yoshioka 2026-05-11 additions
+        item_type=product.item_type,
+        expiry_date=product.expiry_date,
+        lot_number=product.lot_number,
+        unit=product.unit,
+        reorder_url=product.reorder_url,
         ai_session_id=product.ai_session_id,
         variants=[VariantRead.model_validate(v) for v in product.variants],
         images=[ImageRead.model_validate(i) for i in images_sorted],
@@ -230,6 +251,12 @@ async def create_product(body: ProductCreate, db: DB, store_id: StoreId):
         is_pinned=body.is_pinned,
         default_insurance_point_at_payment=body.default_insurance_point_at_payment,
         status=body.status,
+        # Yoshioka 2026-05-11 additions
+        item_type=body.item_type,
+        expiry_date=body.expiry_date,
+        lot_number=body.lot_number,
+        unit=body.unit,
+        reorder_url=body.reorder_url,
         ai_session_id=body.ai_session_id,
     )
 

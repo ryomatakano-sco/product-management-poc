@@ -394,4 +394,4 @@ const btnGhost = {
   fontFamily:"inherit",cursor:"pointer",
 };
 
-Object.assign(window, { ProductDetail, FormRow, formInput, btnPrimary, btnSecondary, btnGhost });
+Object.assign(window, { ProductDetail, FormRow, formInput, btnPrimary, btnSecondary, btnGhost, StatCard, InventoryHistory, SalesChart, InventoryAdjustModal, KV });

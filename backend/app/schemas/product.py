@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, field_serializer
 
-from app.models.product import ProductStatus, WeightUnit
+from app.models.product import ItemType, ProductStatus, WeightUnit
 
 
 # --- Variant schemas ---
@@ -127,6 +127,12 @@ class ProductCreate(BaseModel):
     is_pinned: bool = False
     default_insurance_point_at_payment: Decimal | None = None
     status: ProductStatus = ProductStatus.active
+    # Yoshioka 2026-05-11 additions
+    item_type: ItemType = ItemType.product
+    expiry_date: date | None = None
+    lot_number: str | None = None
+    unit: str | None = None
+    reorder_url: str | None = None
     ai_session_id: int | None = None
     variants: list[VariantCreate] = []
     images: list[ImageCreate] = []
@@ -145,6 +151,11 @@ class ProductUpdate(BaseModel):
     is_pinned: bool | None = None
     default_insurance_point_at_payment: Decimal | None = None
     status: ProductStatus | None = None
+    item_type: ItemType | None = None
+    expiry_date: date | None = None
+    lot_number: str | None = None
+    unit: str | None = None
+    reorder_url: str | None = None
 
 
 class ProductListItem(BaseModel):
@@ -169,6 +180,11 @@ class ProductListItem(BaseModel):
     thumbnail_url: str | None = None
     status: ProductStatus
     default_amount_at_payment: Decimal | None
+
+    # Yoshioka 2026-05-11 additions
+    item_type: ItemType = ItemType.product
+    expiry_date: date | None = None
+    has_reorder_url: bool = False     # cheap signal for the quick-filter chip
 
     @field_serializer("default_amount_at_payment", "default_price")
     @classmethod
@@ -195,6 +211,12 @@ class ProductDetail(BaseModel):
     is_pinned: bool
     default_insurance_point_at_payment: Decimal | None
     status: ProductStatus
+    # Yoshioka 2026-05-11 additions
+    item_type: ItemType = ItemType.product
+    expiry_date: date | None = None
+    lot_number: str | None = None
+    unit: str | None = None
+    reorder_url: str | None = None
     ai_session_id: int | None
     variants: list[VariantRead] = []
     images: list[ImageRead] = []

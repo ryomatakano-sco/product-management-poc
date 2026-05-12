@@ -17,7 +17,7 @@ function AdminShell({ children, title, breadcrumbs, headerRight, currentNav = "p
 
 function Sidebar({ current }) {
   const items = [
-    { id: "dashboard",  label: "ダッシュボード", icon: "dashboard" },
+    { id: "dashboard",  label: "ダッシュボード", icon: "dashboard", to: "/dashboard" },
     { id: "products",   label: "商品",           icon: "box", to: "/products" },
     { id: "categories", label: "カテゴリ",       icon: "folder" },
     { id: "inventory",  label: "在庫",           icon: "layers" },

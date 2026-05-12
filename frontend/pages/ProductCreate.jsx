@@ -16,6 +16,13 @@ function ProductCreate() {
   const [description, setDescription] = React.useState("");
   const [aiOpen, setAiOpen]     = React.useState(false);
   const [aiSessionId, setAiSessionId] = React.useState(null);
+
+  // Yoshioka 2026-05-11 additions
+  const [itemType, setItemType] = React.useState("product"); // product | consumable
+  const [reorderUrl, setReorderUrl] = React.useState("");
+  const [expiryDate, setExpiryDate] = React.useState("");    // YYYY-MM-DD
+  const [lotNumber, setLotNumber] = React.useState("");
+  const [unit, setUnit] = React.useState("個");
   const [variant, setVariant]   = React.useState({
     sku: "", barcode: "", price: "", cost: "", stock: "",
     opt1k: "", opt1v: "", isDefault: true,
@@ -34,6 +41,12 @@ function ProductCreate() {
         description: description || null,
         status: newStatus,
         ai_session_id: aiSessionId,
+        // Yoshioka 2026-05-11 additions
+        item_type: itemType,
+        reorder_url: reorderUrl || null,
+        expiry_date: itemType === "consumable" && expiryDate ? expiryDate : null,
+        lot_number:  itemType === "consumable" ? (lotNumber || null) : null,
+        unit:        itemType === "consumable" ? (unit || null) : null,
         variants: [{
           sku: variant.sku || null,
           barcode: variant.barcode || null,
@@ -128,6 +141,14 @@ function ProductCreate() {
 
           {/* Basic info */}
           <FormSection title="基本情報" subtitle="商品の基本となる情報を入力します">
+            {/* Yoshioka 2026-05-11: 品目種別 toggle at the very top */}
+            <FormRow label="品目種別">
+              <ItemKindToggle value={itemType} onChange={setItemType} />
+              <div style={{ fontSize: 11, color: PLX_MUTED, marginTop: 6 }}>
+                消耗品は使用期限管理の対象になります
+              </div>
+            </FormRow>
+
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
               <FormRow label="商品名（漢字）">
                 <input value={name} onChange={(e) => setName(e.target.value)}
@@ -152,6 +173,41 @@ function ProductCreate() {
                 ]} />
               </FormRow>
             </div>
+
+            {/* Reorder URL — always visible (Yoshioka 2026-05-11) */}
+            <FormRow label="発注先 URL">
+              <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ position: "relative", flex: 1 }}>
+                  <span style={{ position: "absolute", left: 14, top: 11, color: PLX_MUTED }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      strokeWidth="1.8" strokeLinecap="round">
+                      <path d="M10 13a5 5 0 0 0 7.5.7l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7"/>
+                      <path d="M14 11a5 5 0 0 0-7.5-.7l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7"/>
+                    </svg>
+                  </span>
+                  <input value={reorderUrl} onChange={(e) => setReorderUrl(e.target.value)}
+                    placeholder="https://example.com/product/..." style={{
+                      ...formInput, paddingLeft: 38,
+                      fontFamily: "ui-monospace,SFMono-Regular,monospace", fontSize: 12,
+                    }} />
+                </div>
+                <a href={reorderUrl || "#"} target="_blank" rel="noopener noreferrer"
+                  onClick={(e) => { if (!reorderUrl) e.preventDefault(); }} style={{
+                    height: 38, padding: "0 14px", borderRadius: 9,
+                    border: `1px solid ${reorderUrl ? PLX_GREEN : PLX_BORDER}`,
+                    background: reorderUrl ? "#fff" : "#F9FAFB",
+                    color: reorderUrl ? PLX_GREEN : PLX_SUBTLE,
+                    fontWeight: 700, fontSize: 12,
+                    cursor: reorderUrl ? "pointer" : "not-allowed",
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    textDecoration: "none", whiteSpace: "nowrap",
+                  }}>🔗 開く</a>
+              </div>
+              <div style={{ fontSize: 11, color: PLX_MUTED, marginTop: 5 }}>
+                クリックでこの URL を開いて再発注できます
+              </div>
+            </FormRow>
+
             <FormRow label="商品説明">
               <textarea value={description} onChange={(e) => setDescription(e.target.value)}
                 placeholder="商品の特長・用途・サイズなどを記入します。" style={{
@@ -205,6 +261,36 @@ function ProductCreate() {
               </div>
             </FormRow>
           </FormSection>
+
+          {/* Consumable-only section (Yoshioka 2026-05-11) */}
+          {itemType === "consumable" && (
+            <FormSection title="消耗品の追加情報" subtitle="使用期限・ロット・単位を管理します">
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+                <FormRow label="使用期限">
+                  <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)}
+                    style={{ ...formInput, fontFamily: "ui-monospace,SFMono-Regular,monospace" }} />
+                  <div style={{ fontSize: 11, color: PLX_MUTED, marginTop: 5 }}>
+                    空欄の場合は期限管理されません
+                  </div>
+                </FormRow>
+                <FormRow label="ロット番号（任意）">
+                  <input value={lotNumber} onChange={(e) => setLotNumber(e.target.value)}
+                    placeholder="LOT-2026A-001" style={{
+                      ...formInput, fontFamily: "ui-monospace,SFMono-Regular,monospace",
+                    }} />
+                </FormRow>
+                <FormRow label="単位">
+                  <Select value={unit} onChange={setUnit} options={[
+                    { value: "個",  label: "個" },
+                    { value: "箱",  label: "箱" },
+                    { value: "mL", label: "mL" },
+                    { value: "g",  label: "g" },
+                    { value: "本",  label: "本" },
+                  ]} />
+                </FormRow>
+              </div>
+            </FormSection>
+          )}
 
           {/* Variant */}
           <FormSection title="バリアント" subtitle="SKU・価格・初期在庫">
@@ -377,6 +463,44 @@ function RadioRow({ checked, onClick, label, sub }) {
   );
 }
 
+// ItemKindToggle: large pill-style radio for 物販品 / 消耗品.
+// Yoshioka 2026-05-11 — top of the create form.
+function ItemKindToggle({ value, onChange }) {
+  const opts = [
+    { value: "product",    label: "物販品", sub: "販売する商品（歯ブラシ等）",     color: PLX_GREEN, bg: PLX_GREEN_LIGHT },
+    { value: "consumable", label: "消耗品", sub: "治療で使う材料（紙コップ等）", color: "#2563EB", bg: PLX_BLUE_LIGHT },
+  ];
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, maxWidth: 560 }}>
+      {opts.map((o) => {
+        const on = value === o.value;
+        return (
+          <button key={o.value} onClick={() => onChange(o.value)} style={{
+            textAlign: "left", padding: "12px 16px", borderRadius: 10,
+            border: `1.5px solid ${on ? o.color : PLX_BORDER}`,
+            background: on ? o.bg : "#fff",
+            cursor: "pointer",
+            display: "flex", alignItems: "center", gap: 11,
+          }}>
+            <span style={{
+              width: 18, height: 18, borderRadius: "50%",
+              border: `2px solid ${on ? o.color : PLX_BORDER}`,
+              background: "#fff", display: "flex",
+              alignItems: "center", justifyContent: "center", flexShrink: 0,
+            }}>
+              {on && <span style={{ width: 9, height: 9, borderRadius: "50%", background: o.color }} />}
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: on ? o.color : PLX_TEXT }}>{o.label}</div>
+              <div style={{ fontSize: 11, color: PLX_MUTED, marginTop: 2 }}>{o.sub}</div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 const FIELD_DEFS = [
   { key: "title",       label: "商品名 (title)" },
   { key: "name_kana",   label: "商品名（かな）" },
@@ -389,6 +513,8 @@ const FIELD_DEFS = [
 
 function AiAssistModal({ onClose, onApply }) {
   const [phase, setPhase] = React.useState("input"); // input | loading | results | error
+  // Yoshioka 2026-05-11: barcode-first UX. `mode` toggles between JAN and name.
+  const [mode, setMode]   = React.useState("jan"); // jan | name
   const [jan, setJan]     = React.useState("");
   const [name, setName]   = React.useState("");
   const [picks, setPicks] = React.useState({});
@@ -398,9 +524,10 @@ function AiAssistModal({ onClose, onApply }) {
   const lookup = async () => {
     setPhase("loading"); setError(null);
     try {
+      // Mode toggle: route the user's input to the correct backend field.
       let s = await api.createAiSuggestion({
-        jan: jan || undefined,
-        title: name || undefined,
+        jan: mode === "jan" ? (jan || undefined) : undefined,
+        title: mode === "name" ? (name || undefined) : undefined,
       });
       let attempts = 0;
       while (s.status === "pending" && attempts < 20) {
@@ -469,25 +596,92 @@ function AiAssistModal({ onClose, onApply }) {
         <div style={{ padding: "20px 26px", overflow: "auto", flex: 1 }}>
           {phase === "input" && (
             <>
-              <div style={{ fontSize: 13, color: PLX_TEXT, marginBottom: 18, lineHeight: 1.7 }}>
-                JAN コード（バーコード）または商品名を入力してください。AI が公開情報から候補を取得し、候補の中から選んで商品フォームに反映できます。
+              {/* Mode toggle — Yoshioka 2026-05-11 ("そっちの方が良さそう"): default to JAN. */}
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
+                <div style={{
+                  display: "inline-flex", background: PLX_SURFACE, borderRadius: 9999,
+                  padding: 3, border: `1px solid ${PLX_BORDER}`,
+                }}>
+                  {[{ v: "jan", l: "ジャンルコード" }, { v: "name", l: "商品名" }].map((o) => {
+                    const on = mode === o.v;
+                    return (
+                      <button key={o.v} onClick={() => setMode(o.v)} style={{
+                        fontSize: 12, fontWeight: 700, padding: "7px 18px",
+                        borderRadius: 9999, border: "none",
+                        background: on ? "#fff" : "transparent",
+                        color: on ? PLX_GREEN : PLX_MUTED,
+                        boxShadow: on ? "0 1px 3px rgba(0,0,0,.06)" : "none",
+                        cursor: "pointer",
+                      }}>{o.l}</button>
+                    );
+                  })}
+                </div>
               </div>
-              <FormRow label="JAN コード（バーコード）">
-                <input value={jan} onChange={(e) => setJan(e.target.value)}
-                  placeholder="4987246012001" style={{
-                    ...formInput,
-                    fontFamily: "ui-monospace,SFMono-Regular,monospace",
-                    letterSpacing: ".05em",
-                  }} />
-              </FormRow>
-              <FormRow label="商品名（任意 · JAN がない場合に利用）">
-                <input value={name} onChange={(e) => setName(e.target.value)}
-                  placeholder="例：パナビア V5 ペースト" style={formInput} />
-              </FormRow>
+
+              {/* Large single input — barcode-first */}
+              <div style={{ position: "relative", marginBottom: 8 }}>
+                {mode === "jan" ? (
+                  <>
+                    <input value={jan} onChange={(e) => setJan(e.target.value)}
+                      inputMode="numeric" pattern="[0-9]*"
+                      placeholder="例: 4901301234567" style={{
+                        width: "100%", height: 54, border: `1.5px solid ${PLX_GREEN_LIGHT}`,
+                        borderRadius: 12, padding: "0 150px 0 18px", fontSize: 18,
+                        fontFamily: "ui-monospace,SFMono-Regular,monospace",
+                        letterSpacing: ".05em", outline: "none", background: "#fff",
+                        boxSizing: "border-box", color: PLX_TEXT, fontWeight: 600,
+                      }} />
+                    <button disabled title="準備中: カメラスキャンは今後対応" style={{
+                      position: "absolute", right: 6, top: 6, height: 42, padding: "0 14px",
+                      borderRadius: 9, background: "#F3F4F6", color: PLX_SUBTLE,
+                      border: "none", cursor: "not-allowed",
+                      fontWeight: 700, fontSize: 12,
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                    }}>
+                      <span>📷 カメラで読み取る</span>
+                      <span style={{
+                        fontSize: 9, background: "#fff", color: PLX_MUTED,
+                        padding: "2px 6px", borderRadius: 9999,
+                        border: `1px solid ${PLX_BORDER}`,
+                      }}>準備中</span>
+                    </button>
+                  </>
+                ) : (
+                  <input value={name} onChange={(e) => setName(e.target.value)}
+                    placeholder="例: GUM デンタルブラシ" style={{
+                      width: "100%", height: 54, border: `1.5px solid ${PLX_GREEN_LIGHT}`,
+                      borderRadius: 12, padding: "0 18px", fontSize: 16,
+                      outline: "none", background: "#fff", boxSizing: "border-box",
+                      color: PLX_TEXT, fontWeight: 600,
+                    }} />
+                )}
+              </div>
+              <div style={{
+                fontSize: 11, color: PLX_MUTED, marginBottom: 18, paddingLeft: 4,
+                display: "flex", alignItems: "center", gap: 6,
+              }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                  stroke={PLX_GREEN} strokeWidth="2" strokeLinecap="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="12"/>
+                  <line x1="12" y1="16" x2="12" y2="16"/>
+                </svg>
+                ジャンルコードでの検索の方が精度が高いです
+              </div>
+
+              <button onClick={lookup} disabled={mode === "jan" ? !jan : !name} style={{
+                width: "100%", height: 46, borderRadius: 12,
+                background: PLX_GREEN, color: "#fff", border: "none",
+                fontWeight: 700, fontSize: 14, cursor: "pointer",
+                boxShadow: "0 6px 16px rgba(26,166,138,.25)",
+                display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+                opacity: (mode === "jan" ? jan : name) ? 1 : 0.5,
+              }}>🔍 AI で検索</button>
+
               <div style={{
                 background: PLX_GREEN_50, borderRadius: 10,
-                padding: "10px 14px", fontSize: 11, color: PLX_MUTED,
-                lineHeight: 1.6, marginTop: 6,
+                padding: "12px 14px", fontSize: 11, color: PLX_MUTED,
+                lineHeight: 1.6, marginTop: 14,
               }}>
                 ※ AI による候補は参考情報です。価格・在庫など最終確定値は必ず担当者がご確認ください。
               </div>
@@ -608,11 +802,7 @@ function AiAssistModal({ onClose, onApply }) {
             {phase === "results" && `${selectedCount} / ${visibleFields.length} 項目を選択中`}
           </span>
           <button onClick={onClose} style={btnGhost}>キャンセル</button>
-          {phase === "input" && (
-            <button onClick={lookup} disabled={!jan && !name} style={{
-              ...btnPrimary, opacity: !jan && !name ? 0.5 : 1,
-            }}>🔍 候補を検索</button>
-          )}
+          {/* Search button is inside the body for "input" phase (large CTA per Yoshioka). */}
           {phase === "error" && (
             <button onClick={() => setPhase("input")} style={btnPrimary}>再試行</button>
           )}

@@ -73,6 +73,9 @@ const api = {
   createAiSuggestion: (body) =>
     request(`/ai-suggestions`, { method: "POST", body: JSON.stringify(body) }),
   getAiSuggestion: (id) => request(`/ai-suggestions/${id}`),
+
+  // --- dashboard (Yoshioka 2026-05-11) ---
+  getDashboardSummary: () => request(`/dashboard/summary`),
 };
 
 Object.assign(window, { api, getStoreId, setStoreId });

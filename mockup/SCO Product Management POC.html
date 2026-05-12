@@ -11,6 +11,7 @@
   .plx-artboard-inner { width:100%; height:100%; display:block; position:relative; overflow:hidden; }
   /* Make AdminShell fill its artboard */
   .plx-artboard-inner > div { height:100%; }
+  @keyframes plxshimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
 </style>
 </head>
 <body>
@@ -26,6 +27,10 @@
 <script type="text/babel" src="ProductList.jsx"></script>
 <script type="text/babel" src="ProductDetail.jsx"></script>
 <script type="text/babel" src="ProductCreate.jsx"></script>
+<script type="text/babel" src="ProductListV2.jsx"></script>
+<script type="text/babel" src="ProductDetailV2.jsx"></script>
+<script type="text/babel" src="ProductCreateV2.jsx"></script>
+<script type="text/babel" src="Dashboard.jsx"></script>
 
 <script type="text/babel" data-presets="react">
 // Clickable hybrid: each artboard hosts its own mini-router so the user can
@@ -51,10 +56,54 @@ function CreateArtboard() {
   return <ProductCreate onCancel={()=>setView({name:"list"})}/>;
 }
 
+/* ────── V2 artboards (new screens per design prompt) ────── */
+
+function ListV2Artboard() {
+  const [view, setView] = React.useState({ name:"list", productId:null });
+  if (view.name==="detail") return <ProductDetailV2 productId={view.productId} onBack={()=>setView({name:"list"})} onEdit={()=>setView({name:"create"})}/>;
+  if (view.name==="create") return <ProductCreateV2 onCancel={()=>setView({name:"list"})}/>;
+  return <ProductListV2 onOpenProduct={id=>setView({name:"detail",productId:id})} onCreate={()=>setView({name:"create"})}/>;
+}
+
+function DetailV2Artboard() {
+  const [view, setView] = React.useState({ name:"detail", productId:"p6" });
+  if (view.name==="list") return <ProductListV2 onOpenProduct={id=>setView({name:"detail",productId:id})} onCreate={()=>setView({name:"create"})}/>;
+  if (view.name==="create") return <ProductCreateV2 onCancel={()=>setView({name:"detail",productId:view.productId})}/>;
+  return <ProductDetailV2 productId={view.productId} onBack={()=>setView({name:"list"})} onEdit={()=>setView({name:"create"})}/>;
+}
+
+function CreateV2Artboard() {
+  const [view, setView] = React.useState({ name:"create" });
+  if (view.name==="list") return <ProductListV2 onOpenProduct={id=>setView({name:"detail",productId:id})} onCreate={()=>setView({name:"create"})}/>;
+  if (view.name==="detail") return <ProductDetailV2 productId={view.productId} onBack={()=>setView({name:"list"})} onEdit={()=>setView({name:"create"})}/>;
+  return <ProductCreateV2 onCancel={()=>setView({name:"list"})}/>;
+}
+
 function App() {
   return (
     <DesignCanvas>
-      <DCSection id="primary" title="SCO 商品管理 POC" subtitle="paylight X デザイン言語に準拠 · 歯科医院向け商品マスタ管理 · クリック可能">
+      <DCSection id="v2" title="V2 追加スクリーン" subtitle="ダッシュボード + 種別（物販/消耗品）+ 期限管理 + 発注先 URL + AI ジャンルコード対応">
+        <DCArtboard id="dashboard" label="01 · ダッシュボード（AI サマリー + KPI + 要対応）" width={1440} height={1180}>
+          <div className="plx-artboard-inner" data-screen-label="V2-01 ダッシュボード"><Dashboard variant="ready"/></div>
+        </DCArtboard>
+        <DCArtboard id="dashboard-loading" label="02 · ダッシュボード — ローディング状態" width={1440} height={1180}>
+          <div className="plx-artboard-inner" data-screen-label="V2-02 ダッシュボード ローディング"><Dashboard variant="loading"/></div>
+        </DCArtboard>
+        <DCArtboard id="dashboard-empty" label="03 · ダッシュボード — 健全 / 空の状態" width={1440} height={1180}>
+          <div className="plx-artboard-inner" data-screen-label="V2-03 ダッシュボード 健全"><Dashboard variant="empty"/></div>
+        </DCArtboard>
+        <DCArtboard id="list-v2" label="04 · 商品一覧 V2（種別フィルタ + 期限表示 + クイックフィルタ）" width={1440} height={1100}>
+          <div className="plx-artboard-inner" data-screen-label="V2-04 商品一覧"><ListV2Artboard/></div>
+        </DCArtboard>
+        <DCArtboard id="detail-v2" label="05 · 商品詳細 V2（消耗品 / 使用期限 / 発注先 URL / ロット履歴）" width={1440} height={1180}>
+          <div className="plx-artboard-inner" data-screen-label="V2-05 商品詳細"><DetailV2Artboard/></div>
+        </DCArtboard>
+        <DCArtboard id="create-v2" label="06 · 商品新規 V2（品目種別トグル + 期限 + AI ジャンルコード）" width={1440} height={1180}>
+          <div className="plx-artboard-inner" data-screen-label="V2-06 商品新規"><CreateV2Artboard/></div>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="primary" title="V1 既存スクリーン" subtitle="paylight X デザイン言語に準拠 · 既存設計の参照用">
         <DCArtboard id="list" label="01 · 商品一覧（フィルタ・検索・タグ）" width={1440} height={1000}>
           <div className="plx-artboard-inner" data-screen-label="01 商品一覧"><ListArtboard/></div>
         </DCArtboard>
@@ -66,18 +115,18 @@ function App() {
         </DCArtboard>
       </DCSection>
 
-      <DCSection id="notes" title="デザインノート" subtitle="設計の考え方">
+      <DCSection id="notes" title="デザインノート" subtitle="V2 追加分の設計の考え方">
         <DCPostIt left={40} top={40} width={300}>
-          <b>コンセプト:</b> 受付 / 衛生士が「在庫が切れる前に気付ける」こと。商品一覧は <u>低在庫を朝イチで把握</u>、商品詳細は <u>変動の理由が追える</u>、新規登録は <u>AI で 9割自動入力</u>。
+          <b>ダッシュボード:</b> 朝イチで開いて <u>「今日やるべきこと」が 5 秒で分かる</u> こと。AI サマリーは自然文 + 太字で件数強調、KPI は 4 つに絞り、下段の「要対応」テーブルは行クリックで該当商品へ。
         </DCPostIt>
         <DCPostIt left={360} top={40} width={300} rotate={1.5}>
-          <b>色のルール:</b> Brand Green は CTA / 主要数値 / 良い変化のみ。低在庫アラートは医療UI で「赤」を避けて柔らかいアンバー <span style={{color:'#D97706',fontWeight:700}}>●</span>。承認系の青チェックは <u>本POCでは未使用</u>（将来の発注承認フローで使用予定）。
+          <b>種別の見せ方:</b> 物販 = 緑、消耗品 = 青。色だけに依存せず「物販 / 消耗品」のテキストも常に併記。一覧・詳細・新規すべてで同じピル形状を使い、視線が迷わないように。
         </DCPostIt>
         <DCPostIt left={680} top={40} width={300} rotate={-1.5}>
-          <b>AI の見せ方:</b> ✨ アイコンと <span style={{color:'#1AA68A',fontWeight:700}}>「約80%削減」</span> という paylight X の数値訴求パターンを継承。候補はすべて <u>確信度 + 出典</u> 付きで提示し、最終確定は人が行う前提。
+          <b>期限管理:</b> 60日超 = 表示なし / 60-30日 = アンバー / 30日以下 = 赤 / 過ぎた = 「期限切れ」ピル。医療UIで赤を多用しないよう、アンバーを「予告」に挟む 3 段階。
         </DCPostIt>
         <DCPostIt left={1000} top={40} width={300} rotate={1}>
-          <b>クリックできる箇所:</b> 商品行 → 詳細、フィルタ、タグ、ステータス切替、ページ送り、「新しい商品を追加」→ 作成画面、AI で入力 → モーダル（ダミー JAN で試せます）、在庫を調整 → 調整モーダル、タブ切替（バリアント / 在庫履歴 / 売上推移）。
+          <b>AI モーダル v2:</b> ジャンルコード（バーコード）をデフォルトに。📷 カメラボタンは「準備中」グレーアウト。「ジャンルコードの方が精度が高い」と明示し、現場での読み取り運用を想定。
         </DCPostIt>
       </DCSection>
     </DesignCanvas>
