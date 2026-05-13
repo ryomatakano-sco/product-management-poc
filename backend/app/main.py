@@ -27,7 +27,9 @@ from app.routers import (
     products,
     purchase_orders,
     sales,
+    settings as settings_router,
     stores,
+    support,
     tags,
     variants,
     vendors,
@@ -63,6 +65,8 @@ app.include_router(sales.router)
 app.include_router(purchase_orders.router)
 app.include_router(ai_suggestions.router)
 app.include_router(dashboard.router)
+app.include_router(settings_router.router)
+app.include_router(support.router)
 app.include_router(dev.router)
 
 

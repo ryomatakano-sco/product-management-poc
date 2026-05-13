@@ -14,8 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import async_session, engine
 from app.models import Base  # noqa: F401 — ensure all models registered
-from app.models.branch import Branch
-from app.models.category import Category
+from app.models.branch import Branch, BranchStatus, BranchType
+from app.models.category import Category, CategoryAppliesTo
+from app.models.inventory import AdjustmentReason, InventoryAdjustment, InventoryField
 from app.models.product import (
     ItemType,
     Product,
@@ -24,9 +25,11 @@ from app.models.product import (
     ProductVariant,
     WeightUnit,
 )
+from app.models.settings_kv import SettingsKV
 from app.models.store import Store
+from app.models.support import SupportSubject, SupportTicket, TicketStatus
 from app.models.tag import Tag, ProductTag
-from app.models.vendor import Vendor
+from app.models.vendor import Vendor, VendorStatus
 
 
 async def seed() -> None:
@@ -44,34 +47,141 @@ async def seed() -> None:
         sid = store.id
         print(f"Created store: {store.name} (id={sid})")
 
-        # --- Default branch ---
-        branch = Branch(store_id=sid, name="本院", is_default=True, country="JP", address="東京都渋谷区1-1-1")
+        # --- Branches: 本院 + 分院 (brief §4.2/§4.10) ---
+        # Two branches so the 院・店舗 list and the inventory branch filter
+        # have something to render.
+        main_hours = {
+            "mon": [{"open": "09:30", "close": "13:00"}, {"open": "14:30", "close": "19:00"}],
+            "tue": [{"open": "09:30", "close": "13:00"}, {"open": "14:30", "close": "19:00"}],
+            "wed": [],
+            "thu": [{"open": "09:30", "close": "13:00"}, {"open": "14:30", "close": "19:00"}],
+            "fri": [{"open": "09:30", "close": "13:00"}, {"open": "14:30", "close": "19:00"}],
+            "sat": [{"open": "09:30", "close": "17:00"}],
+            "sun": [],
+            "holiday": [],
+        }
+        branch = Branch(
+            store_id=sid, name="本院 ペイライト歯科クリニック",
+            is_default=True, branch_type=BranchType.main,
+            country="JP", postal_code="100-0005",
+            address="東京都千代田区丸の内3-4-1 新国際ビル9階",
+            phone="03-6281-8883",
+            manager_name="田島 雄一",
+            operating_hours_json=main_hours,
+            status=BranchStatus.active,
+        )
         db.add(branch)
+        sub_hours = {
+            "mon": [{"open": "10:00", "close": "13:30"}, {"open": "15:00", "close": "20:00"}],
+            "tue": [{"open": "10:00", "close": "13:30"}, {"open": "15:00", "close": "20:00"}],
+            "wed": [{"open": "10:00", "close": "13:30"}, {"open": "15:00", "close": "20:00"}],
+            "thu": [{"open": "10:00", "close": "13:30"}, {"open": "15:00", "close": "20:00"}],
+            "fri": [{"open": "10:00", "close": "13:30"}, {"open": "15:00", "close": "20:00"}],
+            "sat": [{"open": "10:00", "close": "18:00"}],
+            "sun": [{"open": "10:00", "close": "18:00"}],
+            "holiday": [],
+        }
+        branch_sub = Branch(
+            store_id=sid, name="分院 ペイライト歯科クリニック 梅田",
+            is_default=False, branch_type=BranchType.sub,
+            country="JP", postal_code="530-0012",
+            address="大阪府大阪市北区芝田2-6-27 PMO梅田 8階B",
+            phone="06-1234-5678",
+            manager_name="山口 さくら",
+            operating_hours_json=sub_hours,
+            status=BranchStatus.active,
+        )
+        db.add(branch_sub)
         await db.flush()
-        print(f"Created branch: {branch.name}")
+        print(f"Created branches: {branch.name}, {branch_sub.name}")
 
-        # --- Categories ---
-        cats = {}
-        for name in ["歯ブラシ", "歯間ブラシ", "フロス", "歯磨剤", "洗口液", "消耗品", "麻酔", "その他"]:
-            c = Category(store_id=sid, name=name)
-            db.add(c)
-            await db.flush()
-            cats[name] = c
-        print(f"Created {len(cats)} categories")
+        # --- Categories with hierarchy (brief §4.3) ---
+        # Two top-level parents (物販品 / 消耗品) and 11 leaves with the
+        # exact colors + Lucide icons the design specifies.
+        cats: dict[str, Category] = {}
+        retail_parent = Category(
+            store_id=sid, name="物販品", applies_to=CategoryAppliesTo.retail,
+            color_hex="#16A36C", icon_name="ShoppingBag", sort_order=0,
+        )
+        consumable_parent = Category(
+            store_id=sid, name="消耗品", applies_to=CategoryAppliesTo.consumable,
+            color_hex="#2E7BD6", icon_name="Boxes", sort_order=1,
+        )
+        db.add(retail_parent)
+        db.add(consumable_parent)
+        await db.flush()
+        cats["物販品"] = retail_parent
+        cats["消耗品"] = consumable_parent
 
-        # --- Vendors ---
-        vendor_data = [
-            ("サンスター", "JP", "https://www.sunstar.com/jp/"),
-            ("ライオン", "JP", "https://www.lion.co.jp/"),
-            ("Ci メディカル", "JP", "https://www.ci-medical.com/"),
+        leaf_specs = [
+            # (name, parent_key, color, icon, applies_to, sort)
+            ("歯ブラシ",       "物販品", "#16A36C", "Brush",       CategoryAppliesTo.retail, 10),
+            ("歯磨剤",         "物販品", "#2E7BD6", "Sparkle",     CategoryAppliesTo.retail, 11),
+            ("フロス",         "物販品", "#22B07A", "Wind",        CategoryAppliesTo.retail, 12),
+            ("洗口液",         "物販品", "#7AD3B0", "Droplet",     CategoryAppliesTo.retail, 13),
+            ("ホワイトニング", "物販品", "#E89B17", "Star",        CategoryAppliesTo.retail, 14),
+            ("矯正用品",       "物販品", "#9C56C0", "Smile",       CategoryAppliesTo.retail, 15),
+            ("衛生材料",       "消耗品", "#5B6776", "ShieldCheck", CategoryAppliesTo.consumable, 20),
+            ("印象材",         "消耗品", "#2E7BD6", "Layers",      CategoryAppliesTo.consumable, 21),
+            ("麻酔・薬剤",     "消耗品", "#D6433A", "Pill",        CategoryAppliesTo.consumable, 22),
+            ("グローブ",       "消耗品", "#0F8A5F", "Hand",        CategoryAppliesTo.consumable, 23),
+            ("滅菌・消毒",     "消耗品", "#16A36C", "Sparkles",    CategoryAppliesTo.consumable, 24),
+            # Keep the legacy keys that existing product seed lines reference.
+            # These act as aliases so the product creates below keep working.
+            ("歯間ブラシ",     "物販品", "#7AD3B0", "Brush",       CategoryAppliesTo.retail, 16),
+            ("麻酔",           "消耗品", "#D6433A", "Pill",        CategoryAppliesTo.consumable, 25),
+            ("その他",         None,     "#8A95A4", "MoreHorizontal", CategoryAppliesTo.both, 99),
         ]
-        vendors = {}
-        for vname, country, website in vendor_data:
-            v = Vendor(store_id=sid, company_name=vname, country=country, website=website)
+        for name, parent_key, color, icon, applies, sort in leaf_specs:
+            parent_id = cats[parent_key].id if parent_key else None
+            leaf = Category(
+                store_id=sid, name=name,
+                parent_id=parent_id,
+                color_hex=color, icon_name=icon,
+                applies_to=applies, sort_order=sort,
+            )
+            db.add(leaf)
+            await db.flush()
+            cats[name] = leaf
+        print(f"Created {len(cats)} categories (2 parents + {len(leaf_specs)} leaves)")
+
+        # --- Vendors (brief §4.4 — 6 real Japanese dental suppliers) ---
+        # Existing product seed references "サンスター", "ライオン", "Ci メディカル"
+        # so we keep those names but enrich with full contact + payment terms.
+        vendor_specs = [
+            # (display_name, alias_keys, contact, phone, email, payment_terms, website)
+            ("サンスター", ["サンスター", "サンスター株式会社"],
+                "佐藤 健一", "03-1234-5678", "k.sato@sunstar.co.jp",
+                "月末締/翌月末払", "https://www.sunstar.com/jp/"),
+            ("ライオン", ["ライオン", "ライオン歯科材株式会社"],
+                "鈴木 美咲", "03-2345-6789", "suzuki@lion-dent.co.jp",
+                "月末締/翌々月10日払", "https://www.lion.co.jp/"),
+            ("Ci メディカル", ["Ci メディカル", "Ci メディカル株式会社"],
+                "中村 翔", "052-1234-5678", "nakamura@ci-medical.com",
+                "月末締/翌月末払", "https://www.ci-medical.com/"),
+            ("GC株式会社", ["GC", "GC株式会社"],
+                "田中 浩二", "03-3456-7890", "tanaka@gc.dental.jp",
+                "月末締/翌月末払", "https://www.gc.dental"),
+            ("モリタ製作所", ["モリタ", "モリタ製作所"],
+                "山本 由紀", "06-1234-5678", "yamamoto@morita.com",
+                "月末締/翌月末払", "https://www.morita.com"),
+            ("ヘンリーシャイン・ジャパン", ["ヘンリーシャイン"],
+                "David Tanaka", "03-4567-8901", "dtanaka@henryschein.jp",
+                "月末締/翌月20日払", "https://www.henryschein.jp"),
+        ]
+        vendors: dict[str, Vendor] = {}
+        for (name, aliases, contact, phone, email, terms, web) in vendor_specs:
+            v = Vendor(
+                store_id=sid, company_name=name, country="JP",
+                contact_name=contact, phone=phone, email=email,
+                payment_terms=terms, website=web,
+                status=VendorStatus.active,
+            )
             db.add(v)
             await db.flush()
-            vendors[vname] = v
-        print(f"Created {len(vendors)} vendors")
+            for k in aliases:
+                vendors[k] = v
+        print(f"Created {len({v.id for v in vendors.values()})} vendors")
 
         # --- Tags ---
         tag_names = ["歯周病ケア", "知覚過敏", "子供用", "フッ素配合", "おすすめ"]
@@ -303,6 +413,91 @@ async def seed() -> None:
 
         await db.commit()
         print(f"Created 9 products with variants, images, and tags (5 retail + 4 consumables)")
+
+        # ── Settings (brief §4.9) ──
+        # Insert one settings_kv row per namespace with sensible defaults.
+        settings_seed = {
+            "general": {
+                "company_name": "ペイライト歯科クリニック",
+                "company_registration_no": "1234567890123",
+                "representative": "田島 雄一",
+                "phone": "03-6281-8883",
+                "email": "info@example.com",
+                "address": "東京都千代田区丸の内3-4-1 新国際ビル9階",
+                "timezone": "Asia/Tokyo",
+                "language": "ja",
+                "currency": "JPY",
+                "date_format": "YYYY/MM/DD",
+                "logo_url": None,
+                "brand_color_hex": "#16A36C",
+            },
+            "notifications": {
+                "email_enabled": True,
+                "low_stock": True,
+                "expiring_soon": True,
+                "po_status_change": True,
+                "daily_summary_time": "08:00",
+                "recipient_user_ids": [1, 2],
+            },
+            "tax_rates": {
+                "rates": [
+                    {"id": 1, "name": "標準税率", "rate": "10.00", "is_default": True},
+                    {"id": 2, "name": "軽減税率", "rate": "8.00", "is_default": False},
+                    {"id": 3, "name": "非課税", "rate": "0.00", "is_default": False},
+                ]
+            },
+            "ai": {
+                "auto_fill_mode": "auto",
+                "openai_api_key_set": False,
+                "daily_summary_schedule": {"time": "06:00", "weekdays": [1, 2, 3, 4, 5]},
+                "model": "gpt-4o-mini",
+                "monthly_usage": {"api_calls": 2847, "tokens": 1400000, "cost_jpy": "3200"},
+            },
+            "integrations": {
+                "paylight_x_sso": {"connected": True, "connected_at": "2026-04-15T09:00:00+09:00"},
+                "accounting": {"provider": "freee", "connected": False},
+                "line_official": {"connected": False, "connected_at": None},
+                "slack": {"connected": False, "webhook_url_set": False},
+            },
+        }
+        for ns, data in settings_seed.items():
+            db.add(SettingsKV(store_id=sid, namespace=ns, data_json=data))
+        await db.flush()
+        print(f"Created {len(settings_seed)} settings_kv rows")
+
+        # ── Support tickets (brief §4.10) ──
+        ticket_specs = [
+            (SupportSubject.bug, "products", "在庫数が表示されない", "info@example.com", TicketStatus.resolved),
+            (SupportSubject.feature, "purchase-orders", "PDFテンプレートをカスタマイズしたい", "manager@example.com", TicketStatus.in_progress),
+            (SupportSubject.howto, "settings", "ユーザーを新規追加する方法は？", "admin@example.com", TicketStatus.open),
+        ]
+        for sc, page, body, email, status in ticket_specs:
+            db.add(SupportTicket(
+                store_id=sid, subject_category=sc, related_page=page,
+                body=body, email=email,
+                contact_window="平日 10:00-17:00",
+                status=status,
+            ))
+        await db.flush()
+        print(f"Created {len(ticket_specs)} support tickets")
+
+        # ── Inventory adjustments — feed the dashboard's 最近の活動 ──
+        # A handful of recent receives + sales so the timeline isn't empty.
+        # Reference an arbitrary variant via the first one we created.
+        variant_rows = (await db.execute(select(ProductVariant).limit(5))).scalars().all()
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        for i, v in enumerate(variant_rows):
+            db.add(InventoryAdjustment(
+                store_id=sid, variant_id=v.id,
+                field=InventoryField.on_hand,
+                delta=10 if i % 2 == 0 else -2,
+                reason=AdjustmentReason.purchase_order_received if i % 2 == 0 else AdjustmentReason.sale,
+                note="シード用の入荷/販売イベント",
+            ))
+        await db.commit()
+        print(f"Created {len(variant_rows)} sample inventory adjustments")
+
         print("Seed complete!")
 
 

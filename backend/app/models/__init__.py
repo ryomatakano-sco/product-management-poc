@@ -11,3 +11,5 @@ from app.models.inventory import InventoryAdjustment  # noqa: F401
 from app.models.sale import SalesRecord  # noqa: F401
 from app.models.purchase_order import PurchaseOrder, PurchaseOrderItem, PurchaseOrderTag  # noqa: F401
 from app.models.ai_session import AiSuggestionSession, AiSuggestionFieldOption  # noqa: F401
+from app.models.support import SupportTicket  # noqa: F401
+from app.models.settings_kv import SettingsKV  # noqa: F401
