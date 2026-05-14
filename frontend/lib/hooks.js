@@ -54,19 +54,32 @@ function parseHash() {
   if (h === "/products/new") return { name: "create", query };
   const m = h.match(/^\/products\/(\d+)$/);
   if (m) return { name: "detail", id: m[1], query };
-  // Under-construction stub routes (paylight X brief §5).
-  // Sidebar links exist; pages are placeholders.
-  const stub = {
-    "/categories":      { navId: "categories", title: "カテゴリ",   breadcrumbs: ["ホーム", "カテゴリ"] },
-    "/inventory":       { navId: "inventory",  title: "在庫",       breadcrumbs: ["ホーム", "在庫"] },
-    "/purchase-orders": { navId: "po",         title: "発注書",     breadcrumbs: ["ホーム", "発注書"] },
-    "/sales":           { navId: "sales",      title: "販売記録",   breadcrumbs: ["ホーム", "販売記録"] },
-    "/vendors":         { navId: "vendors",    title: "仕入先",     breadcrumbs: ["ホーム", "仕入先"] },
-    "/branches":        { navId: "branches",   title: "院・店舗",   breadcrumbs: ["ホーム", "院・店舗"] },
-    "/settings":        { navId: "settings",   title: "設定",       breadcrumbs: ["ホーム", "設定"] },
-    "/support":         { navId: "support",    title: "サポート",   breadcrumbs: ["ホーム", "サポート"] },
+  // 2026-05-12: routes that used to be UnderConstruction stubs now have
+  // real page components. Map each path to a route name; app.jsx renders.
+  const realPages = {
+    "/categories":      "categories",
+    "/inventory":       "inventory",
+    "/purchase-orders": "purchase_orders",
+    "/sales":           "sales",
+    "/vendors":         "vendors",
+    "/branches":        "branches",
+    "/settings":        "settings",
+    "/support":         "support",
   };
-  if (stub[h]) return { name: "stub", stub: stub[h], query };
+  if (realPages[h]) return { name: realPages[h], query };
+
+  // Detail pages — `#/vendors/3`, `#/branches/2`, `#/purchase-orders/8`.
+  const detail = h.match(/^\/(vendors|branches|purchase-orders|sales)\/(\d+)$/);
+  if (detail) {
+    const map = {
+      "vendors":         "vendor_detail",
+      "branches":        "branch_detail",
+      "purchase-orders": "po_detail",
+      "sales":           "sale_detail",
+    };
+    return { name: map[detail[1]], id: detail[2], query };
+  }
+
   return { name: "dashboard", query };
 }
 

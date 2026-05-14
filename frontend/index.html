@@ -74,11 +74,29 @@
   <script type="text/babel" data-presets="env,react" src="./components/Atoms.jsx"></script>
   <script type="text/babel" data-presets="env,react" src="./components/AdminShell.jsx"></script>
   <script type="text/babel" data-presets="env,react" src="./components/DevPanel.jsx"></script>
+  <script type="text/babel" data-presets="env,react" src="./components/Toast.jsx"></script>
+
+  <!-- Original 4 pages -->
+  <script type="text/babel" data-presets="env,react" src="./pages/Dashboard.jsx"></script>
   <script type="text/babel" data-presets="env,react" src="./pages/ProductList.jsx"></script>
   <script type="text/babel" data-presets="env,react" src="./pages/ProductDetail.jsx"></script>
   <script type="text/babel" data-presets="env,react" src="./pages/ProductCreate.jsx"></script>
-  <script type="text/babel" data-presets="env,react" src="./pages/Dashboard.jsx"></script>
   <script type="text/babel" data-presets="env,react" src="./pages/UnderConstruction.jsx"></script>
+
+  <!-- 8 new pages added 2026-05-12 for the full 12-page sidebar -->
+  <!-- Order matters: Categories registers PlxModal/PlxEmptyState/PlxErrorBanner/PlxPageHead -->
+  <!-- which Inventory/PurchaseOrders/etc. consume. -->
+  <script type="text/babel" data-presets="env,react" src="./pages/Categories.jsx"></script>
+  <!-- Inventory registers PlxKpiTile/PlxChip/formatJpDateTime used by sales+PO -->
+  <script type="text/babel" data-presets="env,react" src="./pages/Inventory.jsx"></script>
+  <!-- PurchaseOrders registers PlxDetailKV used by Vendors+Branches -->
+  <script type="text/babel" data-presets="env,react" src="./pages/PurchaseOrders.jsx"></script>
+  <script type="text/babel" data-presets="env,react" src="./pages/SalesRecords.jsx"></script>
+  <script type="text/babel" data-presets="env,react" src="./pages/Vendors.jsx"></script>
+  <script type="text/babel" data-presets="env,react" src="./pages/Branches.jsx"></script>
+  <script type="text/babel" data-presets="env,react" src="./pages/Settings.jsx"></script>
+  <script type="text/babel" data-presets="env,react" src="./pages/Support.jsx"></script>
+
   <script type="text/babel" data-presets="env,react" src="./app.jsx"></script>
 </body>
 </html>

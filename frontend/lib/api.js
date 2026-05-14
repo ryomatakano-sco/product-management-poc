@@ -76,6 +76,62 @@ const api = {
 
   // --- dashboard (Yoshioka 2026-05-11) ---
   getDashboardSummary: () => request(`/dashboard/summary`),
+
+  // ──────────────────────────────────────────────────────────────────
+  // 2026-05-12 additions for the 12-page paylight X frontend.
+  // Names match prompt 04's contract so pages can be ported later if we
+  // ever do introduce the /api/v1 prefix; for now they stay at root.
+  // ──────────────────────────────────────────────────────────────────
+
+  // Categories (extended)
+  getCategoryTree: () => request(`/categories/tree`),
+  getCategory:     (id) => request(`/categories/${id}`),
+  createCategory:  (body) => request(`/categories`, { method: "POST", body: JSON.stringify(body) }),
+  updateCategory:  (id, body) => request(`/categories/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteCategory:  (id) => request(`/categories/${id}`, { method: "DELETE" }),
+
+  // Inventory (aggregate view + adjustments)
+  listInventory:   (params) => request(`/inventory${qs(params)}`),
+
+  // Purchase orders (existing backend at /purchase-orders)
+  listPurchaseOrders: (params) => request(`/purchase-orders${qs(params)}`),
+  getPurchaseOrder:   (id) => request(`/purchase-orders/${id}`),
+
+  // Sales — backend currently only has POST /sales; list/refund/summary are
+  // brief-04 features that prompt 03 deferred. The pages call these and
+  // fall back to empty state if they 404.
+  listSales: (params) => request(`/sales${qs(params)}`).catch((e) => {
+    if (e.status === 405 || e.status === 404) return { items: [], total: 0 };
+    throw e;
+  }),
+
+  // Vendors detail (already there) + sub-resources (graceful fallback)
+  getVendor: (id) => request(`/vendors/${id}`),
+  deleteVendor: (id) => request(`/vendors/${id}`, { method: "DELETE" }),
+  createVendor: (body) => request(`/vendors`, { method: "POST", body: JSON.stringify(body) }),
+  updateVendor: (id, body) => request(`/vendors/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+
+  // Branches (full CRUD added in prompt-03)
+  listBranches: () => request(`/branches?limit=100`),
+  getBranch:    (id) => request(`/branches/${id}`),
+  createBranch: (body) => request(`/branches`, { method: "POST", body: JSON.stringify(body) }),
+  updateBranch: (id, body) => request(`/branches/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteBranch: (id) => request(`/branches/${id}`, { method: "DELETE" }),
+  getBranchInventorySnapshot: (id) => request(`/branches/${id}/inventory-snapshot`),
+
+  // Settings (5 namespaces: general/notifications/tax_rates/ai/integrations)
+  getSettings:    (ns) => request(`/settings/${ns}`),
+  updateSettings: (ns, body) => request(`/settings/${ns}`, { method: "PUT", body: JSON.stringify(body) }),
+
+  // Support
+  getFaq:              () => request(`/support/faq`),
+  createSupportTicket: (body) => request(`/support/tickets`, { method: "POST", body: JSON.stringify(body) }),
+  getSystemStatus:     () => request(`/support/system-status`),
+  getVersion:          () => request(`/support/version`),
 };
+
+// Prompt 04 expects `window.PLX_API.*` — alias it to our existing `api`.
+// Same object reference so calls go through the same fetch wrapper.
+window.PLX_API = api;
 
 Object.assign(window, { api, getStoreId, setStoreId });
