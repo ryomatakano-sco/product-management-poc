@@ -84,11 +84,30 @@ _frontend_candidates = [
     Path(os.environ.get("FRONTEND_DIR", "/frontend")),
     Path(__file__).resolve().parent.parent.parent / "frontend",
 ]
+class _SafeStaticFiles(StaticFiles):
+    """Wrap StaticFiles so malformed paths return 404 instead of 500.
+
+    Background: browser autofill / bookmark heuristics sometimes navigate
+    to URLs like ``/app/http%3A//127.0.0.1%3A8000/app/`` — a literal ``:``
+    in the path, which ``os.stat()`` on Windows rejects with WinError 123.
+    Without this wrapper, the request crashes with a 500 traceback in the
+    server log on every such hit; with it, we return a quiet 404.
+    """
+
+    async def get_response(self, path, scope):  # type: ignore[override]
+        try:
+            return await super().get_response(path, scope)
+        except OSError:
+            # Windows can't represent the path (colon, etc.) — treat as missing.
+            from starlette.responses import PlainTextResponse
+            return PlainTextResponse("Not Found", status_code=404)
+
+
 for _candidate in _frontend_candidates:
     if _candidate.is_dir() and (_candidate / "index.html").is_file():
         app.mount(
             "/app",
-            StaticFiles(directory=str(_candidate), html=True),
+            _SafeStaticFiles(directory=str(_candidate), html=True),
             name="frontend",
         )
 
