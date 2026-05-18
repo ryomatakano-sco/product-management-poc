@@ -115,13 +115,16 @@ EXTRACTION_SYSTEM_PROMPT = """\
 ウェブ検索エージェントが収集したテキストレポートを受け取り、ExtractionResult スキーマに変換してください。
 
 ## ルール
-1. テキスト中にURLが併記されていない候補は除外してください（name_kana を除く）。
+1. URL併記ポリシーはフィールドごとに異なります:
+   - **厳格フィールド**（URLが必須。URL無しの候補は除外してください）: `price`, `weight`, `image_url`, `fluoride_ppm`, `dimensions`
+   - **緩和フィールド**（URLは推奨。URL無しでも採用可、その場合 source_url は空欄のまま）: `title`, `name_kana`, `brand`, `description`, `category`, `indications`, `barcode`, `country_of_origin`, `head_size`, `bristle_hardness`
+   緩和フィールドは、検索エージェントのレポート本文に値が記載されていれば、個別URLが併記されていなくても候補として残してください。検証可能な数値・価格・画像は依然としてURLが必要です。
 2. found フィールド: 該当商品が見つかったかどうか。
 3. candidates リストに、見つかった各フィールドの各候補を FieldCandidate として追加。
 4. field_name は以下のいずれか: title, name_kana, brand, description, category, indications, barcode, weight, country_of_origin, price, image_url
 5. indications のように複数値がある場合は、JSON配列文字列として value に格納（例: '["歯周病", "知覚過敏"]'）。
 6. image_url のように複数ある場合も同様に JSON配列文字列。
-7. confidence は 0.0〜1.0 でソースの信頼度を推定。
+7. confidence は 0.0〜1.0 でソースの信頼度を推定。URL無しの緩和フィールド候補は 0.6 以下にしてください。
 8. raw_search_notes に検索ノートをそのままコピー。
 """
 

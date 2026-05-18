@@ -13,7 +13,11 @@ function ProductList({ initialQuery }) {
   const [kindFilter, setKindFilter] = React.useState(initial.kind || "all"); // all | product | consumable
   const [categoryFilter, setCategoryFilter] = React.useState("");
   const [vendorFilter, setVendorFilter] = React.useState("");
-  const [statusFilter, setStatusFilter] = React.useState("active");
+  // ProductCreate.save("draft") navigates to /products?status=draft so the
+  // user lands on the drafts list and can see what they just saved.
+  const [statusFilter, setStatusFilter] = React.useState(
+    initial.status === "draft" || initial.status === "all" ? initial.status : "active"
+  );
   const [activeTags, setActiveTags] = React.useState([]);
   const [quickFilters, setQuickFilters] = React.useState(() => {
     // Dashboard tiles deep-link here with ?stock=low or ?expiry=soon.
@@ -64,6 +68,33 @@ function ProductList({ initialQuery }) {
   );
 
   const toggleQuick = (k) => setQuickFilters((s) => s.includes(k) ? s.filter(x => x !== k) : [...s, k]);
+
+  // Inline publish (Yoshioka feedback 2026-05-18): on draft rows, if the
+  // minimum fields needed for publish are present, show a 登録 button so the
+  // user doesn't have to open the detail page just to flip status.
+  // List rows don't carry barcode, so the rule here matches what the list
+  // can see: name + category + price + item_type. The backend will reject
+  // the PATCH if it disagrees, in which case we surface the error.
+  const canPublishFromList = (p) =>
+    !!p.name && !!p.category_name && !!p.item_type
+    && p.default_price != null && Number(p.default_price) > 0;
+
+  const [publishing, setPublishing] = React.useState(null); // product id mid-flight
+  const publishDraft = async (e, p) => {
+    e.stopPropagation();
+    if (publishing) return;
+    setPublishing(p.id);
+    try {
+      await api.updateProduct(p.id, { status: "active" });
+      if (window.PLX_TOAST?.success) window.PLX_TOAST.success(`「${p.name}」を公開しました`);
+      productsQ.refetch();
+    } catch (err) {
+      const msg = err?.body?.detail || err?.message || "公開に失敗しました";
+      if (window.PLX_TOAST?.error) window.PLX_TOAST.error(msg);
+    } finally {
+      setPublishing(null);
+    }
+  };
 
   return (
     <AdminShell currentNav="products" breadcrumbs={["ホーム", "商品一覧"]}>
@@ -272,7 +303,35 @@ function ProductList({ initialQuery }) {
                   <div style={{ fontSize: 9, fontWeight: 700, color: PLX_WARN, marginTop: 2 }}>● 低在庫</div>
                 )}
               </span>
-              <span style={{ textAlign: "center" }}><StatusPill status={p.status} /></span>
+              <span style={{ textAlign: "center", display: "flex",
+                flexDirection: "column", alignItems: "center", gap: 4,
+              }}>
+                <StatusPill status={p.status} />
+                {p.status === "draft" && (
+                  canPublishFromList(p) ? (
+                    <button
+                      onClick={(e) => publishDraft(e, p)}
+                      disabled={publishing === p.id}
+                      title="この下書きをそのまま公開します"
+                      style={{
+                        fontSize: 10, fontWeight: 700, padding: "3px 9px",
+                        borderRadius: 9999, border: "none",
+                        background: PLX_GREEN, color: "#fff",
+                        cursor: publishing === p.id ? "wait" : "pointer",
+                        opacity: publishing === p.id ? 0.6 : 1,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {publishing === p.id ? "登録中…" : "✓ 登録"}
+                    </button>
+                  ) : (
+                    <span title="商品名・カテゴリ・価格・種別が揃うと「登録」できます"
+                      style={{
+                        fontSize: 9, color: PLX_SUBTLE, whiteSpace: "nowrap",
+                      }}>項目不足</span>
+                  )
+                )}
+              </span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={PLX_SUBTLE}
                 strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="9 18 15 12 9 6" />

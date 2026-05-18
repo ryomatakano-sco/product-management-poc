@@ -4,6 +4,48 @@ function ProductDetail({ productId }) {
   const productQ = useFetch(() => api.getProduct(productId), [productId]);
   const [tab, setTab] = React.useState("variants");
   const [adjustVariant, setAdjustVariant] = React.useState(null);
+  const [publishing, setPublishing] = React.useState(false);
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
+
+  // Same publish-from-list rule as ProductList: keep these consistent so the
+  // user doesn't see "登録" available in one place but disabled in another.
+  const canPublishProduct = (p) => {
+    if (!p) return false;
+    const hv = (p.variants || []).find((v) => v.is_default) || (p.variants || [])[0];
+    return !!p.name && !!p.category_name && !!p.item_type
+      && hv && hv.price != null && Number(hv.price) > 0;
+  };
+
+  const publishDraft = async () => {
+    if (publishing) return;
+    setPublishing(true);
+    try {
+      await api.updateProduct(productId, { status: "active" });
+      if (window.PLX_TOAST?.success) window.PLX_TOAST.success("商品を公開しました");
+      productQ.refetch();
+    } catch (e) {
+      const msg = e?.body?.detail || e?.message || "公開に失敗しました";
+      if (window.PLX_TOAST?.error) window.PLX_TOAST.error(msg);
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const doDelete = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      await api.archiveProduct(productId);
+      if (window.PLX_TOAST?.success) window.PLX_TOAST.success("商品を削除しました");
+      navigate("/products");
+    } catch (e) {
+      const msg = e?.body?.detail || e?.message || "削除に失敗しました";
+      if (window.PLX_TOAST?.error) window.PLX_TOAST.error(msg);
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  };
 
   if (productQ.loading) {
     return <AdminShell title="読み込み中..." currentNav="products">
@@ -23,15 +65,35 @@ function ProductDetail({ productId }) {
   const totalAvail = variants.reduce((s, v) => s + available(v), 0);
   const heroVariant = variants.find((v) => v.is_default) ?? variants[0];
 
+  const isDraft = p.status === "draft";
+  const canPublish = canPublishProduct(p);
   const headerRight = (
     <div style={{ display: "flex", gap: 8 }}>
-      <button onClick={async () => {
-        if (confirm("この商品をアーカイブしますか？")) {
-          try { await api.archiveProduct(p.id); navigate("/products"); }
-          catch (e) { alert("アーカイブに失敗しました: " + e.message); }
-        }
-      }} style={btnGhost}>… その他</button>
-      <button style={btnSecondary}>編集</button>
+      <button
+        onClick={() => setConfirmDelete(true)}
+        style={{ ...btnGhost, color: "#B91C1C" }}
+        title="この商品をアーカイブ（削除）します"
+      >
+        🗑 削除
+      </button>
+      <button
+        onClick={() => navigate(`/products/${p.id}/edit`)}
+        style={btnSecondary}
+      >
+        編集
+      </button>
+      {isDraft && (
+        <button
+          onClick={publishDraft}
+          disabled={publishing || !canPublish}
+          title={canPublish
+            ? "この下書きを公開します"
+            : "商品名・カテゴリ・種別・価格が揃うと公開できます"}
+          style={{ ...btnPrimary, opacity: (publishing || !canPublish) ? 0.7 : 1 }}
+        >
+          {publishing ? "登録中…" : "✓ この商品を登録"}
+        </button>
+      )}
     </div>
   );
 
@@ -232,7 +294,72 @@ function ProductDetail({ productId }) {
           onApplied={() => { setAdjustVariant(null); productQ.refetch(); }}
         />
       )}
+
+      {confirmDelete && (
+        <ConfirmDeleteModal
+          title="商品を削除しますか？"
+          message={`「${p.name}」をアーカイブします。この操作は商品を一覧から非表示にしますが、関連する発注書・販売記録は保持されます。`}
+          confirmLabel={deleting ? "削除中…" : "削除する"}
+          onConfirm={doDelete}
+          onCancel={() => setConfirmDelete(false)}
+          disabled={deleting}
+        />
+      )}
     </AdminShell>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ConfirmDeleteModal — generic two-step delete confirmation.
+// Kept inside ProductDetail because it's the only page using it for now.
+// If another page needs it, move to components/Atoms.jsx and expose on window.
+// ─────────────────────────────────────────────────────────────────────────────
+function ConfirmDeleteModal({ title, message, confirmLabel, onConfirm, onCancel, disabled }) {
+  return (
+    <div onClick={onCancel} style={{
+      position: "fixed", inset: 0, background: "rgba(17,24,39,0.45)",
+      backdropFilter: "blur(4px)", zIndex: 60,
+      display: "flex", alignItems: "center", justifyContent: "center",
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: "#fff", borderRadius: 16, width: 420, maxWidth: "90%",
+        boxShadow: "0 24px 60px rgba(17,24,39,.22)", padding: 24,
+      }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 12 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: "50%", background: "#FEE2E2",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            flexShrink: 0, fontSize: 20,
+          }}>⚠</div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: PLX_TEXT, marginBottom: 6 }}>
+              {title}
+            </div>
+            <div style={{ fontSize: 13, color: PLX_MUTED, lineHeight: 1.6 }}>
+              {message}
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
+          <button onClick={onCancel} disabled={disabled} style={btnGhost}>
+            キャンセル
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={disabled}
+            style={{
+              height: 38, padding: "0 20px", borderRadius: 9999,
+              background: "#DC2626", color: "#fff", border: "none",
+              fontWeight: 700, fontSize: 13,
+              cursor: disabled ? "wait" : "pointer",
+              opacity: disabled ? 0.7 : 1,
+            }}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

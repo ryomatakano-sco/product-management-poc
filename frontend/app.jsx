@@ -10,6 +10,7 @@ function App() {
   if (route.name === "dashboard") page = <Dashboard />;
   else if (route.name === "detail") page = <ProductDetail productId={Number(route.id)} />;
   else if (route.name === "create") page = <ProductCreate />;
+  else if (route.name === "edit")   page = <ProductCreate editId={Number(route.id)} />;
   else if (route.name === "list") page = <ProductList initialQuery={route.query} />;
 
   // Pages added 2026-05-12 for the full 12-page sidebar.

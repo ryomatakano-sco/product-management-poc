@@ -126,8 +126,14 @@ function formatJpDate(dateStr) {
   return `${parts[0]}年${parts[1]}月${parts[2]}日`;
 }
 
+// Single source of truth for the version badge shown in the sidebar footer.
+// Bump the number on every meaningful change; keep the channel ("Alpha") until
+// we cut a beta — the demo is pre-release.
+const PLX_VERSION = { channel: "Alpha", number: "0.4.0" };
+
 Object.assign(window, {
   T,
+  PLX_VERSION,
   // Legacy aliases
   PLX_GREEN, PLX_GREEN_DARK, PLX_GREEN_LIGHT, PLX_GREEN_50,
   PLX_BLUE, PLX_BLUE_LIGHT, PLX_TEXT, PLX_MUTED, PLX_SUBTLE, PLX_BORDER, PLX_SURFACE,

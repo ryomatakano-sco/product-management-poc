@@ -7,6 +7,13 @@
 !.env.example
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Local-only Claude context — not for the public repo. Holds internal
+# trade-off notes + conversation TL;DR that don't belong on GitHub.
+# Regenerate or update locally; never push.
+# ─────────────────────────────────────────────────────────────────────────────
+CONTEXT.md
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Python (backend/)
 # ─────────────────────────────────────────────────────────────────────────────
 __pycache__/

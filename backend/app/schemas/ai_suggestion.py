@@ -43,3 +43,38 @@ class AiSuggestionRead(BaseModel):
 
 class AiOptionApply(BaseModel):
     was_applied: bool
+
+
+# ---------------------------------------------------------------------------
+# Tier 2: debug endpoint — read-only inspection of the AI pipeline.
+# ---------------------------------------------------------------------------
+
+
+class AiDebugCandidate(BaseModel):
+    """A single field candidate as returned by the extraction agent."""
+
+    field_name: str
+    value: str
+    source_url: str | None
+    source_title: str | None
+    confidence: float | None
+
+
+class AiDebugDropped(BaseModel):
+    """A candidate rejected by the router's citation filter."""
+
+    field_name: str
+    value: str
+    reason: str  # e.g. "missing source_url for strict-citation field"
+
+
+class AiSuggestionDebug(BaseModel):
+    """Response for POST /ai-suggestions/debug. Nothing persisted to DB."""
+
+    model_used: str
+    found: bool
+    raw_search_notes: str | None
+    candidates: list[AiDebugCandidate]
+    dropped_candidates: list[AiDebugDropped]
+    strict_citation_fields: list[str]
+    error_message: str | None = None

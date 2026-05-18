@@ -1,17 +1,33 @@
-# JAN codes for dental product lookup feasibility test
-# These are well-known Japanese dental products — placeholder set for smoke testing.
-7612412423013
-# Sunstar GUM デンタルブラシ #211 (3列コンパクト やわらかめ)
-4901616213241
+# 20-JAN diagnostic sample drawn from pdf_retail-sunstar-20251201_jancode_02.pdf
+# Original 5-JAN test set was backed up to inputs/jan_codes.txt.bak
+#
+# Hypothesis: the 10 oldest JANs (4901616005xxx–007xxx range) will show
+# more "not found" cases due to discontinued SKUs, while the newest
+# (4901616970xxx + the 4987261xxx range) should resolve more reliably.
 
-# Ci メディカル Ci700 超先細 Mふつう
-4582357820024
+# ─── 10 oldest JANs (lowest in the PDF) ───
+# Likely discontinued / archived SKUs.
+4901616005266
+4901616006096
+4901616006119
+4901616006560
+4901616006621
+4901616006867
+4901616006898
+4901616007000
+4901616007093
+4901616007338
 
-# ライオン クリニカアドバンテージ デンタルフロス Y字タイプ
-4903301282532
-
-# サンスター バトラー デンタルフロス
-4901616215122
-
-# ライオン システマ ハグキプラス ハミガキ 90g
-4903301293248
+# ─── 10 newest JANs ───
+# Mix of the latest Sunstar 4901616970xxx range and 5 non-Sunstar 4987261xxx
+# codes (different GS1 prefix — bonus signal: do non-Sunstar JANs resolve too?).
+4901616970007
+4901616970021
+4901616970038
+4901616970083
+4901616970090
+4987261000245
+4987261000252
+4987261000320
+4987261000344
+4987261000528

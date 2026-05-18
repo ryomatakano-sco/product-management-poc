@@ -133,6 +133,31 @@ function PlxSidebar({ current }) {
           <div style={{ fontSize: 10, color: T.PLX_SIDEBAR_INK_DIM }}>本院 / 管理者</div>
         </div>
       </div>
+
+      {/* Version badge — shows "Alpha v0.4.0" so users (and demo viewers)
+          always know which build they're looking at. The pill uses warm
+          amber to signal pre-release; flip to neutral once we cut a beta. */}
+      <div style={{
+        padding: "8px 16px 12px",
+        borderTop: "1px solid rgba(255,255,255,0.06)",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        gap: 8,
+      }}
+        title={`SCO 商品管理 PoC ${PLX_VERSION.channel} v${PLX_VERSION.number}`}
+      >
+        <span style={{
+          fontSize: 9, fontWeight: 700, letterSpacing: ".08em",
+          color: "#FCD34D", background: "rgba(252,211,77,0.12)",
+          padding: "2px 7px", borderRadius: 9999,
+          border: "1px solid rgba(252,211,77,0.35)",
+          textTransform: "uppercase",
+        }}>{PLX_VERSION.channel}</span>
+        <span style={{
+          fontSize: 10, color: T.PLX_SIDEBAR_INK_DIM,
+          fontFamily: "ui-monospace, SFMono-Regular, monospace",
+          fontVariantNumeric: "tabular-nums",
+        }}>v{PLX_VERSION.number}</span>
+      </div>
     </aside>
   );
 }
@@ -269,10 +294,32 @@ function ChevronRight({ color, size = 14 }) {
 // ─────────────────────────────────────────────────────────────────────
 // Top bar
 // ─────────────────────────────────────────────────────────────────────
+// Label → hash route lookup. Used to auto-link string breadcrumbs without
+// touching every page. Last item is never linked (it's the current page).
+// If a page wants a custom target, pass {label, to} instead of a string.
+const BREADCRUMB_ROUTES = {
+  "ホーム":     "/dashboard",
+  "商品一覧":   "/products",
+  "在庫":       "/inventory",
+  "カテゴリ":   "/categories",
+  "発注書":     "/purchase-orders",
+  "販売記録":   "/sales",
+  "仕入先":     "/vendors",
+  "院・店舗":   "/branches",
+  "設定":       "/settings",
+  "サポート":   "/support",
+};
+
 function PlxTopBar({ title, breadcrumbs, headerRight }) {
   // Brief §2.7 says the top bar is 56 px and contains breadcrumbs (left),
   // headerRight slot, a global search input, and a bell. `title` is kept
   // optional for screens that want the H1 in the topbar instead of the body.
+  //
+  // Breadcrumb items may be:
+  //   - string             — auto-linked via BREADCRUMB_ROUTES if known;
+  //                          last item is always static text (current page).
+  //   - {label, to}        — explicit href = `#${to}`. Use when the auto-
+  //                          lookup doesn't apply (e.g. detail pages).
   return (
     <div style={{
       height: 56, background: T.PLX_SURFACE_0, borderBottom: `1px solid ${T.PLX_LINE_200}`,
@@ -280,17 +327,36 @@ function PlxTopBar({ title, breadcrumbs, headerRight }) {
     }}>
       <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6 }}>
         {breadcrumbs && breadcrumbs.length > 0 ? (
-          breadcrumbs.map((b, i) => (
-            <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              {i > 0 && <ChevronRight color={T.PLX_INK_400} />}
-              <span style={{
-                fontSize: 13,
-                fontWeight: i === breadcrumbs.length - 1 ? 600 : 400,
-                color: i === breadcrumbs.length - 1 ? T.PLX_INK_900 : T.PLX_INK_500,
-                whiteSpace: "nowrap",
-              }}>{b}</span>
-            </span>
-          ))
+          breadcrumbs.map((b, i) => {
+            const isLast = i === breadcrumbs.length - 1;
+            const isObj = b && typeof b === "object";
+            const label = isObj ? b.label : b;
+            const to = isObj ? b.to : BREADCRUMB_ROUTES[label];
+            const textStyle = {
+              fontSize: 13,
+              fontWeight: isLast ? 600 : 400,
+              color: isLast ? T.PLX_INK_900 : T.PLX_INK_500,
+              whiteSpace: "nowrap",
+              textDecoration: "none",
+            };
+            return (
+              <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                {i > 0 && <ChevronRight color={T.PLX_INK_400} />}
+                {!isLast && to ? (
+                  <a
+                    href={"#" + to}
+                    style={{ ...textStyle, cursor: "pointer" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = T.PLX_GREEN_600 || T.PLX_INK_900; e.currentTarget.style.textDecoration = "underline"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = T.PLX_INK_500; e.currentTarget.style.textDecoration = "none"; }}
+                  >
+                    {label}
+                  </a>
+                ) : (
+                  <span style={textStyle}>{label}</span>
+                )}
+              </span>
+            );
+          })
         ) : title ? (
           <span style={{ fontSize: 14, fontWeight: 600, color: T.PLX_INK_900 }}>{title}</span>
         ) : null}

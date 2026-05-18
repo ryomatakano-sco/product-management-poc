@@ -68,14 +68,33 @@ function SegmentedControl({ value, onChange, options }) {
   );
 }
 
-function FormRow({ label, children, hint }) {
+function FormRow({ label, children, hint, required, requiredFor, error }) {
+  // required:    show a red * — field is required to save (any status).
+  // requiredFor: e.g. "公開" — show a softer "公開時必須" tag without the red *.
   return (
     <div style={{ marginBottom: 16 }}>
-      <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: PLX_TEXT, marginBottom: 6 }}>
-        {label}
+      <label style={{
+        display: "flex", alignItems: "center", gap: 6,
+        fontSize: 12, fontWeight: 700, color: PLX_TEXT, marginBottom: 6,
+      }}>
+        <span>{label}</span>
+        {required && (
+          <span style={{ color: "#DC2626", fontSize: 12, fontWeight: 700 }} title="必須">*</span>
+        )}
+        {requiredFor && !required && (
+          <span style={{
+            fontSize: 9, fontWeight: 700, color: "#B45309", background: "#FEF3C7",
+            padding: "2px 6px", borderRadius: 9999, border: "1px solid #FDE68A",
+          }}>{requiredFor}時必須</span>
+        )}
       </label>
       {children}
-      {hint && <div style={{ fontSize: 11, color: PLX_MUTED, marginTop: 5 }}>{hint}</div>}
+      {error && (
+        <div style={{ fontSize: 11, color: "#DC2626", marginTop: 5, fontWeight: 600 }}>
+          {error}
+        </div>
+      )}
+      {hint && !error && <div style={{ fontSize: 11, color: PLX_MUTED, marginTop: 5 }}>{hint}</div>}
     </div>
   );
 }

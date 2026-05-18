@@ -59,7 +59,10 @@ EXTRACTION_SYSTEM_PROMPT = """\
 ウェブ検索エージェントが収集したテキストレポートを受け取り、ProductLookupResult スキーマに変換してください。
 
 ## ルール
-1. テキスト中にURLが併記されていない情報は、value を null にしてください。source_url がないフィールドは null です。これが最重要ルールです。
+1. URL併記ポリシーはフィールドごとに異なります:
+   - **厳格フィールド**（URLが必須。URL無しなら value も source_url も null にしてください）: `price_jpy`, `weight_g`, `fluoride_ppm`, `dimensions`, `image_urls`
+   - **緩和フィールド**（URLは推奨。URL無しでも value を採用可、その場合 source_url は null のまま）: `title`, `brand`, `description`, `category`, `indications`, `bristle_hardness`, `head_size`
+   緩和フィールドは、検索エージェントのレポート本文に値が記載されていれば、個別URLが併記されていなくても値を残してください。検証可能な数値・価格・画像は依然としてURLが必要です。
 2. found フィールド: 検索結果に該当商品が見つかったかどうか。「該当商品なし」等の記載があれば false。
 3. indications の value は list[str] 型です。
 4. image_urls の value は list[str] 型です。
@@ -142,7 +145,10 @@ NAME_EXTRACTION_SYSTEM_PROMPT = """\
 ウェブ検索エージェントが収集したテキストレポートを受け取り、ProductNameLookupResult スキーマに変換してください。
 
 ## ルール
-1. テキスト中にURLが併記されていない情報は、value を null にしてください。source_url がないフィールドは null です。これが最重要ルールです。
+1. URL併記ポリシーはフィールドごとに異なります:
+   - **厳格フィールド**（URLが必須。URL無しなら value も source_url も null にしてください）: `price_jpy`, `weight_g`, `fluoride_ppm`, `dimensions`, `image_urls`
+   - **緩和フィールド**（URLは推奨。URL無しでも value を採用可、その場合 source_url は null のまま）: `title`, `brand`, `description`, `category`, `indications`, `bristle_hardness`, `head_size`, `jan_code`
+   緩和フィールドは、検索エージェントのレポート本文に値が記載されていれば、個別URLが併記されていなくても値を残してください。検証可能な数値・価格・画像は依然としてURLが必要です。
 2. found フィールド: 検索結果に該当商品が見つかったかどうか。「該当商品なし」等の記載があれば false。
 3. jan_code の value は str 型です（バーコード番号）。ページ上に記載されていた場合のみセットしてください。
 4. indications の value は list[str] 型です。

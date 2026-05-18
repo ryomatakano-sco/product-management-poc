@@ -1,10 +1,19 @@
 // Product Create — form + AI Assist modal. Real backend call to /ai-suggestions
 // (returns mock data when OPENAI_API_KEY isn't set; real OpenAI when it is).
 
-function ProductCreate() {
+function ProductCreate({ editId }) {
+  // When editId is set, we PATCH an existing product instead of POSTing a new
+  // one. The form prefills from a GET of the existing product. Variants/tags
+  // editing on this screen is limited to top-level fields; deep variant
+  // edits stay in ProductDetail's inline 在庫調整 modal.
+  const isEdit = !!editId;
   const categoriesQ = useFetch(() => api.listCategories(), []);
   const vendorsQ    = useFetch(() => api.listVendors(),    []);
   const tagsQ       = useFetch(() => api.listTags(),       []);
+  const editingQ    = useFetch(
+    () => isEdit ? api.getProduct(editId) : Promise.resolve(null),
+    [editId]
+  );
 
   const [name, setName]         = React.useState("");
   const [nameKana, setNameKana] = React.useState("");
@@ -27,39 +36,135 @@ function ProductCreate() {
     sku: "", barcode: "", price: "", cost: "", stock: "",
     opt1k: "", opt1v: "", isDefault: true,
   });
+
+  // When loading an existing product for edit, prefill the form once the
+  // data lands. Only runs in edit mode.
+  const [prefilled, setPrefilled] = React.useState(false);
+  React.useEffect(() => {
+    if (!isEdit || !editingQ.data || prefilled) return;
+    const p = editingQ.data;
+    setName(p.name || "");
+    setNameKana(p.name_kana || "");
+    setCategoryId(p.category_id != null ? String(p.category_id) : "");
+    setVendorId(p.vendor_id != null ? String(p.vendor_id) : "");
+    setStatus(p.status || "draft");
+    setTags(p.tags || []);
+    setDescription(p.description || "");
+    setItemType(p.item_type || "product");
+    setReorderUrl(p.reorder_url || "");
+    setExpiryDate(p.expiry_date || "");
+    setLotNumber(p.lot_number || "");
+    setUnit(p.unit || "個");
+    const hv = (p.variants || []).find((v) => v.is_default) || (p.variants || [])[0] || {};
+    setVariant({
+      sku: hv.sku || "",
+      barcode: hv.barcode || "",
+      price: hv.price != null ? String(hv.price) : "",
+      cost:  hv.cost  != null ? String(hv.cost)  : "",
+      stock: hv.on_hand != null ? String(hv.on_hand) : "",
+      opt1k: hv.option1_name  || "",
+      opt1v: hv.option1_value || "",
+      isDefault: hv.is_default != null ? hv.is_default : true,
+    });
+    setPrefilled(true);
+  }, [isEdit, editingQ.data, prefilled]);
   const [saving, setSaving]     = React.useState(false);
   const [error, setError]       = React.useState(null);
+  const [fieldErrors, setFieldErrors] = React.useState({});
+
+  // Required fields. Drafts only need a name (so the user can save partial work).
+  // Publishing requires the full set so the product is actually usable.
+  // Keep this function pure so the disabled state can call it on every render.
+  const validate = (newStatus) => {
+    const errs = {};
+    if (!name.trim()) errs.name = "商品名は必須です";
+    if (newStatus === "active") {
+      if (!categoryId) errs.categoryId = "カテゴリは必須です（公開時）";
+      if (!itemType) errs.itemType = "種別は必須です（公開時）";
+      if (!variant.barcode || !variant.barcode.trim()) {
+        errs.barcode = "JAN/バーコードは必須です（公開時）";
+      }
+      if (!variant.price || isNaN(Number(variant.price))) {
+        errs.price = "販売価格は必須です（公開時）";
+      }
+    }
+    return errs;
+  };
+
+  // True when publish-as-active is currently allowed.
+  const canPublish = Object.keys(validate("active")).length === 0;
+  const canDraft   = Object.keys(validate("draft")).length === 0;
 
   const save = async (newStatus) => {
+    const errs = validate(newStatus);
+    setFieldErrors(errs);
+    if (Object.keys(errs).length > 0) {
+      setError(Object.values(errs)[0]);
+      return;
+    }
     setSaving(true); setError(null);
     try {
-      const created = await api.createProduct({
-        name,
-        name_kana: nameKana || null,
-        category_id: categoryId ? Number(categoryId) : null,
-        vendor_id:   vendorId   ? Number(vendorId)   : null,
-        description: description || null,
-        status: newStatus,
-        ai_session_id: aiSessionId,
-        // Yoshioka 2026-05-11 additions
-        item_type: itemType,
-        reorder_url: reorderUrl || null,
-        expiry_date: itemType === "consumable" && expiryDate ? expiryDate : null,
-        lot_number:  itemType === "consumable" ? (lotNumber || null) : null,
-        unit:        itemType === "consumable" ? (unit || null) : null,
-        variants: [{
-          sku: variant.sku || null,
-          barcode: variant.barcode || null,
-          option1_name:  variant.opt1k || null,
-          option1_value: variant.opt1v || null,
-          price: variant.price || null,
-          cost:  variant.cost  || null,
-          on_hand: variant.stock ? (parseInt(variant.stock, 10) || 0) : 0,
-          is_default: variant.isDefault,
-        }],
-        tags,
-      });
-      navigate(`/products/${created.id}`);
+      let resultId;
+      if (isEdit) {
+        // PATCH only top-level fields. Variants and tags aren't on
+        // ProductUpdate — they're managed in ProductDetail.
+        await api.updateProduct(editId, {
+          name,
+          name_kana: nameKana || null,
+          category_id: categoryId ? Number(categoryId) : null,
+          vendor_id:   vendorId   ? Number(vendorId)   : null,
+          description: description || null,
+          status: newStatus,
+          item_type: itemType,
+          reorder_url: reorderUrl || null,
+          expiry_date: itemType === "consumable" && expiryDate ? expiryDate : null,
+          lot_number:  itemType === "consumable" ? (lotNumber || null) : null,
+          unit:        itemType === "consumable" ? (unit || null) : null,
+        });
+        resultId = editId;
+      } else {
+        const created = await api.createProduct({
+          name,
+          name_kana: nameKana || null,
+          category_id: categoryId ? Number(categoryId) : null,
+          vendor_id:   vendorId   ? Number(vendorId)   : null,
+          description: description || null,
+          status: newStatus,
+          ai_session_id: aiSessionId,
+          // Yoshioka 2026-05-11 additions
+          item_type: itemType,
+          reorder_url: reorderUrl || null,
+          expiry_date: itemType === "consumable" && expiryDate ? expiryDate : null,
+          lot_number:  itemType === "consumable" ? (lotNumber || null) : null,
+          unit:        itemType === "consumable" ? (unit || null) : null,
+          variants: [{
+            sku: variant.sku || null,
+            barcode: variant.barcode || null,
+            option1_name:  variant.opt1k || null,
+            option1_value: variant.opt1v || null,
+            price: variant.price || null,
+            cost:  variant.cost  || null,
+            on_hand: variant.stock ? (parseInt(variant.stock, 10) || 0) : 0,
+            is_default: variant.isDefault,
+          }],
+          tags,
+        });
+        resultId = created.id;
+      }
+      // After saving, take the user somewhere they can see the result.
+      // Edit → back to the product detail page. Create-draft → drafts list.
+      // Create-active → detail page.
+      if (isEdit) {
+        const msg = newStatus === "active" ? "商品を更新・公開しました" : "下書きを更新しました";
+        if (window.PLX_TOAST?.success) window.PLX_TOAST.success(msg);
+        navigate(`/products/${resultId}`);
+      } else if (newStatus === "draft") {
+        if (window.PLX_TOAST?.success) window.PLX_TOAST.success("下書きとして保存しました");
+        navigate(`/products?status=draft`);
+      } else {
+        if (window.PLX_TOAST?.success) window.PLX_TOAST.success("商品を公開しました");
+        navigate(`/products/${resultId}`);
+      }
     } catch (e) {
       setError(e.body?.detail || e.message);
     } finally {
@@ -85,26 +190,90 @@ function ProductCreate() {
     setAiOpen(false);
   };
 
+  // Tooltip lists what's still missing to publish — guides the user without
+  // breaking the button.
+  const publishMissing = Object.values(validate("active"));
+  const publishTooltip = publishMissing.length
+    ? "公開に必要: " + publishMissing.join(" / ")
+    : "公開可能です";
+
+  // Labels switch between create and edit. In edit mode:
+  //   - "下書きとして保存"  → "下書きとして更新" (or keep state as draft)
+  //   - "商品を公開"        → "更新して公開" (publishes a previously-saved draft)
+  //     or just "更新" when the product is already active.
+  const draftBtnLabel = isEdit ? "下書きとして更新" : "下書きとして保存";
+  const publishBtnLabel = isEdit
+    ? (status === "active" ? "更新" : "更新して公開")
+    : "商品を公開";
+  const cancelTarget = isEdit ? `/products/${editId}` : "/products";
+
   const headerRight = (
     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      <button onClick={() => navigate("/products")} style={btnGhost}>キャンセル</button>
-      <button onClick={() => save("draft")} style={btnSecondary} disabled={!name || saving}>
-        下書きとして保存
+      <button onClick={() => navigate(cancelTarget)} style={btnGhost}>キャンセル</button>
+      <button
+        onClick={() => save("draft")}
+        style={btnSecondary}
+        disabled={!canDraft || saving}
+        title={canDraft ? "下書きを保存します" : "商品名を入力してください"}
+      >
+        {draftBtnLabel}
       </button>
-      <button onClick={() => save("active")} style={btnPrimary} disabled={!name || saving}>
-        商品を公開
+      <button
+        onClick={() => save("active")}
+        style={btnPrimary}
+        disabled={!canPublish || saving}
+        title={publishTooltip}
+      >
+        {publishBtnLabel}
       </button>
     </div>
   );
 
+  // While the edit-mode fetch is still in flight, show a spinner. Avoids
+  // flashing an empty "create new" form before the prefill lands.
+  if (isEdit && editingQ.loading && !prefilled) {
+    return (
+      <AdminShell currentNav="products"
+        breadcrumbs={["ホーム", "商品一覧", "編集中…"]}>
+        <div style={{ padding: 60, textAlign: "center", color: PLX_MUTED }}>
+          読み込み中…
+        </div>
+      </AdminShell>
+    );
+  }
+  if (isEdit && editingQ.error) {
+    return (
+      <AdminShell currentNav="products"
+        breadcrumbs={["ホーム", "商品一覧", "編集中…"]}>
+        <div style={{ padding: 60, textAlign: "center", color: PLX_WARN }}>
+          商品の取得に失敗しました。
+        </div>
+      </AdminShell>
+    );
+  }
+
+  const lastCrumb = isEdit
+    ? `${editingQ.data?.name?.slice(0, 24) || "商品"} を編集`
+    : "新規登録";
   return (
-    // Brief §4.3: breadcrumb 「ホーム / 商品一覧 / 新規登録」.
+    // Brief §4.3: breadcrumb 「ホーム / 商品一覧 / 新規登録」 (or "X を編集" in edit mode).
     <AdminShell currentNav="products" headerRight={headerRight}
-      breadcrumbs={["ホーム", "商品一覧", "新規登録"]}>
-      <button onClick={() => navigate("/products")} style={{
+      breadcrumbs={["ホーム", "商品一覧", lastCrumb]}>
+      <button onClick={() => navigate(cancelTarget)} style={{
         background: "none", border: "none", color: PLX_MUTED,
         fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0, marginBottom: 14,
-      }}>← 商品一覧へ戻る</button>
+      }}>{isEdit ? "← 商品詳細へ戻る" : "← 商品一覧へ戻る"}</button>
+
+      {error && (
+        <div style={{
+          background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 10,
+          padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#991B1B",
+          fontWeight: 600, display: "flex", alignItems: "center", gap: 10,
+        }}>
+          <span style={{ fontSize: 16 }}>⚠</span>
+          <span>{error}</span>
+        </div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 18 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -143,7 +312,7 @@ function ProductCreate() {
           {/* Basic info */}
           <FormSection title="基本情報" subtitle="商品の基本となる情報を入力します">
             {/* Yoshioka 2026-05-11: 品目種別 toggle at the very top */}
-            <FormRow label="品目種別">
+            <FormRow label="品目種別" required error={fieldErrors.itemType}>
               <ItemKindToggle value={itemType} onChange={setItemType} />
               <div style={{ fontSize: 11, color: PLX_MUTED, marginTop: 6 }}>
                 消耗品は使用期限管理の対象になります
@@ -151,7 +320,7 @@ function ProductCreate() {
             </FormRow>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-              <FormRow label="商品名（漢字）">
+              <FormRow label="商品名（漢字）" required error={fieldErrors.name}>
                 <input value={name} onChange={(e) => setName(e.target.value)}
                   placeholder="例：エグザフレックス インプレッション" style={formInput} />
               </FormRow>
@@ -161,7 +330,7 @@ function ProductCreate() {
               </FormRow>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-              <FormRow label="カテゴリ">
+              <FormRow label="カテゴリ" requiredFor="公開" error={fieldErrors.categoryId}>
                 <Select value={categoryId} onChange={setCategoryId} options={[
                   { value: "", label: "選択してください" },
                   ...(categoriesQ.data?.items ?? []).map((c) => ({ value: String(c.id), label: c.name })),
@@ -301,14 +470,14 @@ function ProductCreate() {
                   onChange={(e) => setVariant({ ...variant, sku: e.target.value })}
                   placeholder="GC-EX-001" style={formInput} />
               </FormRow>
-              <FormRow label="JAN / バーコード">
+              <FormRow label="JAN / バーコード" requiredFor="公開" error={fieldErrors.barcode}>
                 <input value={variant.barcode}
                   onChange={(e) => setVariant({ ...variant, barcode: e.target.value })}
                   placeholder="4987246012001" style={formInput} />
               </FormRow>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
-              <FormRow label="販売価格 (¥)">
+              <FormRow label="販売価格 (¥)" requiredFor="公開" error={fieldErrors.price}>
                 <div style={{ position: "relative" }}>
                   <span style={{
                     position: "absolute", left: 14, top: 10,
@@ -521,14 +690,30 @@ function AiAssistModal({ onClose, onApply }) {
   const [picks, setPicks] = React.useState({});
   const [session, setSession] = React.useState(null);
   const [error, setError] = React.useState(null);
+  const [scanOpen, setScanOpen] = React.useState(false);
 
-  const lookup = async () => {
+  // Called when the BarcodeScanner finds a code. We:
+  //   1. close the scanner overlay
+  //   2. set the JAN value so the user can see what was scanned
+  //   3. immediately fire the lookup with an explicit override so we don't
+  //      have to wait for the setJan setState to flush before reading it.
+  const onScanDetected = (code) => {
+    setScanOpen(false);
+    setMode("jan");
+    setJan(code);
+    // Fire lookup on next microtask so the input visibly updates first.
+    Promise.resolve().then(() => lookup({ janOverride: code }));
+  };
+
+  const lookup = async (opts) => {
+    const janOverride = opts && opts.janOverride;
+    const useJan = janOverride !== undefined ? janOverride : jan;
     setPhase("loading"); setError(null);
     try {
       // Mode toggle: route the user's input to the correct backend field.
       let s = await api.createAiSuggestion({
-        jan: mode === "jan" ? (jan || undefined) : undefined,
-        title: mode === "name" ? (name || undefined) : undefined,
+        jan: (janOverride !== undefined || mode === "jan") ? (useJan || undefined) : undefined,
+        title: (janOverride === undefined && mode === "name") ? (name || undefined) : undefined,
       });
       let attempts = 0;
       while (s.status === "pending" && attempts < 20) {
@@ -563,6 +748,12 @@ function AiAssistModal({ onClose, onApply }) {
       backdropFilter: "blur(4px)", display: "flex",
       alignItems: "center", justifyContent: "center", zIndex: 50,
     }}>
+      {scanOpen && (
+        <BarcodeScanner
+          onDetected={onScanDetected}
+          onClose={() => setScanOpen(false)}
+        />
+      )}
       <div onClick={(e) => e.stopPropagation()} style={{
         background: "#fff", borderRadius: 18, width: 680, maxHeight: "86%",
         boxShadow: "0 24px 60px rgba(17,24,39,.22)", overflow: "hidden",
@@ -632,19 +823,18 @@ function AiAssistModal({ onClose, onApply }) {
                         letterSpacing: ".05em", outline: "none", background: "#fff",
                         boxSizing: "border-box", color: PLX_TEXT, fontWeight: 600,
                       }} />
-                    <button disabled title="準備中: カメラスキャンは今後対応" style={{
-                      position: "absolute", right: 6, top: 6, height: 42, padding: "0 14px",
-                      borderRadius: 9, background: "#F3F4F6", color: PLX_SUBTLE,
-                      border: "none", cursor: "not-allowed",
-                      fontWeight: 700, fontSize: 12,
-                      display: "inline-flex", alignItems: "center", gap: 6,
-                    }}>
-                      <span>📷 カメラで読み取る</span>
-                      <span style={{
-                        fontSize: 9, background: "#fff", color: PLX_MUTED,
-                        padding: "2px 6px", borderRadius: 9999,
-                        border: `1px solid ${PLX_BORDER}`,
-                      }}>準備中</span>
+                    <button
+                      onClick={() => setScanOpen(true)}
+                      title="カメラでバーコードをスキャン"
+                      style={{
+                        position: "absolute", right: 6, top: 6, height: 42, padding: "0 14px",
+                        borderRadius: 9, background: PLX_GREEN, color: "#fff",
+                        border: "none", cursor: "pointer",
+                        fontWeight: 700, fontSize: 12,
+                        display: "inline-flex", alignItems: "center", gap: 6,
+                      }}
+                    >
+                      📷 カメラで読み取る
                     </button>
                   </>
                 ) : (
@@ -830,6 +1020,170 @@ function ConfBar({ val }) {
         marginTop: 3, overflow: "hidden",
       }}>
         <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 2 }} />
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Barcode scanner — camera-based JAN reader for the AI Assist modal.
+// Uses html5-qrcode from CDN (see index.html). Lazy: only this component
+// touches `Html5Qrcode`, so other pages never load the camera stack.
+// ─────────────────────────────────────────────────────────────────────────────
+function BarcodeScanner({ onDetected, onClose }) {
+  const containerId = "plx-barcode-reader";
+  const [error, setError] = React.useState(null);
+  const [starting, setStarting] = React.useState(true);
+  // running flag lives in a ref so both onSuccess and the cleanup return
+  // see a single shared "has the camera actually started?" state without
+  // re-triggering the effect.
+  const stateRef = React.useRef({ scanner: null, running: false, detected: false });
+  // Keep onDetected fresh without re-running the effect.
+  const onDetectedRef = React.useRef(onDetected);
+  onDetectedRef.current = onDetected;
+
+  React.useEffect(() => {
+    if (typeof window.Html5Qrcode === "undefined") {
+      setError("バーコードリーダーの読み込みに失敗しました。ページを再読み込みしてください。");
+      setStarting(false);
+      return;
+    }
+    let scanner;
+    try {
+      scanner = new window.Html5Qrcode(containerId, /* verbose */ false);
+    } catch (e) {
+      setError("カメラの初期化に失敗しました: " + (e && e.message ? e.message : String(e)));
+      setStarting(false);
+      return;
+    }
+    stateRef.current.scanner = scanner;
+
+    const config = {
+      fps: 10,
+      qrbox: { width: 260, height: 140 },   // wide rectangle suits 1D barcodes
+      aspectRatio: 1.7,
+      // EAN-13 covers JAN-13 (Japan); keep QR enabled too in case a vendor
+      // ships their products with a QR-coded SKU.
+      formatsToSupport: window.Html5QrcodeSupportedFormats
+        ? [
+          window.Html5QrcodeSupportedFormats.EAN_13,
+          window.Html5QrcodeSupportedFormats.EAN_8,
+          window.Html5QrcodeSupportedFormats.CODE_128,
+          window.Html5QrcodeSupportedFormats.QR_CODE,
+        ]
+        : undefined,
+    };
+
+    const onSuccess = (decoded) => {
+      // Library keeps firing onSuccess until we stop. Bail on every call
+      // after the first — but DO NOT await stop() before calling onDetected.
+      // The parent's onScanDetected setState may unmount us, which then runs
+      // cleanup() below; the cleanup is what actually stops the scanner.
+      if (stateRef.current.detected) return;
+      stateRef.current.detected = true;
+      // Hand the code to the parent in a microtask so React's batched
+      // setState in the parent doesn't race with whatever Html5Qrcode is
+      // doing internally on the current frame.
+      const code = String(decoded);
+      Promise.resolve().then(() => {
+        try { onDetectedRef.current(code); }
+        catch (e) { console.error("onDetected threw:", e); }
+      });
+    };
+    const onErr = () => {/* per-frame decode misses are normal; ignore */};
+
+    scanner.start({ facingMode: "environment" }, config, onSuccess, onErr)
+      .then(() => {
+        stateRef.current.running = true;
+        setStarting(false);
+      })
+      .catch((e) => {
+        setError(
+          (e && e.message ? e.message : String(e))
+          + " — カメラ権限を許可してください。"
+        );
+        setStarting(false);
+      });
+
+    return () => {
+      // Cleanup runs when the parent unmounts us (after onDetected fires,
+      // or when the user clicks ×/cancel). Guard every step so a partially-
+      // started scanner can't crash React on unmount.
+      const s = stateRef.current.scanner;
+      stateRef.current.scanner = null;
+      if (!s) return;
+      // Only call stop() if start() actually resolved. Calling stop on a
+      // scanner that hasn't reached "running" state throws synchronously in
+      // some html5-qrcode versions.
+      const stopPromise = stateRef.current.running
+        ? s.stop().catch(() => {})
+        : Promise.resolve();
+      stopPromise.then(() => {
+        try {
+          if (typeof s.clear === "function") s.clear();
+        } catch (e) {
+          // Clear() can throw when the container DOM is already gone.
+          // That's expected on fast unmount — swallow it.
+        }
+      });
+      stateRef.current.running = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div onClick={(e) => e.stopPropagation()} style={{
+      position: "fixed", inset: 0, background: "rgba(17,24,39,0.85)",
+      zIndex: 100, display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center", padding: 20,
+    }}>
+      <div style={{
+        background: "#fff", borderRadius: 16, padding: 16, maxWidth: 460, width: "100%",
+        boxShadow: "0 24px 60px rgba(0,0,0,0.5)",
+      }}>
+        <div style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          marginBottom: 12,
+        }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: PLX_TEXT }}>
+            📷 バーコードをスキャン
+          </div>
+          <button onClick={onClose} style={{
+            background: "none", border: "none", cursor: "pointer",
+            fontSize: 20, color: PLX_MUTED, padding: 4, lineHeight: 1,
+          }}>×</button>
+        </div>
+
+        {error ? (
+          <div style={{
+            background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 10,
+            padding: "12px 14px", fontSize: 12, color: "#991B1B", lineHeight: 1.6,
+          }}>
+            {error}
+          </div>
+        ) : (
+          <>
+            <div id={containerId} style={{
+              width: "100%", minHeight: 240, borderRadius: 10,
+              overflow: "hidden", background: "#000",
+            }} />
+            <div style={{
+              marginTop: 10, fontSize: 11, color: PLX_MUTED, textAlign: "center",
+            }}>
+              {starting
+                ? "カメラを起動しています…"
+                : "バーコードを枠内に合わせると自動で読み取ります"}
+            </div>
+          </>
+        )}
+
+        <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{
+            height: 36, padding: "0 16px", borderRadius: 9999,
+            background: "#F3F4F6", color: PLX_TEXT, border: "none",
+            fontWeight: 700, fontSize: 12, cursor: "pointer",
+          }}>キャンセル</button>
+        </div>
       </div>
     </div>
   );

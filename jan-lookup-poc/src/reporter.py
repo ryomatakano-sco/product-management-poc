@@ -31,15 +31,25 @@ def generate_summary(
     found_rate = found_count / total * 100 if total else 0
 
     # --- Field fill-rate ---
+    # Two columns:
+    #   - has_value: field has a value (Tier 3a — what users see / can edit)
+    #   - grounded:  field has both value AND source_url (cited)
     field_names = ProductLookupResult.GROUNDED_FIELD_NAMES
     field_fill: dict[str, int] = {name: 0 for name in field_names}
+    field_value_only: dict[str, int] = {name: 0 for name in field_names}
     for _, r in found:
         for name in field_names:
             f = getattr(r, name)
+            if f.value is not None:
+                field_value_only[name] += 1
             if f.value is not None and f.source_url is not None:
                 field_fill[name] += 1
 
-    field_fill_sorted = sorted(field_fill.items(), key=lambda x: x[1], reverse=True)
+    field_fill_sorted = sorted(
+        field_fill.items(),
+        key=lambda x: (field_value_only[x[0]], x[1]),
+        reverse=True,
+    )
 
     # --- Build markdown ---
     lines: list[str] = []
@@ -60,11 +70,15 @@ def generate_summary(
 
     # Field fill-rate table
     lines.append("## Field Fill Rate (among found=true JANs)\n")
-    lines.append("| Field | Grounded | Rate |")
-    lines.append("|-------|----------|------|")
+    lines.append("`has_value` = field populated (Tier 3a metric). `grounded` = value AND URL.\n")
+    lines.append("| Field | has_value | grounded | value rate |")
+    lines.append("|-------|-----------|----------|------------|")
     for name, count in field_fill_sorted:
-        rate = count / found_count * 100 if found_count else 0
-        lines.append(f"| {name} | {count}/{found_count} | {rate:.0f}% |")
+        v_count = field_value_only[name]
+        v_rate = v_count / found_count * 100 if found_count else 0
+        lines.append(
+            f"| {name} | {v_count}/{found_count} | {count}/{found_count} | {v_rate:.0f}% |"
+        )
     lines.append("")
 
     # Per-JAN table

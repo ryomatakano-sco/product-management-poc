@@ -65,6 +65,13 @@
   <script src="https://unpkg.com/@babel/standalone@7.25.7/babel.min.js" crossorigin></script>
 
   <!--
+    Barcode scanner. html5-qrcode supports EAN-13 / JAN-13 / EAN-8 / Code128
+    via getUserMedia + a built-in WASM decoder. Lazy: only the AI Assist
+    modal touches `Html5Qrcode`, so other pages don't pay any cost.
+  -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" crossorigin></script>
+
+  <!--
     Load order matters: each module attaches its exports onto `window`,
     later files read from `window`. No build step, no bundler.
   -->

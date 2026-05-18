@@ -52,6 +52,8 @@ function parseHash() {
   if (!h || h === "/" || h === "/dashboard") return { name: "dashboard", query };
   if (h === "/products") return { name: "list", query };
   if (h === "/products/new") return { name: "create", query };
+  const edit = h.match(/^\/products\/(\d+)\/edit$/);
+  if (edit) return { name: "edit", id: edit[1], query };
   const m = h.match(/^\/products\/(\d+)$/);
   if (m) return { name: "detail", id: m[1], query };
   // 2026-05-12: routes that used to be UnderConstruction stubs now have

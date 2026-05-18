@@ -13,8 +13,11 @@ from sqlalchemy.orm import selectinload
 from app.deps import DB, StoreId
 from app.models.ai_session import AiSessionStatus, AiSuggestionFieldOption, AiSuggestionSession
 from app.schemas.ai_suggestion import (
+    AiDebugCandidate,
+    AiDebugDropped,
     AiFieldOptionRead,
     AiOptionApply,
+    AiSuggestionDebug,
     AiSuggestionRead,
     AiSuggestionRequest,
 )
@@ -22,6 +25,13 @@ from app.services.ai_agent import DEFAULT_MODEL, run_product_lookup
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai-suggestions", tags=["ai-suggestions"])
+
+# Tier 3a: fields where a source URL is mandatory (verifiable claims).
+# All other fields are "lenient" — value kept even if no inline citation,
+# because the search agent's narrative is itself the source.
+STRICT_CITATION_FIELDS: frozenset[str] = frozenset(
+    {"price", "weight", "image_url", "fluoride_ppm", "dimensions"}
+)
 
 
 def _session_to_read(session: AiSuggestionSession) -> AiSuggestionRead:
@@ -75,8 +85,11 @@ async def create_ai_suggestion(body: AiSuggestionRequest, db: DB, store_id: Stor
 
         # Persist candidates as field_options
         for i, candidate in enumerate(result.candidates):
-            # Anti-hallucination: reject options without source_url (except name_kana)
-            if candidate.field_name != "name_kana" and not candidate.source_url:
+            # Anti-hallucination: only strict-citation fields require a source_url.
+            # Lenient fields (title, brand, description, category, indications, etc.)
+            # are kept even without an inline citation — the search agent's
+            # narrative as a whole is the source.
+            if candidate.field_name in STRICT_CITATION_FIELDS and not candidate.source_url:
                 continue
             opt = AiSuggestionFieldOption(
                 session_id=session.id,
@@ -161,4 +174,64 @@ async def apply_option(session_id: int, option_id: int, body: AiOptionApply, db:
         confidence=option.confidence,
         position=option.position,
         was_applied=option.was_applied,
+    )
+
+
+@router.post("/debug", response_model=AiSuggestionDebug)
+async def debug_ai_suggestion(body: AiSuggestionRequest):
+    """Read-only inspection of the AI pipeline.
+
+    Runs the same two-agent lookup as POST /ai-suggestions but does NOT
+    persist anything to the database. Returns the raw search-agent text,
+    every candidate the extraction agent produced, and which of those were
+    dropped by the strict-citation filter (with reasons).
+
+    Use this to investigate why a given JAN under-fetches in production.
+    """
+    if not body.jan and not body.title:
+        raise HTTPException(400, detail="At least one of 'jan' or 'title' is required")
+
+    try:
+        result = await run_product_lookup(jan=body.jan, title=body.title)
+    except Exception as e:
+        logger.error("AI debug failed: %s", e, exc_info=True)
+        return AiSuggestionDebug(
+            model_used=DEFAULT_MODEL,
+            found=False,
+            raw_search_notes=None,
+            candidates=[],
+            dropped_candidates=[],
+            strict_citation_fields=sorted(STRICT_CITATION_FIELDS),
+            error_message=str(e),
+        )
+
+    kept: list[AiDebugCandidate] = []
+    dropped: list[AiDebugDropped] = []
+    for c in result.candidates:
+        if c.field_name in STRICT_CITATION_FIELDS and not c.source_url:
+            dropped.append(
+                AiDebugDropped(
+                    field_name=c.field_name,
+                    value=c.value,
+                    reason="missing source_url for strict-citation field",
+                )
+            )
+            continue
+        kept.append(
+            AiDebugCandidate(
+                field_name=c.field_name,
+                value=c.value,
+                source_url=c.source_url,
+                source_title=c.source_title,
+                confidence=c.confidence,
+            )
+        )
+
+    return AiSuggestionDebug(
+        model_used=DEFAULT_MODEL,
+        found=getattr(result, "found", bool(kept)),
+        raw_search_notes=result.raw_search_notes,
+        candidates=kept,
+        dropped_candidates=dropped,
+        strict_citation_fields=sorted(STRICT_CITATION_FIELDS),
     )
