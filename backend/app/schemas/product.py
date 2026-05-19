@@ -186,6 +186,12 @@ class ProductListItem(BaseModel):
     expiry_date: date | None = None
     has_reorder_url: bool = False     # cheap signal for the quick-filter chip
 
+    # Search match reasons — only populated when `q` is set on the list call.
+    # Tells the frontend which field caused the row to match, so it can
+    # render a "SKU 一致" / "JAN 一致" pill next to the row.
+    # See _build_product_search() in routers/products.py.
+    match_reasons: list[str] = []
+
     @field_serializer("default_amount_at_payment", "default_price")
     @classmethod
     def ser_decimal(cls, v: Decimal | None) -> str | None:

@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import func, insert as sa_insert, select
+from sqlalchemy import case, exists, func, insert as sa_insert, literal, or_, select, text
 from sqlalchemy.orm import selectinload
 
 from app.deps import DB, StoreId
@@ -31,7 +31,61 @@ from app.schemas.product import (
 router = APIRouter(prefix="/products", tags=["products"])
 
 
-def _build_list_item(p: Product) -> ProductListItem:
+# MySQL's default FULLTEXT parser silently ignores tokens shorter than
+# `ft_min_word_len` (default 4 for MyISAM, `innodb_ft_min_token_size`
+# default 3). Common Japanese product/brand stems like "GUM" or "Ora" hit
+# that floor, so for short queries we always fall through to ILIKE on
+# name/kana. For ≥4-character queries we still OR FULLTEXT in alongside
+# ILIKE so partial substrings match too.
+_FULLTEXT_MIN_TOKEN = 4
+
+
+def _build_product_search(q: str):
+    """Return (filter, reasons_expression) for a `q` query.
+
+    filter: a SQLAlchemy boolean clause OR-ing every place the query can
+            match (name / kana / description / variant SKU / variant
+            barcode).
+    reasons_expression: a SQLAlchemy expression that, when selected
+            alongside Product columns, returns a comma-separated string
+            naming which fields actually matched on this row. Used by the
+            frontend to render match-reason pills.
+    """
+    like = f"%{q}%"
+    name_match = Product.name.ilike(like)
+    kana_match = Product.name_kana.ilike(like)
+    desc_match = Product.description.ilike(like)
+
+    # Variant SKU + barcode hits. Use EXISTS subqueries — cheaper than
+    # joining (which would multiply rows when a product has many variants
+    # and force DISTINCT downstream).
+    sku_match = exists(
+        select(literal(1))
+        .where(ProductVariant.product_id == Product.id)
+        .where(ProductVariant.sku.ilike(like))
+    )
+    barcode_match = exists(
+        select(literal(1))
+        .where(ProductVariant.product_id == Product.id)
+        .where(ProductVariant.barcode.ilike(like))
+    )
+
+    filter_clause = or_(name_match, kana_match, desc_match, sku_match, barcode_match)
+
+    # Reasons: CASE-when each predicate, concatenated. We do this in SQL so
+    # the list query doesn't need a per-row Python pass.
+    reasons = func.concat_ws(
+        ",",
+        case((name_match, "name"), else_=None),
+        case((kana_match, "kana"), else_=None),
+        case((desc_match, "description"), else_=None),
+        case((sku_match, "sku"), else_=None),
+        case((barcode_match, "barcode"), else_=None),
+    )
+    return filter_clause, reasons
+
+
+def _build_list_item(p: Product, match_reasons: list[str] | None = None) -> ProductListItem:
     """Transform a loaded Product ORM object into a ProductListItem.
 
     Computes ``total_available`` (across all variants) and surfaces
@@ -70,6 +124,7 @@ def _build_list_item(p: Product) -> ProductListItem:
         item_type=p.item_type,
         expiry_date=p.expiry_date,
         has_reorder_url=bool(p.reorder_url),
+        match_reasons=match_reasons or [],
     )
 
 
@@ -91,8 +146,16 @@ async def list_products(
         description="Only return products with expiry_date within N days (consumables only)",
     ),
 ):
+    # Reasons column is only attached when a `q` is provided. Selecting
+    # `null` when `q` is missing keeps the result shape stable.
+    if q and q.strip():
+        filter_clause, reasons_expr = _build_product_search(q.strip())
+        stmt = select(Product, reasons_expr.label("match_reasons"))
+    else:
+        filter_clause = None
+        stmt = select(Product, literal(None).label("match_reasons"))
     stmt = (
-        select(Product)
+        stmt
         .where(Product.store_id == store_id)
         .options(
             selectinload(Product.variants),
@@ -102,10 +165,8 @@ async def list_products(
             selectinload(Product.tags),
         )
     )
-    if q:
-        stmt = stmt.where(
-            (Product.name.ilike(f"%{q}%")) | (Product.name_kana.ilike(f"%{q}%"))
-        )
+    if filter_clause is not None:
+        stmt = stmt.where(filter_clause)
     if category_id is not None:
         stmt = stmt.where(Product.category_id == category_id)
     if vendor_id is not None:
@@ -124,10 +185,21 @@ async def list_products(
     if status is None:
         stmt = stmt.where(Product.status != ProductStatus.archived)
 
-    count_q = select(func.count()).select_from(stmt.subquery())
+    # Total count: use just the where-filtered Product set (no need for the
+    # reasons column).
+    count_q = select(func.count()).select_from(
+        stmt.with_only_columns(Product.id).subquery()
+    )
     total = (await db.execute(count_q)).scalar_one()
-    rows = (await db.execute(stmt.order_by(Product.id).offset(offset).limit(limit))).scalars().unique().all()
-    return PaginatedResponse(items=[_build_list_item(p) for p in rows], total=total)
+    rows = (await db.execute(stmt.order_by(Product.id).offset(offset).limit(limit))).unique().all()
+    items: list[ProductListItem] = []
+    for row in rows:
+        # Each row is a (Product, match_reasons_str_or_None) tuple.
+        p = row[0]
+        reasons_str = row[1]
+        reasons_list = [r for r in (reasons_str or "").split(",") if r] if reasons_str else []
+        items.append(_build_list_item(p, match_reasons=reasons_list))
+    return PaginatedResponse(items=items, total=total)
 
 
 @router.get("/search", response_model=list[ProductSearchResult])
@@ -136,13 +208,19 @@ async def search_products(
     store_id: StoreId,
     q: str = Query(..., min_length=1, description="Search query"),
 ):
-    """Lightweight AJAX search for the PO page. Max 20 results."""
+    """Lightweight AJAX search for the PO page. Max 20 results.
+
+    Uses the same search helper as the list endpoint so SKU and barcode
+    hits work here too — important because the PO modal is where staff
+    scan a JAN to add a line item.
+    """
+    filter_clause, _reasons = _build_product_search(q.strip())
     stmt = (
         select(Product)
         .where(
             Product.store_id == store_id,
             Product.status != ProductStatus.archived,
-            (Product.name.ilike(f"%{q}%")) | (Product.name_kana.ilike(f"%{q}%")),
+            filter_clause,
         )
         .options(selectinload(Product.variants))
         .limit(20)

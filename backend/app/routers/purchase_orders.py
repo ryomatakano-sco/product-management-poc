@@ -90,6 +90,7 @@ async def list_purchase_orders(
     status: POStatus | None = Query(None),
     supplier_vendor_id: int | None = Query(None),
     destination_branch_id: int | None = Query(None),
+    q: str | None = Query(None, description="Search by PO number, reference, tracking, or note"),
 ):
     stmt = select(PurchaseOrder).where(PurchaseOrder.store_id == store_id).options(*_po_load_options())
     if status:
@@ -98,6 +99,22 @@ async def list_purchase_orders(
         stmt = stmt.where(PurchaseOrder.supplier_vendor_id == supplier_vendor_id)
     if destination_branch_id:
         stmt = stmt.where(PurchaseOrder.destination_branch_id == destination_branch_id)
+    if q and q.strip():
+        like = f"%{q.strip()}%"
+        from sqlalchemy import or_ as _or
+        # The PO model historically used `po_number` as a short identifier;
+        # fall back to the integer id for older PoC data without a po_number.
+        clauses = []
+        if hasattr(PurchaseOrder, "po_number"):
+            clauses.append(PurchaseOrder.po_number.ilike(like))
+        if hasattr(PurchaseOrder, "reference_number"):
+            clauses.append(PurchaseOrder.reference_number.ilike(like))
+        if hasattr(PurchaseOrder, "tracking_number"):
+            clauses.append(PurchaseOrder.tracking_number.ilike(like))
+        if hasattr(PurchaseOrder, "note"):
+            clauses.append(PurchaseOrder.note.ilike(like))
+        if clauses:
+            stmt = stmt.where(_or(*clauses))
     total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     rows = (await db.execute(stmt.order_by(PurchaseOrder.id.desc()).offset(offset).limit(limit))).scalars().unique().all()
     return PaginatedResponse(items=[_po_to_read(po) for po in rows], total=total)

@@ -58,6 +58,7 @@ async def list_categories(
     store_id: StoreId,
     limit: int = Query(100, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    q: str | None = Query(None, description="Search by category name"),
 ):
     """Flat list of all categories in the store, sorted by `sort_order` then id."""
     stmt = (
@@ -65,6 +66,8 @@ async def list_categories(
         .where(Category.store_id == store_id)
         .order_by(Category.sort_order.asc(), Category.id.asc())
     )
+    if q and q.strip():
+        stmt = stmt.where(Category.name.ilike(f"%{q.strip()}%"))
     total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     rows = (await db.execute(stmt.offset(offset).limit(limit))).scalars().all()
     counts = await _category_product_counts(db, store_id)

@@ -362,22 +362,36 @@ function PlxTopBar({ title, breadcrumbs, headerRight }) {
         ) : null}
       </div>
       {headerRight}
-      {/* Global search */}
-      <div style={{ position: "relative", width: 280 }}>
-        <input placeholder="商品名・SKU・JANで検索" style={{
-          width: "100%", height: 36,
+      {/* Global search — opens the Ctrl+K command palette. We render this
+          as a button shaped like an input so the affordance still reads as
+          "search box", but clicking (or Ctrl+K) opens the palette which
+          does the real cross-resource lookup. */}
+      <button
+        onClick={() => window.PLX_CMDK && window.PLX_CMDK.open()}
+        title="横断検索 (Ctrl+K)"
+        style={{
+          position: "relative", width: 280, height: 36,
           padding: "0 12px 0 36px", fontSize: 13, fontFamily: "inherit",
           background: T.PLX_SURFACE_50, border: `1px solid ${T.PLX_LINE_200}`,
-          borderRadius: T.RADIUS_MD, outline: "none", color: T.PLX_INK_700,
-          boxSizing: "border-box",
-        }} />
-        <div style={{ position: "absolute", left: 12, top: 10, pointerEvents: "none" }}>
+          borderRadius: T.RADIUS_MD, outline: "none", color: T.PLX_INK_500,
+          boxSizing: "border-box", cursor: "pointer", textAlign: "left",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}
+      >
+        <span style={{ position: "absolute", left: 12, top: 10, pointerEvents: "none" }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.PLX_INK_400}
             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/>
           </svg>
-        </div>
-      </div>
+        </span>
+        <span>商品 / 仕入先 / 発注書を検索…</span>
+        <kbd style={{
+          fontSize: 10, color: T.PLX_INK_500, background: "#fff",
+          padding: "1px 6px", borderRadius: 4,
+          border: `1px solid ${T.PLX_LINE_200}`,
+          fontFamily: "ui-monospace, monospace",
+        }}>Ctrl+K</kbd>
+      </button>
       {/* Bell */}
       <button style={{
         width: 36, height: 36, borderRadius: T.RADIUS_MD, border: `1px solid ${T.PLX_LINE_200}`,

@@ -25,6 +25,21 @@ function ProductCreate({ editId }) {
   const [description, setDescription] = React.useState("");
   const [aiOpen, setAiOpen]     = React.useState(false);
   const [aiSessionId, setAiSessionId] = React.useState(null);
+  // Seed for the AI Assist modal. Populated when this page was reached via
+  // the "AI で『…』を検索" CTA on ProductList or the command palette —
+  // we stash a {mode, value} on window so the modal can open pre-filled.
+  const [aiSeed, setAiSeed] = React.useState(null);
+  React.useEffect(() => {
+    // Run once on mount. Pull and clear so a subsequent direct visit
+    // doesn't re-open the modal.
+    const seed = window.PLX_AI_PREFILL;
+    if (seed && (seed.value || "").trim()) {
+      window.PLX_AI_PREFILL = null;
+      setAiSeed(seed);
+      setAiOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Yoshioka 2026-05-11 additions
   const [itemType, setItemType] = React.useState("product"); // product | consumable
@@ -584,7 +599,11 @@ function ProductCreate({ editId }) {
       </div>
 
       {aiOpen && (
-        <AiAssistModal onClose={() => setAiOpen(false)} onApply={applyAi} />
+        <AiAssistModal
+          onClose={() => { setAiOpen(false); setAiSeed(null); }}
+          onApply={applyAi}
+          seed={aiSeed}
+        />
       )}
     </AdminShell>
   );
@@ -681,16 +700,33 @@ const FIELD_DEFS = [
   { key: "description", label: "説明文" },
 ];
 
-function AiAssistModal({ onClose, onApply }) {
+function AiAssistModal({ onClose, onApply, seed }) {
   const [phase, setPhase] = React.useState("input"); // input | loading | results | error
   // Yoshioka 2026-05-11: barcode-first UX. `mode` toggles between JAN and name.
-  const [mode, setMode]   = React.useState("jan"); // jan | name
-  const [jan, setJan]     = React.useState("");
-  const [name, setName]   = React.useState("");
+  // Seed (from the "No results? Try AI" CTA or the command palette) can flip
+  // the default mode and pre-fill the input.
+  const [mode, setMode]   = React.useState(seed?.mode || "jan");
+  const [jan, setJan]     = React.useState(seed?.mode === "jan"  ? (seed.value || "") : "");
+  const [name, setName]   = React.useState(seed?.mode === "name" ? (seed.value || "") : "");
   const [picks, setPicks] = React.useState({});
   const [session, setSession] = React.useState(null);
   const [error, setError] = React.useState(null);
   const [scanOpen, setScanOpen] = React.useState(false);
+
+  // Seed-driven auto-lookup. Fires once on first mount if the modal was
+  // opened with a seed value (from the "No results? Try AI" CTA or the
+  // Ctrl+K palette). Skips if seed is empty or already used.
+  const seedFiredRef = React.useRef(false);
+  React.useEffect(() => {
+    if (seedFiredRef.current) return;
+    if (!seed || !(seed.value || "").trim()) return;
+    seedFiredRef.current = true;
+    Promise.resolve().then(() => {
+      if (seed.mode === "jan") lookup({ janOverride: seed.value.trim() });
+      else                     lookup({ nameOverride: seed.value.trim() });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed]);
 
   // Called when the BarcodeScanner finds a code. We:
   //   1. close the scanner overlay
@@ -707,13 +743,18 @@ function AiAssistModal({ onClose, onApply }) {
 
   const lookup = async (opts) => {
     const janOverride = opts && opts.janOverride;
+    const nameOverride = opts && opts.nameOverride;
     const useJan = janOverride !== undefined ? janOverride : jan;
+    const useName = nameOverride !== undefined ? nameOverride : name;
+    const effectiveMode = janOverride !== undefined ? "jan"
+                        : nameOverride !== undefined ? "name"
+                        : mode;
     setPhase("loading"); setError(null);
     try {
       // Mode toggle: route the user's input to the correct backend field.
       let s = await api.createAiSuggestion({
-        jan: (janOverride !== undefined || mode === "jan") ? (useJan || undefined) : undefined,
-        title: (janOverride === undefined && mode === "name") ? (name || undefined) : undefined,
+        jan:   effectiveMode === "jan"  ? (useJan  || undefined) : undefined,
+        title: effectiveMode === "name" ? (useName || undefined) : undefined,
       });
       let attempts = 0;
       while (s.status === "pending" && attempts < 20) {

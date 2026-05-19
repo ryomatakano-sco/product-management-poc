@@ -36,6 +36,7 @@ function App() {
   return (
     <>
       {page}
+      <CommandPaletteHost />
       <DevPanel />
       <ToastContainer />
     </>

@@ -65,12 +65,17 @@ async def list_vendors(
     store_id: StoreId,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    q: str | None = Query(None, description="Search by company name (会社名)"),
+    q: str | None = Query(None, description="Search by company name (会社名) or contact name"),
     status: VendorStatus | None = Query(None, description="Filter by status (active/inactive)"),
 ):
     stmt = select(Vendor).where(Vendor.store_id == store_id)
-    if q:
-        stmt = stmt.where(Vendor.company_name.ilike(f"%{q}%"))
+    if q and q.strip():
+        from sqlalchemy import or_ as _or
+        like = f"%{q.strip()}%"
+        clauses = [Vendor.company_name.ilike(like)]
+        if hasattr(Vendor, "contact_name"):
+            clauses.append(Vendor.contact_name.ilike(like))
+        stmt = stmt.where(_or(*clauses))
     if status is not None:
         stmt = stmt.where(Vendor.status == status)
     total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()

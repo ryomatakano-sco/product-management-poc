@@ -32,10 +32,18 @@ async def list_branches(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     status: BranchStatus | None = Query(None),
+    q: str | None = Query(None, description="Search by branch name or manager name"),
 ):
     stmt = select(Branch).where(Branch.store_id == store_id)
     if status is not None:
         stmt = stmt.where(Branch.status == status)
+    if q and q.strip():
+        from sqlalchemy import or_ as _or
+        like = f"%{q.strip()}%"
+        clauses = [Branch.name.ilike(like)]
+        if hasattr(Branch, "manager_name"):
+            clauses.append(Branch.manager_name.ilike(like))
+        stmt = stmt.where(_or(*clauses))
     total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     rows = (await db.execute(stmt.order_by(Branch.id).offset(offset).limit(limit))).scalars().all()
     return PaginatedResponse(items=rows, total=total)

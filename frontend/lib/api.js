@@ -55,6 +55,9 @@ const api = {
   updateProduct: (id, body) => request(`/products/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   archiveProduct: (id)   => request(`/products/${id}`, { method: "DELETE" }),
 
+  // --- global search (powers the Ctrl+K command palette) ---
+  globalSearch: (q) => request(`/search/global${qs({ q })}`),
+
   // --- ref data ---
   listCategories: () => request(`/categories?limit=100`),
   listVendors:    () => request(`/vendors?limit=100`),

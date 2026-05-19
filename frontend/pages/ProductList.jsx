@@ -273,6 +273,7 @@ function ProductList({ initialQuery }) {
                       ))}
                     </div>
                   )}
+                  {p.match_reasons?.length > 0 && <MatchReasonPills reasons={p.match_reasons} />}
                 </div>
               </div>
               <span>
@@ -340,13 +341,7 @@ function ProductList({ initialQuery }) {
           );
         })}
         {!productsQ.loading && items.length === 0 && (
-          <div style={{ padding: "60px 20px", textAlign: "center", color: PLX_MUTED }}>
-            <div style={{ fontSize: 32, marginBottom: 8, opacity: 0.4 }}>—</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: PLX_TEXT, marginBottom: 4 }}>
-              該当する商品がありません
-            </div>
-            <div style={{ fontSize: 12 }}>検索条件を変更するか、新しい商品を追加してください。</div>
-          </div>
+          <NoResultsState query={searchQ} />
         )}
       </div>
     </AdminShell>
@@ -405,6 +400,88 @@ function QuickChip({ on, onClick, dot, check, label, color, bg }) {
       )}
       <span>{label}</span>
     </button>
+  );
+}
+
+// ─── search UX helpers (Tier-A search rollout 2026-05-18) ───────────────────
+
+// Map a backend match_reasons[] string into a small pill. Names come from
+// _build_product_search() in backend/app/routers/products.py.
+const _MATCH_REASON_LABELS = {
+  name:        { emoji: "📝", label: "商品名一致" },
+  kana:        { emoji: "🔤", label: "ふりがな一致" },
+  description: { emoji: "📄", label: "説明文一致" },
+  sku:         { emoji: "🏷", label: "SKU 一致" },
+  barcode:     { emoji: "📦", label: "JAN 一致" },
+};
+
+function MatchReasonPills({ reasons }) {
+  if (!reasons || reasons.length === 0) return null;
+  return (
+    <div style={{ display: "flex", gap: 4, marginTop: 5, flexWrap: "wrap" }}>
+      {reasons.map((r) => {
+        const meta = _MATCH_REASON_LABELS[r];
+        if (!meta) return null;
+        return (
+          <span key={r} title={`検索が ${meta.label} で一致しました`} style={{
+            fontSize: 9, fontWeight: 700, color: "#0F766E",
+            background: "#CCFBF1", padding: "2px 7px", borderRadius: 9999,
+            border: "1px solid #5EEAD4",
+            display: "inline-flex", alignItems: "center", gap: 3,
+          }}>
+            <span style={{ fontSize: 10 }}>{meta.emoji}</span>
+            <span>{meta.label}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+// Empty state for the product list. If the user has a search query active,
+// offer to hand the query off to the AI Assist modal — the LLM can find
+// products that aren't in the DB yet. Falls back to a plain message when
+// the empty list is just "no filter matches".
+function NoResultsState({ query }) {
+  const trimmed = (query || "").trim();
+  if (!trimmed) {
+    return (
+      <div style={{ padding: "60px 20px", textAlign: "center", color: PLX_MUTED }}>
+        <div style={{ fontSize: 32, marginBottom: 8, opacity: 0.4 }}>—</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: PLX_TEXT, marginBottom: 4 }}>
+          該当する商品がありません
+        </div>
+        <div style={{ fontSize: 12 }}>検索条件を変更するか、新しい商品を追加してください。</div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ padding: "44px 20px", textAlign: "center" }}>
+      <div style={{ fontSize: 32, marginBottom: 6, opacity: 0.5 }}>🔍</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: PLX_TEXT, marginBottom: 4 }}>
+        「{trimmed}」に一致する商品はありません
+      </div>
+      <div style={{ fontSize: 12, color: PLX_MUTED, marginBottom: 18 }}>
+        商品名・SKU・JAN コードを再確認するか、AI に検索を依頼できます。
+      </div>
+      <button
+        onClick={() => {
+          // Stash the query and navigate to the new-product page. ProductCreate
+          // checks this flag on mount and auto-opens the AI Assist modal.
+          window.PLX_AI_PREFILL = { mode: "name", value: trimmed };
+          navigate("/products/new");
+        }}
+        style={{
+          height: 40, padding: "0 22px", borderRadius: 9999,
+          background: PLX_GREEN, color: "#fff", border: "none",
+          fontWeight: 700, fontSize: 13, cursor: "pointer",
+          boxShadow: "0 6px 16px rgba(26,166,138,.25)",
+          display: "inline-flex", alignItems: "center", gap: 8,
+        }}
+      >
+        ✨ AI で「{trimmed}」を検索する
+      </button>
+    </div>
   );
 }
 
