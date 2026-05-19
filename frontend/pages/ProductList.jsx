@@ -224,7 +224,10 @@ function ProductList({ initialQuery }) {
 
         {items.map((p, i) => {
           const av = p.total_available ?? 0;
-          const low = av <= 10;
+          // Per-variant low-stock threshold (default 10 when missing).
+          // See migration 005_low_stock_threshold.
+          const threshold = p.default_low_stock_threshold != null ? p.default_low_stock_threshold : 10;
+          const low = av <= threshold;
           const days = daysUntil(p.expiry_date);
           return (
             <div key={p.id} onClick={() => navigate(`/products/${p.id}`)} style={{

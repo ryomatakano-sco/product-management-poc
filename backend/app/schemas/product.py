@@ -26,6 +26,7 @@ class VariantCreate(BaseModel):
     on_hand: int = 0
     committed: int = 0
     unavailable: int = 0
+    low_stock_threshold: int = 10
     is_default: bool = False
 
 
@@ -42,6 +43,7 @@ class VariantUpdate(BaseModel):
     cost: Decimal | None = None
     weight_value: Decimal | None = None
     weight_unit: WeightUnit | None = None
+    low_stock_threshold: int | None = None
     is_default: bool | None = None
 
 
@@ -67,6 +69,7 @@ class VariantRead(BaseModel):
     committed: int
     unavailable: int
     available: int
+    low_stock_threshold: int = 10
     is_default: bool
     created_at: datetime
     updated_at: datetime
@@ -177,6 +180,7 @@ class ProductListItem(BaseModel):
     total_available: int = 0          # sum(on_hand - committed - unavailable) across variants
     default_sku: str | None = None    # SKU of the default variant (or first if none flagged)
     default_price: Decimal | None = None  # price of the default variant
+    default_low_stock_threshold: int = 10   # threshold for the row's "low stock" pill
     thumbnail_url: str | None = None
     status: ProductStatus
     default_amount_at_payment: Decimal | None
@@ -228,6 +232,10 @@ class ProductDetail(BaseModel):
     images: list[ImageRead] = []
     tags: list[str] = []
     sales_summary: SalesSummary | None = None
+    # Most recent InventoryAdjustment with reason=purchase_order_received,
+    # computed in the GET /products/:id router. Useful for "最終入荷日" on
+    # the product detail page.
+    last_received_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -149,6 +149,11 @@ function ProductDetail({ productId }) {
             <BasicRow k="仕入先" v={p.vendor_name ?? "—"} />
             <BasicRow k="主要 SKU" v={heroVariant?.sku ?? "—"} mono />
             <BasicRow k="JAN" v={heroVariant?.barcode ?? "—"} mono />
+            <BasicRow
+              k="最終入荷日"
+              v={p.last_received_at ? formatJpDateTime(p.last_received_at) : "入荷履歴なし"}
+              mono={!!p.last_received_at}
+            />
             {p.item_type === "consumable" && p.expiry_date && (
               <BasicRow
                 k="使用期限"

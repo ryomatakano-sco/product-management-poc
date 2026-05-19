@@ -176,6 +176,10 @@ class ProductVariant(Base, TimestampMixin):
     on_hand: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     committed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     unavailable: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Per-variant "running low" cutoff. Default 10 matches the previous
+    # hardcoded frontend behavior. Tunable via the product edit form.
+    # See migration 005_low_stock_threshold.
+    low_stock_threshold: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     product: Mapped["Product"] = relationship(back_populates="variants")

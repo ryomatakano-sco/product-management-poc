@@ -1,6 +1,22 @@
 // Product Create — form + AI Assist modal. Real backend call to /ai-suggestions
 // (returns mock data when OPENAI_API_KEY isn't set; real OpenAI when it is).
 
+// Strip everything except digits + an optional single decimal point. Lets
+// the user type fast (no awkward IME interactions like type="number") while
+// still ensuring no Japanese commas, ¥ marks, or kanji sneak through.
+function _keepDecimal(s) {
+  if (typeof s !== "string") return s;
+  // Allow only [0-9.]; collapse multiple dots to a single one (keep first).
+  const cleaned = s.replace(/[^0-9.]/g, "");
+  const firstDot = cleaned.indexOf(".");
+  if (firstDot === -1) return cleaned;
+  return cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "");
+}
+function _keepInteger(s) {
+  if (typeof s !== "string") return s;
+  return s.replace(/[^0-9]/g, "");
+}
+
 function ProductCreate({ editId }) {
   // When editId is set, we PATCH an existing product instead of POSTing a new
   // one. The form prefills from a GET of the existing product. Variants/tags
@@ -25,6 +41,8 @@ function ProductCreate({ editId }) {
   const [description, setDescription] = React.useState("");
   const [aiOpen, setAiOpen]     = React.useState(false);
   const [aiSessionId, setAiSessionId] = React.useState(null);
+  // When the user clicked "不足項目をAIで補完", apply only to empty fields.
+  const [aiGapFill, setAiGapFill] = React.useState(false);
   // Seed for the AI Assist modal. Populated when this page was reached via
   // the "AI で『…』を検索" CTA on ProductList or the command palette —
   // we stash a {mode, value} on window so the modal can open pre-filled.
@@ -50,6 +68,12 @@ function ProductCreate({ editId }) {
   const [variant, setVariant]   = React.useState({
     sku: "", barcode: "", price: "", cost: "", stock: "",
     opt1k: "", opt1v: "", isDefault: true,
+    lowStockThreshold: "10",
+    // Set in edit mode after the product loads. Used by save() to PATCH
+    // the existing variant and compute the stock delta for an inventory
+    // adjustment instead of creating a new variant.
+    id: null,
+    originalStock: 0,
   });
 
   // When loading an existing product for edit, prefill the form once the
@@ -80,12 +104,19 @@ function ProductCreate({ editId }) {
       opt1k: hv.option1_name  || "",
       opt1v: hv.option1_value || "",
       isDefault: hv.is_default != null ? hv.is_default : true,
+      lowStockThreshold: hv.low_stock_threshold != null ? String(hv.low_stock_threshold) : "10",
+      id: hv.id || null,
+      originalStock: hv.on_hand != null ? hv.on_hand : 0,
     });
     setPrefilled(true);
   }, [isEdit, editingQ.data, prefilled]);
   const [saving, setSaving]     = React.useState(false);
   const [error, setError]       = React.useState(null);
   const [fieldErrors, setFieldErrors] = React.useState({});
+  // When non-null, the ConfirmSaveModal is showing. Holds the status the
+  // user picked so the modal can offer a final "保存する" button that
+  // resumes the real save() with the same status.
+  const [pendingSave, setPendingSave] = React.useState(null);
 
   // Required fields. Drafts only need a name (so the user can save partial work).
   // Publishing requires the full set so the product is actually usable.
@@ -110,19 +141,26 @@ function ProductCreate({ editId }) {
   const canPublish = Object.keys(validate("active")).length === 0;
   const canDraft   = Object.keys(validate("draft")).length === 0;
 
-  const save = async (newStatus) => {
+  // save() is the user-facing entry point. It validates, then opens the
+  // ConfirmSaveModal. The modal calls _doSave(status) to actually persist.
+  const save = (newStatus) => {
     const errs = validate(newStatus);
     setFieldErrors(errs);
     if (Object.keys(errs).length > 0) {
       setError(Object.values(errs)[0]);
       return;
     }
+    setError(null);
+    setPendingSave(newStatus);
+  };
+
+  const _doSave = async (newStatus) => {
+    setPendingSave(null);
     setSaving(true); setError(null);
     try {
       let resultId;
       if (isEdit) {
-        // PATCH only top-level fields. Variants and tags aren't on
-        // ProductUpdate — they're managed in ProductDetail.
+        // 1) Top-level product fields → PATCH /products/:id.
         await api.updateProduct(editId, {
           name,
           name_kana: nameKana || null,
@@ -136,6 +174,42 @@ function ProductCreate({ editId }) {
           lot_number:  itemType === "consumable" ? (lotNumber || null) : null,
           unit:        itemType === "consumable" ? (unit || null) : null,
         });
+
+        // 2) Variant fields → PATCH /variants/:id. ProductUpdate doesn't
+        //    accept nested variants, so we hit the variant endpoint
+        //    directly. Only sends fields whose value isn't blank to avoid
+        //    accidentally clearing data when the form is partially filled.
+        if (variant.id) {
+          const variantBody = {};
+          if (variant.sku !== "")     variantBody.sku = variant.sku || null;
+          if (variant.barcode !== "") variantBody.barcode = variant.barcode || null;
+          if (variant.price !== "")   variantBody.price = variant.price;
+          if (variant.cost  !== "")   variantBody.cost  = variant.cost;
+          if (variant.opt1k !== "")   variantBody.option1_name  = variant.opt1k || null;
+          if (variant.opt1v !== "")   variantBody.option1_value = variant.opt1v || null;
+          if (variant.lowStockThreshold !== "") {
+            const lst = parseInt(variant.lowStockThreshold, 10);
+            if (Number.isFinite(lst) && lst >= 0) variantBody.low_stock_threshold = lst;
+          }
+          if (Object.keys(variantBody).length > 0) {
+            await api.updateVariant(variant.id, variantBody);
+          }
+
+          // 3) Stock change → inventory adjustment with the delta. Stock
+          //    isn't on VariantUpdate by design (it must go through the
+          //    audit-logged adjustment endpoint), so we compute the delta
+          //    from the prefilled originalStock and post one adjustment.
+          const newStock = variant.stock === "" ? null : parseInt(variant.stock, 10);
+          if (newStock != null && !Number.isNaN(newStock) && newStock !== variant.originalStock) {
+            const delta = newStock - variant.originalStock;
+            await api.adjustInventory(variant.id, {
+              field: "on_hand",
+              delta,
+              reason: "correction",
+              note: "編集画面からの在庫修正",
+            });
+          }
+        }
         resultId = editId;
       } else {
         const created = await api.createProduct({
@@ -160,6 +234,9 @@ function ProductCreate({ editId }) {
             price: variant.price || null,
             cost:  variant.cost  || null,
             on_hand: variant.stock ? (parseInt(variant.stock, 10) || 0) : 0,
+            low_stock_threshold: variant.lowStockThreshold
+              ? Math.max(0, parseInt(variant.lowStockThreshold, 10) || 10)
+              : 10,
             is_default: variant.isDefault,
           }],
           tags,
@@ -187,21 +264,31 @@ function ProductCreate({ editId }) {
     }
   };
 
-  const applyAi = (picks, sessionId) => {
+  // When `onlyFillEmpty` is set, the gap-fill flow only applies AI picks
+  // to fields that are currently empty. Used by the 不足項目をAIで補完
+  // button on edit forms so the user's manual edits are never overwritten.
+  const applyAi = (picks, sessionId, opts) => {
+    const onlyFillEmpty = opts && opts.onlyFillEmpty;
     setAiSessionId(sessionId);
-    if (picks.title)       setName(picks.title.value);
-    if (picks.name_kana)   setNameKana(picks.name_kana.value);
-    if (picks.brand && vendorsQ.data?.items) {
+    if (picks.title       && (!onlyFillEmpty || !name))         setName(picks.title.value);
+    if (picks.name_kana   && (!onlyFillEmpty || !nameKana))     setNameKana(picks.name_kana.value);
+    if (picks.brand && vendorsQ.data?.items && (!onlyFillEmpty || !vendorId)) {
       const v = vendorsQ.data.items.find((x) => x.company_name === picks.brand.value);
       if (v) setVendorId(String(v.id));
     }
-    if (picks.category && categoriesQ.data?.items) {
+    if (picks.category && categoriesQ.data?.items && (!onlyFillEmpty || !categoryId)) {
       const c = categoriesQ.data.items.find((x) => x.name === picks.category.value);
       if (c) setCategoryId(String(c.id));
     }
-    if (picks.price) setVariant((v) => ({ ...v, price: picks.price.value.replace(/[¥,\s]/g, "") }));
-    if (picks.barcode)     setVariant((v) => ({ ...v, barcode: picks.barcode.value }));
-    if (picks.description) setDescription(picks.description.value);
+    if (picks.price && (!onlyFillEmpty || !variant.price)) {
+      setVariant((v) => ({ ...v, price: picks.price.value.replace(/[¥,\s]/g, "") }));
+    }
+    if (picks.barcode && (!onlyFillEmpty || !variant.barcode)) {
+      setVariant((v) => ({ ...v, barcode: picks.barcode.value }));
+    }
+    if (picks.description && (!onlyFillEmpty || !description)) {
+      setDescription(picks.description.value);
+    }
     setAiOpen(false);
   };
 
@@ -212,17 +299,32 @@ function ProductCreate({ editId }) {
     ? "公開に必要: " + publishMissing.join(" / ")
     : "公開可能です";
 
-  // Labels switch between create and edit. In edit mode:
-  //   - "下書きとして保存"  → "下書きとして更新" (or keep state as draft)
-  //   - "商品を公開"        → "更新して公開" (publishes a previously-saved draft)
-  //     or just "更新" when the product is already active.
-  const draftBtnLabel = isEdit ? "下書きとして更新" : "下書きとして保存";
-  const publishBtnLabel = isEdit
-    ? (status === "active" ? "更新" : "更新して公開")
-    : "商品を公開";
+  // Save flow:
+  //   - In CREATE mode: two explicit buttons map to two distinct statuses
+  //     ("下書きとして保存" → draft, "商品を公開" → active). The sidebar
+  //     radio is hidden because the buttons already disambiguate.
+  //   - In EDIT mode: the sidebar radio is the canonical status picker.
+  //     One save button "更新" persists everything including whatever
+  //     status the radio currently has — so toggling between active and
+  //     draft works in both directions.
   const cancelTarget = isEdit ? `/products/${editId}` : "/products";
 
-  const headerRight = (
+  const headerRight = isEdit ? (
+    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      <button onClick={() => navigate(cancelTarget)} style={btnGhost}>キャンセル</button>
+      <button
+        onClick={() => save(status)}
+        style={btnPrimary}
+        // In edit mode the save button enforces whatever the radio shows.
+        // If the user has set status=active, full validation applies; if
+        // status=draft, only the name is required.
+        disabled={(status === "active" ? !canPublish : !canDraft) || saving}
+        title={status === "active" ? publishTooltip : "下書きとして更新します"}
+      >
+        {saving ? "保存中…" : (status === "active" ? "更新して公開" : "下書きとして更新")}
+      </button>
+    </div>
+  ) : (
     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
       <button onClick={() => navigate(cancelTarget)} style={btnGhost}>キャンセル</button>
       <button
@@ -231,7 +333,7 @@ function ProductCreate({ editId }) {
         disabled={!canDraft || saving}
         title={canDraft ? "下書きを保存します" : "商品名を入力してください"}
       >
-        {draftBtnLabel}
+        下書きとして保存
       </button>
       <button
         onClick={() => save("active")}
@@ -239,7 +341,7 @@ function ProductCreate({ editId }) {
         disabled={!canPublish || saving}
         title={publishTooltip}
       >
-        {publishBtnLabel}
+        商品を公開
       </button>
     </div>
   );
@@ -316,12 +418,37 @@ function ProductCreate({ editId }) {
                 手入力の手間を約 <span style={{ color: PLX_GREEN, fontWeight: 700 }}>80%</span> 削減できます。
               </div>
             </div>
-            <button onClick={() => setAiOpen(true)} style={{
-              height: 38, padding: "0 18px", borderRadius: 9999,
-              background: PLX_GREEN, color: "#fff", border: "none",
-              fontWeight: 700, fontSize: 13, cursor: "pointer",
-              boxShadow: "0 6px 16px rgba(26,166,138,.25)", whiteSpace: "nowrap",
-            }}>✨ AI で入力する</button>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <button onClick={() => setAiOpen(true)} style={{
+                height: 38, padding: "0 18px", borderRadius: 9999,
+                background: PLX_GREEN, color: "#fff", border: "none",
+                fontWeight: 700, fontSize: 13, cursor: "pointer",
+                boxShadow: "0 6px 16px rgba(26,166,138,.25)", whiteSpace: "nowrap",
+              }}>✨ AI で入力する</button>
+              {isEdit && (
+                // Gap-fill: pre-seed with the product's current JAN (or name
+                // if no JAN), and tell AiAssistModal we want onlyFillEmpty
+                // semantics so manual edits aren't overwritten.
+                <button
+                  onClick={() => {
+                    setAiGapFill(true);
+                    const seedJan  = variant.barcode || "";
+                    const seedName = name || "";
+                    setAiSeed(seedJan
+                      ? { mode: "jan",  value: seedJan }
+                      : seedName ? { mode: "name", value: seedName } : null);
+                    setAiOpen(true);
+                  }}
+                  title="現在空欄の項目だけ AI で埋めます。入力済みの値はそのまま残ります。"
+                  style={{
+                    height: 32, padding: "0 14px", borderRadius: 9999,
+                    background: "#fff", color: PLX_GREEN,
+                    border: `1px solid ${PLX_GREEN}`,
+                    fontWeight: 700, fontSize: 11, cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}>🔍 不足項目をAIで補完</button>
+              )}
+            </div>
           </div>
 
           {/* Basic info */}
@@ -499,7 +626,8 @@ function ProductCreate({ editId }) {
                     fontSize: 13, color: PLX_MUTED, fontWeight: 700,
                   }}>¥</span>
                   <input value={variant.price}
-                    onChange={(e) => setVariant({ ...variant, price: e.target.value })}
+                    inputMode="decimal"
+                    onChange={(e) => setVariant({ ...variant, price: _keepDecimal(e.target.value) })}
                     placeholder="4800" style={{
                       ...formInput, paddingLeft: 28, fontVariantNumeric: "tabular-nums",
                     }} />
@@ -512,16 +640,27 @@ function ProductCreate({ editId }) {
                     fontSize: 13, color: PLX_MUTED, fontWeight: 700,
                   }}>¥</span>
                   <input value={variant.cost}
-                    onChange={(e) => setVariant({ ...variant, cost: e.target.value })}
+                    inputMode="decimal"
+                    onChange={(e) => setVariant({ ...variant, cost: _keepDecimal(e.target.value) })}
                     placeholder="3100" style={{
                       ...formInput, paddingLeft: 28, fontVariantNumeric: "tabular-nums",
                     }} />
                 </div>
               </FormRow>
-              <FormRow label="初期在庫数">
+              <FormRow label={isEdit ? "在庫数" : "初期在庫数"}>
                 <input value={variant.stock}
-                  onChange={(e) => setVariant({ ...variant, stock: e.target.value })}
+                  inputMode="numeric"
+                  onChange={(e) => setVariant({ ...variant, stock: _keepInteger(e.target.value) })}
                   placeholder="0" style={{ ...formInput, fontVariantNumeric: "tabular-nums" }} />
+              </FormRow>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 14 }}>
+              <FormRow label="在庫低下しきい値"
+                hint="この数を下回ると一覧で「低在庫」と表示されます（既定: 10）">
+                <input value={variant.lowStockThreshold}
+                  inputMode="numeric"
+                  onChange={(e) => setVariant({ ...variant, lowStockThreshold: _keepInteger(e.target.value) })}
+                  placeholder="10" style={{ ...formInput, fontVariantNumeric: "tabular-nums" }} />
               </FormRow>
             </div>
             <FormRow label="オプション 1（任意）">
@@ -598,10 +737,40 @@ function ProductCreate({ editId }) {
         </div>
       </div>
 
+      {pendingSave && (
+        <ConfirmSaveModal
+          isEdit={isEdit}
+          status={pendingSave}
+          before={isEdit ? editingQ.data : null}
+          after={{
+            name, name_kana: nameKana,
+            category_id: categoryId, vendor_id: vendorId,
+            description, item_type: itemType, reorder_url: reorderUrl,
+            expiry_date: expiryDate, lot_number: lotNumber, unit,
+            tags,
+            variant: {
+              sku: variant.sku, barcode: variant.barcode,
+              price: variant.price, cost: variant.cost,
+              on_hand: variant.stock, low_stock_threshold: variant.lowStockThreshold,
+            },
+          }}
+          refData={{
+            categories: categoriesQ.data?.items || [],
+            vendors:    vendorsQ.data?.items    || [],
+          }}
+          onCancel={() => setPendingSave(null)}
+          onConfirm={() => _doSave(pendingSave)}
+          saving={saving}
+        />
+      )}
+
       {aiOpen && (
         <AiAssistModal
-          onClose={() => { setAiOpen(false); setAiSeed(null); }}
-          onApply={applyAi}
+          onClose={() => { setAiOpen(false); setAiSeed(null); setAiGapFill(false); }}
+          onApply={(picks, sessionId) => {
+            applyAi(picks, sessionId, { onlyFillEmpty: aiGapFill });
+            setAiGapFill(false);
+          }}
           seed={aiSeed}
         />
       )}
@@ -1226,6 +1395,159 @@ function BarcodeScanner({ onDetected, onClose }) {
           }}>キャンセル</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ConfirmSaveModal — pre-save review screen.
+//
+// Edit mode: shows every field whose value is changing, side-by-side with
+//   the original. Unchanged fields are hidden so the user only sees the
+//   diff that matters.
+// Create mode: shows every populated field as a flat summary list (no
+//   "before" column).
+//
+// The user can either go back to keep editing or confirm to persist.
+// Designed to be cheap to read at a glance — clinic staff will be using it
+// dozens of times per day, so it has to disappear when the data is fine
+// and only call attention when something looks off.
+// ─────────────────────────────────────────────────────────────────────────────
+function ConfirmSaveModal({ isEdit, status, before, after, refData, onCancel, onConfirm, saving }) {
+  // Resolve foreign-key IDs to human names so the user sees "印象材"
+  // instead of "3" in the modal.
+  const catName = (id) => {
+    if (id == null || id === "") return "—";
+    const c = (refData.categories || []).find((x) => String(x.id) === String(id));
+    return c ? c.name : `カテゴリ#${id}`;
+  };
+  const venName = (id) => {
+    if (id == null || id === "") return "—";
+    const v = (refData.vendors || []).find((x) => String(x.id) === String(id));
+    return v ? v.company_name : `仕入先#${id}`;
+  };
+
+  // Build a list of {label, before, after, changed}. before==null when in
+  // create mode. We compare against the original product detail for
+  // edits; the heroVariant on `before` carries the variant baseline.
+  const heroVariant = before
+    ? ((before.variants || []).find((v) => v.is_default) || (before.variants || [])[0] || {})
+    : {};
+  const rows = [
+    { label: "商品名",       b: before?.name ?? "",        a: after.name },
+    { label: "ふりがな",     b: before?.name_kana ?? "",   a: after.name_kana },
+    { label: "カテゴリ",     b: catName(before?.category_id), a: catName(after.category_id) },
+    { label: "仕入先",       b: venName(before?.vendor_id),   a: venName(after.vendor_id) },
+    { label: "種別",         b: before?.item_type ?? "",   a: after.item_type },
+    { label: "ステータス",   b: before?.status ?? "",      a: status },
+    { label: "発注先 URL",   b: before?.reorder_url ?? "", a: after.reorder_url },
+    { label: "商品説明",     b: before?.description ?? "", a: after.description },
+    { label: "SKU",          b: heroVariant?.sku ?? "",    a: after.variant.sku },
+    { label: "JAN",          b: heroVariant?.barcode ?? "", a: after.variant.barcode },
+    { label: "販売価格",     b: heroVariant?.price != null ? String(heroVariant.price) : "", a: after.variant.price },
+    { label: "原価",         b: heroVariant?.cost != null ? String(heroVariant.cost) : "",   a: after.variant.cost },
+    { label: "在庫数",       b: heroVariant?.on_hand != null ? String(heroVariant.on_hand) : "", a: after.variant.on_hand },
+    { label: "在庫低下しきい値", b: heroVariant?.low_stock_threshold != null ? String(heroVariant.low_stock_threshold) : "10", a: after.variant.low_stock_threshold || "10" },
+  ];
+  if (after.item_type === "consumable") {
+    rows.push(
+      { label: "使用期限",     b: before?.expiry_date ?? "", a: after.expiry_date },
+      { label: "ロット番号",   b: before?.lot_number ?? "",  a: after.lot_number },
+      { label: "単位",         b: before?.unit ?? "",        a: after.unit },
+    );
+  }
+  // Mark changed rows so the diff stands out visually.
+  rows.forEach((r) => { r.changed = String(r.b ?? "") !== String(r.a ?? ""); });
+  const displayRows = isEdit ? rows.filter((r) => r.changed) : rows.filter((r) => r.a !== "" && r.a != null);
+  const hasChanges = displayRows.length > 0;
+
+  return (
+    <div onClick={onCancel} style={{
+      position: "fixed", inset: 0, background: "rgba(17,24,39,0.45)",
+      backdropFilter: "blur(4px)", zIndex: 80,
+      display: "flex", alignItems: "center", justifyContent: "center",
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: "#fff", borderRadius: 16, width: 600, maxWidth: "92%",
+        maxHeight: "82vh", boxShadow: "0 24px 60px rgba(17,24,39,.22)",
+        overflow: "hidden", display: "flex", flexDirection: "column",
+      }}>
+        <div style={{
+          padding: "20px 24px 14px", borderBottom: `1px solid ${PLX_BORDER}`,
+          display: "flex", alignItems: "center", gap: 12,
+        }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: "50%",
+            background: PLX_GREEN_LIGHT, color: PLX_GREEN,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            flexShrink: 0, fontSize: 20,
+          }}>✓</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: PLX_TEXT }}>
+              {isEdit ? "保存内容を確認" : "登録内容を確認"}
+            </div>
+            <div style={{ fontSize: 12, color: PLX_MUTED, marginTop: 2 }}>
+              {isEdit
+                ? (hasChanges ? `${displayRows.length} 項目の変更を保存します。` : "変更はありません。")
+                : `ステータス: ${status === "active" ? "公開中" : "下書き"}`}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ padding: "14px 24px", overflow: "auto", flex: 1 }}>
+          {!hasChanges && isEdit ? (
+            <div style={{ padding: "24px 4px", textAlign: "center", color: PLX_MUTED, fontSize: 13 }}>
+              変更された項目はありません。「キャンセル」で戻って編集を続けられます。
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {displayRows.map((r) => (
+                <ConfirmRow key={r.label} {...r} showBefore={isEdit} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{
+          padding: "14px 24px", borderTop: `1px solid ${PLX_BORDER}`,
+          display: "flex", justifyContent: "flex-end", gap: 8,
+        }}>
+          <button onClick={onCancel} disabled={saving} style={btnGhost}>戻る</button>
+          <button
+            onClick={onConfirm}
+            disabled={saving || (isEdit && !hasChanges)}
+            style={{ ...btnPrimary, opacity: (saving || (isEdit && !hasChanges)) ? 0.6 : 1 }}
+          >
+            {saving ? "保存中…" : (isEdit ? "保存する" : "登録する")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmRow({ label, b, a, changed, showBefore }) {
+  return (
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: showBefore ? "120px 1fr 1fr" : "120px 1fr",
+      gap: 10, alignItems: "start",
+      padding: "8px 10px", borderRadius: 8,
+      background: changed ? "#FEF9E7" : "transparent",
+      border: changed ? "1px solid #FCD34D" : "1px solid transparent",
+    }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: PLX_MUTED }}>{label}</div>
+      {showBefore && (
+        <div style={{
+          fontSize: 12, color: PLX_MUTED,
+          textDecoration: changed ? "line-through" : "none",
+          wordBreak: "break-word",
+        }}>{b || <em style={{ color: PLX_SUBTLE, fontStyle: "normal" }}>—</em>}</div>
+      )}
+      <div style={{
+        fontSize: 12, color: PLX_TEXT, fontWeight: changed ? 700 : 500,
+        wordBreak: "break-word",
+      }}>{a || <em style={{ color: PLX_SUBTLE, fontStyle: "normal" }}>—</em>}</div>
     </div>
   );
 }

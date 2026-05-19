@@ -148,7 +148,7 @@ function formatJpDate(dateStr) {
 // Single source of truth for the version badge shown in the sidebar footer.
 // Bump the number on every meaningful change; keep the channel ("Alpha") until
 // we cut a beta — the demo is pre-release.
-const PLX_VERSION = { channel: "Alpha", number: "0.5.0" };
+const PLX_VERSION = { channel: "Alpha", number: "0.6.0" };
 
 Object.assign(window, {
   T,

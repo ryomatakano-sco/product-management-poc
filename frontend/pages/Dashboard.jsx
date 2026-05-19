@@ -97,7 +97,7 @@ function Dashboard() {
           {loading ? <AttentionSkeleton /> : attention.length === 0 ? <AttentionEmpty /> : <AttentionTable rows={attention} />}
         </div>
         <div style={dashCard}>
-          <DashCardHeader title="最近の活動" />
+          <DashCardHeader title="最近の活動" right={loading ? null : "更新"} onRight={summaryQ.refetch} />
           {loading ? <ActivitySkeleton /> : <ActivityList items={summary?.recent_activity || []} />}
         </div>
       </div>

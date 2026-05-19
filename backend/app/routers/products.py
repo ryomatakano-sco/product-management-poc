@@ -117,6 +117,9 @@ def _build_list_item(p: Product, match_reasons: list[str] | None = None) -> Prod
         total_available=total_available,
         default_sku=default_variant.sku if default_variant else None,
         default_price=default_variant.price if default_variant else None,
+        default_low_stock_threshold=(default_variant.low_stock_threshold
+                                     if default_variant and default_variant.low_stock_threshold is not None
+                                     else 10),
         thumbnail_url=thumbnail,
         status=p.status,
         default_amount_at_payment=p.default_amount_at_payment,
@@ -282,6 +285,20 @@ async def get_product(product_id: int, db: DB, store_id: StoreId):
 
     images_sorted = sorted(product.images, key=lambda i: i.position)
 
+    # 最終入荷日 (last_received_at): the most recent inventory adjustment
+    # with reason=purchase_order_received across this product's variants.
+    # Done as a single MAX() query — no per-variant N+1.
+    last_received_at = None
+    if variant_ids:
+        from app.models.inventory import InventoryAdjustment, AdjustmentReason
+        last_received_at = (await db.execute(
+            select(func.max(InventoryAdjustment.created_at))
+            .where(
+                InventoryAdjustment.variant_id.in_(variant_ids),
+                InventoryAdjustment.reason == AdjustmentReason.purchase_order_received,
+            )
+        )).scalar_one()
+
     return ProductDetail(
         id=product.id,
         store_id=product.store_id,
@@ -309,6 +326,7 @@ async def get_product(product_id: int, db: DB, store_id: StoreId):
         images=[ImageRead.model_validate(i) for i in images_sorted],
         tags=[t.name for t in product.tags],
         sales_summary=summary,
+        last_received_at=last_received_at,
         created_at=product.created_at,
         updated_at=product.updated_at,
     )

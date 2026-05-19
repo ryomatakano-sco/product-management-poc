@@ -67,6 +67,8 @@ const api = {
   // --- variants & inventory ---
   createVariant: (productId, body) =>
     request(`/products/${productId}/variants`, { method: "POST", body: JSON.stringify(body) }),
+  updateVariant: (variantId, body) =>
+    request(`/variants/${variantId}`, { method: "PATCH", body: JSON.stringify(body) }),
   adjustInventory: (variantId, body) =>
     request(`/variants/${variantId}/inventory-adjust`, { method: "POST", body: JSON.stringify(body) }),
   inventoryHistory: (variantId, limit = 50, offset = 0) =>
