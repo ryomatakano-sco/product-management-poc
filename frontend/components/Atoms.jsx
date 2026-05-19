@@ -1,5 +1,47 @@
 // Shared visual atoms: SectionLabel, Pill, Select, SegmentedControl, FormRow, buttons.
 
+// ProductThumb — renders the product image with a graceful SVG fallback.
+//
+// The seed data uses placeholder image URLs that often 404; rendering them
+// as `<div style={backgroundImage: url(…)}>` made the broken-image
+// invisible (the green tile showed instead). Using a real <img> + onError
+// gives us a real "did it load?" signal and lets us swap to the icon
+// fallback on failure without a layout shift.
+function ProductThumb({ url, size = 36, iconSize, alt }) {
+  const [failed, setFailed] = React.useState(false);
+  const showImg = !!url && !failed;
+  const _iconSize = iconSize || Math.round(size * 0.45);
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: Math.max(6, Math.round(size / 5)),
+      background: PLX_GREEN_LIGHT, flexShrink: 0,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      border: `1px solid ${PLX_BORDER}`, overflow: "hidden",
+      position: "relative",
+    }}>
+      {showImg ? (
+        <img
+          src={url}
+          alt={alt || ""}
+          onError={() => setFailed(true)}
+          loading="lazy"
+          style={{
+            width: "100%", height: "100%", objectFit: "cover",
+            display: "block",
+          }}
+        />
+      ) : (
+        <svg width={_iconSize} height={_iconSize} viewBox="0 0 24 24"
+          fill="none" stroke={PLX_GREEN}
+          strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+          <polyline points="3.3 7 12 12 20.7 7"/>
+        </svg>
+      )}
+    </div>
+  );
+}
+
 function SectionLabel({ children }) {
   return (
     <div style={{
@@ -126,4 +168,5 @@ const btnGhost = {
 Object.assign(window, {
   SectionLabel, Pill, StatusPill, Select, SegmentedControl,
   FormRow, formInput, btnPrimary, btnSecondary, btnGhost,
+  ProductThumb,
 });

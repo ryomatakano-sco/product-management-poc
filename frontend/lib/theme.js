@@ -8,43 +8,62 @@
 // older components keep working during the refresh.
 // ─────────────────────────────────────────────────────────────────────
 const T = {
-  // Brand greens
-  PLX_GREEN_700: "#0F8A5F",
-  PLX_GREEN_600: "#16A36C",  // primary brand
-  PLX_GREEN_500: "#22B07A",
-  PLX_GREEN_300: "#7AD3B0",
-  PLX_GREEN_100: "#E6F6EE",
-  PLX_GREEN_050: "#F2FBF6",
+  // Brand navy (paylight X live tokens). Drawn from the 2026-05-18 design
+  // handoff at /v1/design/h/b3H9DW31uvRwnd-2QmdYZw — see project/tokens.jsx.
+  // Naming preserved so legacy components ("PLX_GREEN_*") keep working;
+  // the values are pure paylight-X navy now.
+  PLX_NAVY_900: "#002041",
+  PLX_NAVY_800: "#002E5C",
+  PLX_NAVY_700: "#003A77",  // primary brand
+  PLX_NAVY_600: "#0E509A",
+  PLX_NAVY_500: "#3A77BF",
+  PLX_NAVY_300: "#94B3D3",
+  PLX_NAVY_100: "#DCE6F1",
+  PLX_NAVY_050: "#EEF3F9",
+  // Aliased so existing components recolor without per-file edits.
+  PLX_GREEN_700: "#002E5C",
+  PLX_GREEN_600: "#003A77",
+  PLX_GREEN_500: "#0E509A",
+  PLX_GREEN_300: "#94B3D3",
+  PLX_GREEN_100: "#DCE6F1",
+  PLX_GREEN_050: "#EEF3F9",
 
-  // Semantic
-  PLX_BLUE_600:   "#2E7BD6",
-  PLX_BLUE_100:   "#E4F0FB",
-  PLX_AMBER_600:  "#E89B17",
-  PLX_AMBER_100:  "#FDF3DC",
-  PLX_RED_600:    "#D6433A",
-  PLX_RED_100:    "#FCE7E5",
+  // Olive — per-user avatar accent (paylight X). Not a primary brand
+  // color; reserved for the user avatar dot in the sidebar footer.
+  PLX_OLIVE_700: "#8E9636",
+  PLX_OLIVE_600: "#B9C25B",
+  PLX_OLIVE_500: "#C9D275",
+  PLX_OLIVE_100: "#F2F5DA",
+
+  // Semantic — paylight X live tokens (links / alerts / warnings).
+  PLX_BLUE_600:   "#0D99FF",
+  PLX_BLUE_100:   "#E0F1FF",
+  PLX_AMBER_600:  "#F9C22C",
+  PLX_AMBER_100:  "#FEF4D4",
+  PLX_RED_600:    "#D94646",
+  PLX_RED_100:    "#FBE3E3",
   PLX_PURPLE_600: "#9C56C0",
   PLX_PURPLE_100: "#F1E6F8",
 
-  // Neutrals (ink scale)
-  PLX_INK_900: "#0F1B2D",
-  PLX_INK_700: "#2F3A4A",
-  PLX_INK_500: "#5B6776",
-  PLX_INK_400: "#8A95A4",
-  PLX_INK_300: "#C2C9D2",
+  // Neutrals — ink #002041, mid #495B6E, body #575757, muted #999999.
+  PLX_INK_900: "#002041",
+  PLX_INK_700: "#495B6E",
+  PLX_INK_500: "#575757",
+  PLX_INK_400: "#999999",
+  PLX_INK_300: "#C0C4CC",
 
-  // Lines / surfaces
-  PLX_LINE_200:    "#E5E8ED",
-  PLX_LINE_100:    "#EEF1F5",
+  // Lines / surfaces — slightly warmer greys to match paylight X chrome.
+  PLX_LINE_200:    "#DDDDDD",
+  PLX_LINE_100:    "#E8EAEC",
   PLX_SURFACE_0:   "#FFFFFF",
-  PLX_SURFACE_50:  "#F7F9FC",
-  PLX_SURFACE_100: "#F1F4F8",
+  PLX_SURFACE_50:  "#F2F3F5",
+  PLX_SURFACE_100: "#EEF3F9",
 
-  // Sidebar (dark-green chrome — see brief §2.8)
-  PLX_SIDEBAR_BG:        "#0F2A23",
-  PLX_SIDEBAR_INK:       "#D5E5DD",
-  PLX_SIDEBAR_INK_DIM:   "#7B9A8E",
-  PLX_SIDEBAR_ACTIVE_BG: "#16A36C",
+  // Sidebar (deepest navy — matches the paylight X chrome).
+  PLX_SIDEBAR_BG:        "#002041",
+  PLX_SIDEBAR_INK:       "#D6DEEC",
+  PLX_SIDEBAR_INK_DIM:   "#7C8BA6",
+  PLX_SIDEBAR_ACTIVE_BG: "#003A77",
 
   // Radii / shadows
   RADIUS_SM:   "6px",
@@ -129,7 +148,7 @@ function formatJpDate(dateStr) {
 // Single source of truth for the version badge shown in the sidebar footer.
 // Bump the number on every meaningful change; keep the channel ("Alpha") until
 // we cut a beta — the demo is pre-release.
-const PLX_VERSION = { channel: "Alpha", number: "0.4.0" };
+const PLX_VERSION = { channel: "Alpha", number: "0.5.0" };
 
 Object.assign(window, {
   T,

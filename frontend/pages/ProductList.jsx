@@ -239,21 +239,8 @@ function ProductList({ initialQuery }) {
                 <input type="checkbox" style={{ accentColor: PLX_GREEN }} />
               </span>
               <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
-                <div style={{
-                  width: 36, height: 36, borderRadius: 8, background: PLX_GREEN_LIGHT,
-                  flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                  border: `1px solid ${PLX_BORDER}`,
-                  backgroundImage: p.thumbnail_url ? `url(${p.thumbnail_url})` : undefined,
-                  backgroundSize: "cover",
-                }}>
-                  {!p.thumbnail_url && (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={PLX_GREEN}
-                      strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                      <polyline points="3.3 7 12 12 20.7 7"/>
-                    </svg>
-                  )}
-                </div>
+                <ProductThumb url={p.thumbnail_url} size={36} iconSize={16} />
+
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 700,
                     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",

@@ -78,7 +78,8 @@ const api = {
   getAiSuggestion: (id) => request(`/ai-suggestions/${id}`),
 
   // --- dashboard (Yoshioka 2026-05-11) ---
-  getDashboardSummary: () => request(`/dashboard/summary`),
+  getDashboardSummary:        () => request(`/dashboard/summary`),
+  regenerateDashboardSummary: () => request(`/dashboard/summary/regenerate`, { method: "POST" }),
 
   // ──────────────────────────────────────────────────────────────────
   // 2026-05-12 additions for the 12-page paylight X frontend.

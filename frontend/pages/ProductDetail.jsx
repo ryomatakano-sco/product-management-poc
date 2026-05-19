@@ -117,22 +117,7 @@ function ProductDetail({ productId }) {
         gridTemplateColumns: "160px 1fr auto", gap: 24, alignItems: "flex-start",
       }}>
         <div>
-          <div style={{
-            width: 160, height: 160, borderRadius: 14, background: PLX_GREEN_LIGHT,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            border: `1px solid ${PLX_BORDER}`,
-            backgroundImage: p.images?.[0] ? `url(${p.images[0].url})` : undefined,
-            backgroundSize: "cover", backgroundPosition: "center",
-          }}>
-            {!p.images?.[0] && (
-              <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke={PLX_GREEN}
-                strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                <polyline points="3.3 7 12 12 20.7 7"/>
-                <line x1="12" y1="22" x2="12" y2="12"/>
-              </svg>
-            )}
-          </div>
+          <ProductThumb url={p.images?.[0]?.url} size={160} iconSize={56} alt={p.name} />
         </div>
 
         <div style={{ minWidth: 0 }}>
@@ -278,7 +263,8 @@ function ProductDetail({ productId }) {
         </div>
 
         {tab === "variants" && (
-          <VariantsTable variants={variants} onAdjust={setAdjustVariant} />
+          <VariantsTable variants={variants} onAdjust={setAdjustVariant}
+            onEdit={() => navigate(`/products/${p.id}/edit`)} />
         )}
         {tab === "history" && variants[0] && <InventoryHistory variantId={variants[0].id} />}
         {tab === "lots" && p.item_type === "consumable" && <LotHistory product={p} />}
@@ -409,7 +395,7 @@ function StatCard({ label, value, unit, sub, hint }) {
   );
 }
 
-function VariantsTable({ variants, onAdjust }) {
+function VariantsTable({ variants, onAdjust, onEdit }) {
   return (
     <div>
       <div style={{
@@ -482,11 +468,15 @@ function VariantsTable({ variants, onAdjust }) {
                 border: `1px solid ${PLX_GREEN}`, background: "#fff", color: PLX_GREEN,
                 cursor: "pointer",
               }}>在庫を調整</button>
-              <button style={{
-                fontSize: 11, fontWeight: 600, padding: "5px 11px", borderRadius: 9999,
-                border: `1px solid ${PLX_BORDER}`, background: "#fff", color: PLX_TEXT,
-                cursor: "pointer",
-              }}>編集</button>
+              <button
+                onClick={() => onEdit && onEdit(v)}
+                title="商品の編集ページを開きます"
+                style={{
+                  fontSize: 11, fontWeight: 600, padding: "5px 11px", borderRadius: 9999,
+                  border: `1px solid ${PLX_BORDER}`, background: "#fff", color: PLX_TEXT,
+                  cursor: "pointer",
+                }}
+              >編集</button>
             </span>
           </div>
         );

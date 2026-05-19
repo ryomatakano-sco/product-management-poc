@@ -205,3 +205,15 @@ async def get_dashboard_summary(db: DB, store_id: StoreId) -> dict:
         "recent_activity": recent_activity,
         "category_breakdown": category_breakdown,
     }
+
+
+@router.post("/summary/regenerate", summary="AIサマリーを再生成する")
+async def regenerate_summary(db: DB, store_id: StoreId):
+    """Re-runs the deterministic summary right now.
+
+    The GET endpoint already returns a fresh snapshot every call, so this
+    POST is currently a thin alias. It exists so the frontend can express
+    the user's intent ("再生成") with a real action and so a future
+    LLM-driven summary has a place to land without breaking the contract.
+    """
+    return await get_dashboard_summary(db, store_id)

@@ -69,7 +69,7 @@ function Dashboard() {
       </div>
 
       {/* AI Summary card */}
-      {loading ? <AiSummarySkeleton /> : <AiSummaryCard summary={summary} />}
+      {loading ? <AiSummarySkeleton /> : <AiSummaryCard summary={summary} onRegenerate={summaryQ.refetch} />}
 
       {/* KPI tiles */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginTop: 16 }}>
@@ -98,7 +98,7 @@ function Dashboard() {
         </div>
         <div style={dashCard}>
           <DashCardHeader title="最近の活動" />
-          {loading ? <ActivitySkeleton /> : <ActivityList />}
+          {loading ? <ActivitySkeleton /> : <ActivityList items={summary?.recent_activity || []} />}
         </div>
       </div>
 
@@ -145,9 +145,27 @@ function renderInlineMarkdown(text) {
   );
 }
 
-function AiSummaryCard({ summary }) {
+function AiSummaryCard({ summary, onRegenerate }) {
   const isOk = summary.ai_status === "ok";
   const paragraphs = summary.ai_summary.split(/\n{2,}/);
+  const [busy, setBusy] = React.useState(false);
+  const regen = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      // Fire the POST so future LLM-backed implementations have an entry
+      // point; we read the freshly-computed snapshot via the page's
+      // existing refetch path so all dependent UI updates atomically.
+      try { await api.regenerateDashboardSummary(); } catch { /* fall through to refetch */ }
+      if (onRegenerate) await onRegenerate();
+      if (window.PLX_TOAST?.success) window.PLX_TOAST.success("AIサマリーを更新しました");
+    } catch (e) {
+      const msg = e?.body?.detail || e?.message || "再生成に失敗しました";
+      if (window.PLX_TOAST?.error) window.PLX_TOAST.error(msg);
+    } finally {
+      setBusy(false);
+    }
+  };
   // Brief §4.4: AI summary card has a 3 px PLX_GREEN_600 left edge + green wash.
   return (
     <div style={{
@@ -169,19 +187,25 @@ function AiSummaryCard({ summary }) {
           fontSize: 12, fontWeight: 600, color: T.PLX_INK_500, letterSpacing: "0.02em",
         }}>AIサマリー — 1日1回 朝6:00 更新</span>
         <div style={{ flex: 1 }} />
-        <button style={{
-          background: "transparent", border: "none",
-          display: "inline-flex", alignItems: "center", gap: 6,
-          color: T.PLX_GREEN_700, fontSize: 12, fontWeight: 600,
-          cursor: "pointer", fontFamily: "inherit",
-        }}>
+        <button
+          onClick={regen}
+          disabled={busy}
+          title="サマリーを再計算します"
+          style={{
+            background: "transparent", border: "none",
+            display: "inline-flex", alignItems: "center", gap: 6,
+            color: T.PLX_GREEN_700, fontSize: 12, fontWeight: 600,
+            cursor: busy ? "wait" : "pointer", fontFamily: "inherit",
+            opacity: busy ? 0.6 : 1,
+          }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.PLX_GREEN_700}
-            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            style={busy ? { animation: "plxspin 0.9s linear infinite", transformOrigin: "center" } : undefined}>
             <polyline points="23 4 23 10 17 10"/>
             <polyline points="1 20 1 14 7 14"/>
             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
           </svg>
-          再生成
+          {busy ? "再生成中…" : "再生成"}
         </button>
       </div>
       <div style={{
@@ -428,34 +452,83 @@ function AttentionSkeleton() {
 // ── Activity list — static mock for PoC ────────────────────────────────────
 // TODO: wire to inventory_adjustments + audit log after demo.
 
-function ActivityList() {
-  const items = [
-    { id: "a1", icon: "in",  text: "在庫調整: GUM デンタルブラシ #211 (+50)",   at: "09:42",      who: "田中 美咲" },
-    { id: "a2", icon: "new", text: "新規商品登録: ホワイトニングジェル",          at: "昨日 17:08", who: "田中 美咲" },
-    { id: "a3", icon: "ai",  text: "AI 自動入力使用: 3 件",                       at: "昨日 14:21", who: "田中 美咲" },
-    { id: "a4", icon: "out", text: "診療使用: フィルテック スプリーム (-2)",      at: "昨日 11:33", who: "システム" },
-    { id: "a5", icon: "po",  text: "発注書発行: PO-2026-0421 (3M ジャパン)",      at: "2 日前",     who: "田中 美咲" },
-  ];
+// Map a backend `kind` (e.g. inventory adjustment reason enum) to a small
+// icon name. The set is intentionally short — we don't need a perfect
+// per-reason icon, just a visual grouping.
+function _activityIconFor(kind, text) {
+  const k = (kind || "").toLowerCase();
+  if (k.includes("ai")) return "ai";
+  if (k.includes("purchase") || k.includes("po") || (text || "").includes("発注")) return "po";
+  if (k.includes("sale") || k.includes("sold") || (text || "").includes("販売")) return "out";
+  if (k.includes("receive") || k.includes("in")) return "in";
+  if (k.includes("create") || k.includes("new")) return "new";
+  return "in";
+}
+
+// Render an ISO timestamp as a relative-ish JP label. 〜数分前 / 〜時間前 /
+// "昨日 HH:MM" / "YYYY/MM/DD". Cheap, no library.
+function _relTimeJP(iso) {
+  if (!iso) return "—";
+  const t = new Date(iso);
+  if (Number.isNaN(t.getTime())) return iso;
+  const now = new Date();
+  const diffMs = now - t;
+  const diffMin = Math.round(diffMs / 60000);
+  if (diffMin < 1) return "たった今";
+  if (diffMin < 60) return `${diffMin} 分前`;
+  const diffH = Math.round(diffMin / 60);
+  if (diffH < 24) return `${diffH} 時間前`;
+  const sameDay = now.toDateString() === t.toDateString();
+  const yest = new Date(now); yest.setDate(yest.getDate() - 1);
+  const isYest = yest.toDateString() === t.toDateString();
+  const hh = String(t.getHours()).padStart(2, "0");
+  const mm = String(t.getMinutes()).padStart(2, "0");
+  if (sameDay) return `${hh}:${mm}`;
+  if (isYest)  return `昨日 ${hh}:${mm}`;
+  return `${t.getFullYear()}/${String(t.getMonth() + 1).padStart(2, "0")}/${String(t.getDate()).padStart(2, "0")}`;
+}
+
+function ActivityList({ items }) {
+  if (!items || items.length === 0) {
+    return (
+      <div style={{
+        padding: "24px 4px", textAlign: "center", color: PLX_MUTED, fontSize: 12,
+      }}>
+        まだ活動履歴がありません。
+        <div style={{ fontSize: 11, marginTop: 4 }}>
+          在庫調整・発注・販売などの操作が記録されるとここに表示されます。
+        </div>
+      </div>
+    );
+  }
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
-      {items.map((a, i) => (
-        <div key={a.id} style={{
-          display: "flex", alignItems: "flex-start", gap: 12, padding: "10px 0",
-          borderBottom: i < items.length - 1 ? `1px solid ${PLX_BORDER}` : "none",
-        }}>
-          <div style={{
-            width: 30, height: 30, borderRadius: "50%", background: PLX_GREEN_50,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            flexShrink: 0, border: `1px solid ${PLX_GREEN_LIGHT}`,
+      {items.map((a, i) => {
+        const icon = _activityIconFor(a.kind, a.text);
+        return (
+          <div key={i} style={{
+            display: "flex", alignItems: "flex-start", gap: 12, padding: "10px 0",
+            borderBottom: i < items.length - 1 ? `1px solid ${PLX_BORDER}` : "none",
           }}>
-            <ActivityIcon name={a.icon} />
+            <div style={{
+              width: 30, height: 30, borderRadius: "50%", background: PLX_GREEN_50,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0, border: `1px solid ${PLX_GREEN_LIGHT}`,
+            }}>
+              <ActivityIcon name={icon} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: 12, fontWeight: 600, color: PLX_TEXT, lineHeight: 1.5,
+                wordBreak: "break-word",
+              }}>{a.text}</div>
+              <div style={{ fontSize: 10, color: PLX_MUTED, marginTop: 3 }}>
+                {_relTimeJP(a.occurred_at)} · {a.actor || "システム"}
+              </div>
+            </div>
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: PLX_TEXT, lineHeight: 1.5 }}>{a.text}</div>
-            <div style={{ fontSize: 10, color: PLX_MUTED, marginTop: 3 }}>{a.at} · {a.who}</div>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
