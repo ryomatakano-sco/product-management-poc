@@ -58,6 +58,10 @@ const api = {
   // --- global search (powers the Ctrl+K command palette) ---
   globalSearch: (q) => request(`/search/global${qs({ q })}`),
 
+  // --- dev-only model arena (POST /ai-suggestions/compare) ---
+  compareAiSuggestion: (body) =>
+    request(`/ai-suggestions/compare`, { method: "POST", body: JSON.stringify(body) }),
+
   // --- ref data ---
   listCategories: () => request(`/categories?limit=100`),
   listVendors:    () => request(`/vendors?limit=100`),

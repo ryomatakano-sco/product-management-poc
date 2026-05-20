@@ -36,6 +36,73 @@ EXTRACTION_MODEL = "gpt-4.1-nano"
 DEFAULT_MODEL = SEARCH_MODEL
 
 
+# Search allow-list — hostnames only (subdomains included automatically per
+# OpenAI's web_search guide). Sourced verbatim from the 2026-05-20 research
+# report `jan-lookup-upgrade.md` Deliverable 1. Tiered by trust:
+#   T1 manufacturer official → T2 dental dealers → T3 e-commerce
+#   → T4 drugstore chains → T5 wholesale aggregators
+#
+# Passing this via WebSearchTool(filters={"allowed_domains": [...]}) switches
+# the underlying tool from the legacy `web_search_preview` (which silently
+# ignores filters) to the GA `web_search` (which enforces them). Limit is
+# 100; we currently use 36, well within budget for adding more later.
+#
+# When updating: keep order T1 → T5 so the model's first-result preference
+# correlates with our trust ordering.
+_ALLOWED_DOMAINS: list[str] = [
+    # Tier 1 — Manufacturer official sites
+    "jp.sunstar.com",
+    "jp.sunstargum.com",
+    "clinica.lion.co.jp",
+    "systema.lion.co.jp",
+    "www.lion.co.jp",
+    "www.lion-dent.co.jp",
+    "www.gc.dental",
+    "www.gcdental.co.jp",
+    "www.shofu.co.jp",
+    "www.tokuyama-dental.co.jp",
+    "www.morita.com",
+    "japan.morita.com",
+    "www.dental-plaza.com",
+    # Tier 2 — Authorised dental dealers
+    "www.ci-medical.com",
+    "ci-medical.co.jp",
+    "www.dental-fit.com",
+    "www.yoshida-dental.co.jp",
+    "www.tanakadental.co.jp",
+    # Tier 3 — Major Japanese e-commerce (URL often contains JAN).
+    # Bare "rakuten.co.jp" covers *.rakuten.co.jp subdomains (per OpenAI web
+    # search docs, subdomains are included automatically). Specific Rakuten
+    # subdomains kept for clarity but are redundant under the bare entry.
+    "rakuten.co.jp",
+    "item.rakuten.co.jp",
+    "netsuper.rakuten.co.jp",
+    "search.rakuten.co.jp",
+    "www.amazon.co.jp",
+    "shopping.yahoo.co.jp",
+    "store.shopping.yahoo.co.jp",
+    "paypay.ne.jp",                        # PayPay Mall — major Tier 3a hit source
+    "www.yodobashi.com",
+    "www.biccamera.com",                   # Bic Camera — verified Tier 3a hit
+    "www.ec-current.com",                  # EC Current (Joshin) — verified Tier 3a hit
+    "hands.net",
+    "www.askul.co.jp",
+    "www.lohaco.jp",                       # Askul consumer arm
+    # Tier 4 — Drugstore chains (URL often contains JAN)
+    "www.matsukiyo.co.jp",
+    "www.matsukiyococokara-online.com",
+    "www.welcia-yakkyoku.co.jp",
+    "shop.tsuruha.co.jp",
+    "www.cocokarafine.co.jp",
+    "www.sugi-net.jp",
+    "www.cosmospc.co.jp",
+    # Tier 5 — Wholesale / B2B aggregators
+    "www.super-delivery.com",
+    "www.oroshi-uri.com",
+    "www.netsea.jp",
+]
+
+
 def _ai_enabled() -> bool:
     """Real OpenAI only when a key is set AND MOCK_AI is not explicitly 1."""
     if os.environ.get("MOCK_AI", "").strip() == "1":
@@ -130,12 +197,30 @@ EXTRACTION_SYSTEM_PROMPT = """\
 
 
 def _create_search_agent(model: str):
-    from agents import Agent, ModelSettings, WebSearchTool  # lazy
+    # Lazy imports because the agents package is optional in mock mode.
+    from agents import Agent, ModelSettings, WebSearchTool
+    from agents.tool import WebSearchToolFilters
+    # Passing filters/user_location/search_context_size promotes the tool
+    # from `web_search_preview` (which silently ignores filters) to GA
+    # `web_search`. NOTE: `filters` must be the WebSearchToolFilters
+    # Pydantic model — a plain dict silently passes the constructor but
+    # blows up later in OpenAIResponsesModel._build_response_create_kwargs
+    # ("'dict' object has no attribute 'model_dump'"). `user_location` is
+    # a TypedDict and accepts a plain dict.
     return Agent(
         name="Product Search Agent",
         instructions=SEARCH_SYSTEM_PROMPT,
         model=model,
-        tools=[WebSearchTool()],
+        tools=[WebSearchTool(
+            filters=WebSearchToolFilters(allowed_domains=_ALLOWED_DOMAINS),
+            user_location={
+                "type": "approximate",
+                "country": "JP",
+                "city": "Tokyo",
+                "timezone": "Asia/Tokyo",
+            },
+            search_context_size="high",
+        )],
         model_settings=ModelSettings(temperature=0.1),
     )
 
