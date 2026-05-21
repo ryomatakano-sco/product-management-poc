@@ -61,19 +61,30 @@ DEFAULT_MODEL = SEARCH_MODEL
 #   list, but at least the tool runs).
 # ---------------------------------------------------------------------------
 MODEL_NO_WEB_SEARCH: frozenset[str] = frozenset({
+    # nano variants and the o3-mini reasoning model can't use any web search.
+    # Discovered via arena runs 2026-05-21:
+    #   o3-mini  → "Tool 'web_search_preview' is not supported with o3-mini"
     "gpt-4.1-nano",
     "gpt-5-nano",
+    "o3-mini",
 })
 MODEL_NO_SEARCH_FILTERS: frozenset[str] = frozenset({
+    # mini variants accept WebSearchTool() but reject the `filters` parameter
+    # that promotes it to the GA tool. They run on the preview tool with no
+    # allow-list. Discovered 2026-05-21 via arena:
+    #   gpt-4o-mini  → "Parameter 'filters' not supported with model 'gpt-4o-mini'"
     "gpt-4.1-mini",
+    "gpt-4o-mini",
     "gpt-5-mini",
 })
 MODEL_NO_TEMPERATURE: frozenset[str] = frozenset({
+    # GPT-5 family reject ModelSettings(temperature=…).
+    # o4-mini accepts temperature (verified via arena, it ran successfully
+    # with our default temperature=0.1). o3-mini probably does too, but
+    # it can't web-search so we never construct a search agent for it.
     "gpt-5",
     "gpt-5-mini",
     "gpt-5-nano",
-    "o3-mini",
-    "o4-mini",
 })
 
 

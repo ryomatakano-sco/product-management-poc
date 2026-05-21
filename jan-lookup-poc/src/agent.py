@@ -45,9 +45,10 @@ _ALLOWED_DOMAINS: list[str] = [
 # Per-model capability matrix — mirror of backend/app/services/ai_agent.py.
 # See that file's MODEL_NO_WEB_SEARCH / MODEL_NO_SEARCH_FILTERS / MODEL_NO_TEMPERATURE
 # constants for the discovery rationale. Keep these two lists in sync.
-_MODEL_NO_WEB_SEARCH = {"gpt-4.1-nano", "gpt-5-nano"}
-_MODEL_NO_SEARCH_FILTERS = {"gpt-4.1-mini", "gpt-5-mini"}
-_MODEL_NO_TEMPERATURE = {"gpt-5", "gpt-5-mini", "gpt-5-nano", "o3-mini", "o4-mini"}
+# Updated 2026-05-21 from arena evidence — see backend/app/services/ai_agent.py.
+_MODEL_NO_WEB_SEARCH = {"gpt-4.1-nano", "gpt-5-nano", "o3-mini"}
+_MODEL_NO_SEARCH_FILTERS = {"gpt-4.1-mini", "gpt-4o-mini", "gpt-5-mini"}
+_MODEL_NO_TEMPERATURE = {"gpt-5", "gpt-5-mini", "gpt-5-nano"}  # o4-mini OK
 
 
 def _web_search_tool_for(model: str):
