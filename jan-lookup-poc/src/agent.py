@@ -10,8 +10,50 @@ WebSearchTool with structured output (output_type) on large Pydantic models.
 from __future__ import annotations
 
 from agents import Agent, WebSearchTool, ModelSettings
+from agents.tool import WebSearchToolFilters
 
 from schema import ProductLookupResult, ProductNameLookupResult
+
+
+# Allow-list mirrored from backend/app/services/ai_agent.py — keep these
+# two lists in sync. Source: 2026-05-20 research report deliverable 1.
+# Passing this via WebSearchTool(filters=...) is what switches the tool
+# from `web_search_preview` (ignores filters) to GA `web_search`.
+_ALLOWED_DOMAINS: list[str] = [
+    # T1 manufacturer official
+    "jp.sunstar.com", "jp.sunstargum.com", "clinica.lion.co.jp",
+    "systema.lion.co.jp", "www.lion.co.jp", "www.lion-dent.co.jp",
+    "www.gc.dental", "www.gcdental.co.jp", "www.shofu.co.jp",
+    "www.tokuyama-dental.co.jp", "www.morita.com", "japan.morita.com",
+    "www.dental-plaza.com",
+    # T2 dental dealers
+    "www.ci-medical.com", "ci-medical.co.jp", "www.dental-fit.com",
+    "www.yoshida-dental.co.jp", "www.tanakadental.co.jp",
+    # T3 e-commerce — see backend/app/services/ai_agent.py for tier notes.
+    "rakuten.co.jp", "item.rakuten.co.jp", "netsuper.rakuten.co.jp", "search.rakuten.co.jp",
+    "www.amazon.co.jp", "shopping.yahoo.co.jp", "store.shopping.yahoo.co.jp",
+    "paypay.ne.jp", "www.yodobashi.com", "www.biccamera.com",
+    "www.ec-current.com", "hands.net", "www.askul.co.jp", "www.lohaco.jp",
+    # T4 drugstore chains
+    "www.matsukiyo.co.jp", "www.matsukiyococokara-online.com",
+    "www.welcia-yakkyoku.co.jp", "shop.tsuruha.co.jp",
+    "www.cocokarafine.co.jp", "www.sugi-net.jp", "www.cosmospc.co.jp",
+    # T5 wholesale aggregators
+    "www.super-delivery.com", "www.oroshi-uri.com", "www.netsea.jp",
+]
+
+_WEB_SEARCH_KWARGS = dict(
+    # filters MUST be the Pydantic model — dict here silently breaks at
+    # request-build time. See the matching note in backend/app/services/ai_agent.py.
+    filters=WebSearchToolFilters(allowed_domains=_ALLOWED_DOMAINS),
+    user_location={
+        "type": "approximate",
+        "country": "JP",
+        "city": "Tokyo",
+        "timezone": "Asia/Tokyo",
+    },
+    search_context_size="high",
+)
 
 
 SEARCH_SYSTEM_PROMPT = """\
@@ -79,7 +121,7 @@ def create_search_agent(model: str) -> Agent:
         name="JAN Search Agent",
         instructions=SEARCH_SYSTEM_PROMPT,
         model=model,
-        tools=[WebSearchTool()],
+        tools=[WebSearchTool(**_WEB_SEARCH_KWARGS)],
         model_settings=ModelSettings(temperature=0.1),
     )
 
@@ -166,7 +208,7 @@ def create_name_search_agent(model: str) -> Agent:
         name="Product Name Search Agent",
         instructions=NAME_SEARCH_SYSTEM_PROMPT,
         model=model,
-        tools=[WebSearchTool()],
+        tools=[WebSearchTool(**_WEB_SEARCH_KWARGS)],
         model_settings=ModelSettings(temperature=0.1),
     )
 

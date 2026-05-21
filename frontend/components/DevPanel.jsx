@@ -202,6 +202,20 @@ function DevSections({ status }) {
         <DevKv k="search model" v={ai.search_model} />
         <DevKv k="extraction model" v={ai.extraction_model} />
         <DevEnvEditor ai={ai} writeTarget={rt.env_write_target} />
+        {/* Model arena — side-by-side comparison of N models on the same
+            JAN. Lives in the dev panel because it's a dev tool, not a
+            user-facing feature. Hooks up to POST /ai-suggestions/compare. */}
+        <button
+          onClick={() => window.PLX_AI_ARENA && window.PLX_AI_ARENA.open()}
+          style={{
+            marginTop: 8, padding: "6px 12px", borderRadius: 6,
+            border: `1px solid ${PLX_GREEN}`, background: "#fff",
+            color: PLX_GREEN, fontWeight: 700, fontSize: 11, cursor: "pointer",
+            display: "inline-flex", alignItems: "center", gap: 6,
+          }}
+        >
+          🧪 AI モデル比較
+        </button>
       </DevSection>
 
       <DevSection title="Runtime">

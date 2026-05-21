@@ -17,11 +17,37 @@ from app.schemas.ai_suggestion import (
     AiDebugDropped,
     AiFieldOptionRead,
     AiOptionApply,
+    AiSuggestionCompare,
+    AiSuggestionCompareRequest,
+    AiSuggestionCompareResult,
     AiSuggestionDebug,
     AiSuggestionRead,
     AiSuggestionRequest,
 )
 from app.services.ai_agent import DEFAULT_MODEL, run_product_lookup
+from app.services.jan import normalize_jan, validate_check_digit
+
+
+def _normalised_jan_or_422(raw: str | None) -> str | None:
+    """Validate + normalise an incoming JAN string.
+
+    Returns the cleaned digit form on success. Returns ``None`` if no JAN was
+    supplied. Raises HTTPException(422) on malformed input so the caller
+    doesn't have to repeat the boilerplate.
+
+    Order matters: shape check first (so we can say "wrong length"), then
+    check digit (so we can say "valid shape, bad check digit"). The user-
+    facing message stays generic because the AI Assist modal isn't a JAN
+    validator — we just want bad input to fail fast and cheap.
+    """
+    if not raw:
+        return None
+    normalised = normalize_jan(raw)
+    if normalised is None:
+        raise HTTPException(422, detail="JAN コードの形式が正しくありません (8桁または13桁の数字をご入力ください)")
+    if not validate_check_digit(normalised):
+        raise HTTPException(422, detail="JAN コードのチェックディジットが正しくありません")
+    return normalised
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai-suggestions", tags=["ai-suggestions"])
@@ -70,10 +96,16 @@ async def create_ai_suggestion(body: AiSuggestionRequest, db: DB, store_id: Stor
     if not body.jan and not body.title:
         raise HTTPException(400, detail="At least one of 'jan' or 'title' is required")
 
+    # Validate + normalise the JAN before any model call. NFKC strips full-
+    # width digits to ASCII, the mod-10 check digit rejects typos. Saves an
+    # OpenAI round-trip on malformed input (422 instead of a confused model).
+    jan = _normalised_jan_or_422(body.jan)
+    title = body.title
+
     session = AiSuggestionSession(
         store_id=store_id,
-        input_jan=body.jan,
-        input_title=body.title,
+        input_jan=jan,
+        input_title=title,
         status=AiSessionStatus.pending,
         model_name=DEFAULT_MODEL,
     )
@@ -81,7 +113,7 @@ async def create_ai_suggestion(body: AiSuggestionRequest, db: DB, store_id: Stor
     await db.flush()
 
     try:
-        result = await run_product_lookup(jan=body.jan, title=body.title)
+        result = await run_product_lookup(jan=jan, title=title)
 
         # Persist candidates as field_options
         for i, candidate in enumerate(result.candidates):
@@ -191,8 +223,12 @@ async def debug_ai_suggestion(body: AiSuggestionRequest):
     if not body.jan and not body.title:
         raise HTTPException(400, detail="At least one of 'jan' or 'title' is required")
 
+    # Same JAN gate as the create endpoint so /debug fails fast on garbage.
+    jan = _normalised_jan_or_422(body.jan)
+    title = body.title
+
     try:
-        result = await run_product_lookup(jan=body.jan, title=body.title)
+        result = await run_product_lookup(jan=jan, title=title)
     except Exception as e:
         logger.error("AI debug failed: %s", e, exc_info=True)
         return AiSuggestionDebug(
@@ -217,6 +253,13 @@ async def debug_ai_suggestion(body: AiSuggestionRequest):
                 )
             )
             continue
+        # Free JAN-presence check: substring-match the queried JAN against
+        # the source URL. Retailers like Matsukiyo / Welcia / Rakuten / Hands
+        # bake the JAN literal into the URL path; finding it there is
+        # near-conclusive evidence the page is about that exact product.
+        # Manufacturer slug URLs (jp.sunstar.com/oralcare/gum/product_054.html)
+        # won't match — that's expected. See Wave 2 for fetch-based verifier.
+        verified = bool(jan and c.source_url and jan in c.source_url)
         kept.append(
             AiDebugCandidate(
                 field_name=c.field_name,
@@ -224,6 +267,7 @@ async def debug_ai_suggestion(body: AiSuggestionRequest):
                 source_url=c.source_url,
                 source_title=c.source_title,
                 confidence=c.confidence,
+                jan_verified=verified,
             )
         )
 
@@ -234,4 +278,98 @@ async def debug_ai_suggestion(body: AiSuggestionRequest):
         candidates=kept,
         dropped_candidates=dropped,
         strict_citation_fields=sorted(STRICT_CITATION_FIELDS),
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /ai-suggestions/compare — dev-only model arena.
+# ---------------------------------------------------------------------------
+
+
+def _build_compare_result_from_lookup(
+    model_id: str,
+    raw_result,
+    jan: str | None,
+    wall_time_ms: int,
+) -> AiSuggestionCompareResult:
+    """Apply the same citation + JAN-substring rules as /debug, per model.
+
+    Kept private to this module — only the /compare endpoint needs it.
+    """
+    kept: list[AiDebugCandidate] = []
+    dropped: list[AiDebugDropped] = []
+    for c in raw_result.candidates:
+        if c.field_name in STRICT_CITATION_FIELDS and not c.source_url:
+            dropped.append(AiDebugDropped(
+                field_name=c.field_name,
+                value=c.value,
+                reason="missing source_url for strict-citation field",
+            ))
+            continue
+        verified = bool(jan and c.source_url and jan in c.source_url)
+        kept.append(AiDebugCandidate(
+            field_name=c.field_name,
+            value=c.value,
+            source_url=c.source_url,
+            source_title=c.source_title,
+            confidence=c.confidence,
+            jan_verified=verified,
+        ))
+    return AiSuggestionCompareResult(
+        model=model_id,
+        found=getattr(raw_result, "found", bool(kept)),
+        wall_time_ms=wall_time_ms,
+        raw_search_notes=raw_result.raw_search_notes,
+        candidates=kept,
+        dropped_candidates=dropped,
+    )
+
+
+@router.post("/compare", response_model=AiSuggestionCompare)
+async def compare_ai_suggestion(body: AiSuggestionCompareRequest):
+    """Run the same lookup against N models in parallel.
+
+    Used by the DevPanel model arena to A/B which model produces the best
+    recall/quality. Not user-facing. Caller-supplied model ids are passed
+    through to run_product_lookup verbatim so we don't have to ship a
+    backend change every time OpenAI releases a new model variant.
+
+    asyncio.gather(return_exceptions=True) means one model failing doesn't
+    kill the whole run — each result row carries its own error_message.
+    """
+    import asyncio
+    import time
+
+    if not body.jan and not body.title:
+        raise HTTPException(400, detail="At least one of 'jan' or 'title' is required")
+    if not body.models:
+        raise HTTPException(400, detail="At least one model id is required")
+    if len(body.models) > 6:
+        raise HTTPException(400, detail="Up to 6 models per call")
+
+    jan = _normalised_jan_or_422(body.jan)
+    title = body.title
+
+    async def _one(model_id: str) -> AiSuggestionCompareResult:
+        start = time.perf_counter()
+        try:
+            raw = await run_product_lookup(jan=jan, title=title, model=model_id)
+            elapsed = int((time.perf_counter() - start) * 1000)
+            return _build_compare_result_from_lookup(model_id, raw, jan, elapsed)
+        except Exception as e:  # noqa: BLE001 — surface error per model
+            elapsed = int((time.perf_counter() - start) * 1000)
+            logger.error("Compare run failed for model=%s: %s", model_id, e, exc_info=True)
+            return AiSuggestionCompareResult(
+                model=model_id,
+                found=False,
+                wall_time_ms=elapsed,
+                error_message=str(e),
+            )
+
+    results = await asyncio.gather(*[_one(m) for m in body.models])
+    return AiSuggestionCompare(
+        jan=jan,
+        title=title,
+        strict_citation_fields=sorted(STRICT_CITATION_FIELDS),
+        results=list(results),
     )

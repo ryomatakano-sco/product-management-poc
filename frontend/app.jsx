@@ -38,6 +38,7 @@ function App() {
       {page}
       <CommandPaletteHost />
       <DevPanel />
+      <AiArenaHost />
       <ToastContainer />
     </>
   );
