@@ -14,9 +14,56 @@
 
 (function () {
   const _STORAGE_KEY = "sco.modelArena.models.v1";
-  // Defaults are the same family currently in production. Edit by typing in
-  // the "+ Add custom..." box; selections persist via localStorage.
-  const _DEFAULT_OPTIONS = ["gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"];
+  const _SIDE_BY_SIDE_KEY = "sco.modelArena.sideBySide.v1";
+  const _HISTORY_KEY = "sco.modelArena.history.v1";
+  const _LAST_RESULT_KEY = "sco.modelArena.lastResult.v1";
+  const _MAX_HISTORY = 50;
+  const _MAX_SIDE_BY_SIDE = 6;
+
+  // Preset list — toggle any; custom IDs still work via the add box.
+  const _DEFAULT_OPTIONS = [
+    "gpt-4.1",
+    "gpt-4.1-mini",
+    "gpt-4.1-nano",
+    "gpt-4o",
+    "gpt-4o-mini",
+    "o3-mini",
+    "o4-mini",
+    "gpt-5",
+    "gpt-5-mini",
+    "gpt-5-nano",
+  ];
+
+  function _fmtUsd(n) {
+    if (n == null || Number.isNaN(Number(n))) return "—";
+    return `$${Number(n).toFixed(4)}`;
+  }
+  function _fmtJpy(n) {
+    if (n == null || Number.isNaN(Number(n))) return "—";
+    return `¥${Math.round(Number(n)).toLocaleString()}`;
+  }
+  function _sumCompareCostUsd(results) {
+    return (results || []).reduce((s, r) => s + (Number(r.total_cost_usd) || 0), 0);
+  }
+
+  async function _copyText(text) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+  }
+
+  function _formatComparePayload(result, meta) {
+    return JSON.stringify({ ...meta, result }, null, 2);
+  }
 
   function _loadModels() {
     try {
@@ -35,6 +82,42 @@
     catch { /* swallow */ }
   }
 
+  function _loadSideBySide() {
+    try {
+      const n = parseInt(localStorage.getItem(_SIDE_BY_SIDE_KEY), 10);
+      if (Number.isFinite(n) && n >= 1 && n <= _MAX_SIDE_BY_SIDE) return n;
+    } catch { /* ignore */ }
+    return 2;
+  }
+  function _saveSideBySide(n) {
+    try { localStorage.setItem(_SIDE_BY_SIDE_KEY, String(n)); }
+    catch { /* swallow */ }
+  }
+
+  function _loadHistory() {
+    try {
+      const raw = localStorage.getItem(_HISTORY_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch { /* ignore */ }
+    return [];
+  }
+  function _saveHistory(list) {
+    try { localStorage.setItem(_HISTORY_KEY, JSON.stringify(list.slice(0, _MAX_HISTORY))); }
+    catch { /* swallow */ }
+  }
+  function _pushHistory(entry) {
+    const next = [entry, ..._loadHistory()].slice(0, _MAX_HISTORY);
+    _saveHistory(next);
+    return next;
+  }
+  function _saveLastResult(entry) {
+    try { localStorage.setItem(_LAST_RESULT_KEY, JSON.stringify(entry)); }
+    catch { /* swallow */ }
+  }
+
   // ──────────────────────────────────────────────────────────────────────
   // Root component. Renders nothing when closed; mounted by window.PLX_AI_ARENA.
   // ──────────────────────────────────────────────────────────────────────
@@ -43,12 +126,28 @@
     const [title, setTitle] = React.useState("");
     const [mode, setMode]   = React.useState("jan"); // jan | name
     const [selected, setSelected] = React.useState(_loadModels);
+    const [sideBySide, setSideBySide] = React.useState(_loadSideBySide);
     const [customInput, setCustomInput] = React.useState("");
     const [running, setRunning] = React.useState(false);
     const [result, setResult]   = React.useState(null);
     const [error, setError]     = React.useState(null);
+    const [history, setHistory] = React.useState(_loadHistory);
+    const [showHistory, setShowHistory] = React.useState(false);
+    const [copyMsg, setCopyMsg] = React.useState(null);
     // Persist selection on every change so we don't lose it on reload.
     React.useEffect(() => { _saveModels(selected); }, [selected]);
+    React.useEffect(() => { _saveSideBySide(sideBySide); }, [sideBySide]);
+
+    const flashCopy = (label) => {
+      setCopyMsg(label);
+      const t = setTimeout(() => setCopyMsg(null), 2000);
+      return () => clearTimeout(t);
+    };
+
+    const modelsToRun = React.useMemo(
+      () => selected.slice(0, Math.min(sideBySide, selected.length)),
+      [selected, sideBySide],
+    );
 
     if (!open) return null;
 
@@ -64,16 +163,51 @@
       setCustomInput("");
     };
 
+    const copyCurrent = async () => {
+      if (!result) return;
+      const meta = {
+        copied_at: new Date().toISOString(),
+        input_mode: mode,
+        jan: jan.trim() || null,
+        title: title.trim() || null,
+        models_requested: modelsToRun,
+        side_by_side: sideBySide,
+      };
+      try {
+        await _copyText(_formatComparePayload(result, meta));
+        flashCopy("Copied current result");
+      } catch {
+        setError("クリップボードへのコピーに失敗しました");
+      }
+    };
+
+    const copyAllHistory = async () => {
+      if (history.length === 0) return;
+      try {
+        await _copyText(JSON.stringify(history, null, 2));
+        flashCopy(`Copied ${history.length} history entries`);
+      } catch {
+        setError("履歴のコピーに失敗しました");
+      }
+    };
+
+    const clearHistory = () => {
+      if (!history.length) return;
+      if (!confirm(`履歴 ${history.length} 件をすべて削除しますか？`)) return;
+      _saveHistory([]);
+      setHistory([]);
+    };
+
     const run = async () => {
       if (running) return;
-      const body = { models: selected };
+      const body = { models: modelsToRun };
       if (mode === "jan" && jan.trim())   body.jan = jan.trim();
       if (mode === "name" && title.trim()) body.title = title.trim();
       if (!body.jan && !body.title) {
         setError("JAN または商品名を入力してください");
         return;
       }
-      if (selected.length === 0) {
+      if (modelsToRun.length === 0) {
         setError("少なくとも 1 つのモデルを選んでください");
         return;
       }
@@ -81,6 +215,17 @@
       try {
         const res = await api.compareAiSuggestion(body);
         setResult(res);
+        const entry = {
+          at: new Date().toISOString(),
+          input_mode: mode,
+          jan: body.jan || null,
+          title: body.title || null,
+          models: modelsToRun,
+          side_by_side: sideBySide,
+          result: res,
+        };
+        _saveLastResult(entry);
+        setHistory(_pushHistory(entry));
       } catch (e) {
         setError(e.body?.detail || e.message || "比較リクエストに失敗しました");
       } finally {
@@ -101,7 +246,17 @@
           overflow: "hidden", display: "flex", flexDirection: "column",
           border: `1px solid ${PLX_BORDER}`,
         }}>
-          <ArenaHeader onClose={onClose} />
+          <ArenaHeader
+            onClose={onClose}
+            hasResult={!!result}
+            onCopy={copyCurrent}
+            historyCount={history.length}
+            showHistory={showHistory}
+            onToggleHistory={() => setShowHistory((s) => !s)}
+            onCopyHistory={copyAllHistory}
+            onClearHistory={clearHistory}
+            copyMsg={copyMsg}
+          />
 
           <div style={{ padding: "14px 22px", borderBottom: `1px solid ${PLX_BORDER}` }}>
             <ArenaInputs
@@ -116,8 +271,18 @@
               customInput={customInput}
               setCustomInput={setCustomInput}
               onAddCustom={addCustom}
+              sideBySide={sideBySide}
+              onSideBySideChange={setSideBySide}
+              modelsToRun={modelsToRun}
             />
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
+            {showHistory && (
+              <ArenaHistory
+                history={history}
+                onCopyAll={copyAllHistory}
+                onClear={clearHistory}
+              />
+            )}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
               <button
                 onClick={run}
                 disabled={running}
@@ -129,8 +294,15 @@
                   opacity: running ? 0.6 : 1,
                 }}
               >
-                {running ? "実行中…" : `▶ ${selected.length} モデルで実行`}
+                {running
+                  ? "実行中…"
+                  : `▶ ${modelsToRun.length} モデルを並べて実行`}
               </button>
+              {selected.length > modelsToRun.length && (
+                <span style={{ fontSize: 11, color: PLX_MUTED }}>
+                  （選択 {selected.length} · 実行は先頭 {modelsToRun.length} 件）
+                </span>
+              )}
               {error && (
                 <span style={{ color: PLX_RED, fontSize: 12, fontWeight: 600 }}>⚠ {error}</span>
               )}
@@ -159,20 +331,70 @@
   // Sub-components
   // ──────────────────────────────────────────────────────────────────────
 
-  function ArenaHeader({ onClose }) {
+  const _arenaBtn = {
+    height: 28, padding: "0 10px", borderRadius: 6,
+    border: `1px solid ${PLX_BORDER}`, background: "#fff",
+    color: PLX_TEXT, fontSize: 11, fontWeight: 700, cursor: "pointer",
+  };
+
+  function ArenaHeader({
+    onClose, hasResult, onCopy, historyCount, showHistory,
+    onToggleHistory, onCopyHistory, onClearHistory, copyMsg,
+  }) {
     return (
       <div style={{
         padding: "16px 22px", borderBottom: `1px solid ${PLX_BORDER}`,
-        display: "flex", alignItems: "center", gap: 12,
+        display: "flex", alignItems: "flex-start", gap: 12,
       }}>
         <div style={{ fontSize: 20 }}>🧪</div>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: PLX_TEXT }}>
             AI モデル比較 — 開発者向け
           </div>
           <div style={{ fontSize: 11, color: PLX_MUTED, marginTop: 2 }}>
             同じ JAN を複数モデルに投げて、どの結果が最良かを並べて確認します。
             UI には影響しません。
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+            <button
+              onClick={onCopy}
+              disabled={!hasResult}
+              title="現在の比較結果を JSON でコピー"
+              style={{ ..._arenaBtn, opacity: hasResult ? 1 : 0.45, cursor: hasResult ? "pointer" : "not-allowed" }}
+            >
+              📋 結果をコピー
+            </button>
+            <button
+              onClick={onToggleHistory}
+              style={{
+                ..._arenaBtn,
+                borderColor: showHistory ? PLX_GREEN : PLX_BORDER,
+                color: showHistory ? PLX_GREEN : PLX_TEXT,
+              }}
+            >
+              🕘 履歴 ({historyCount})
+            </button>
+            <button
+              onClick={onCopyHistory}
+              disabled={historyCount === 0}
+              title="保存済みの全履歴を JSON で一括コピー"
+              style={{
+                ..._arenaBtn, opacity: historyCount ? 1 : 0.45,
+                cursor: historyCount ? "pointer" : "not-allowed",
+              }}
+            >
+              📋 履歴をすべてコピー
+            </button>
+            {historyCount > 0 && (
+              <button onClick={onClearHistory} style={{ ..._arenaBtn, color: PLX_RED }}>
+                履歴を消去
+              </button>
+            )}
+            {copyMsg && (
+              <span style={{ fontSize: 11, color: PLX_GREEN, fontWeight: 700, alignSelf: "center" }}>
+                ✓ {copyMsg}
+              </span>
+            )}
           </div>
         </div>
         <button onClick={onClose} title="閉じる" style={{
@@ -221,11 +443,40 @@
     );
   }
 
-  function ArenaModelPicker({ options, selected, onToggle, customInput, setCustomInput, onAddCustom }) {
+  function ArenaModelPicker({
+    options, selected, onToggle, customInput, setCustomInput, onAddCustom,
+    sideBySide, onSideBySideChange, modelsToRun,
+  }) {
     return (
       <div style={{ marginTop: 12 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: PLX_MUTED, marginBottom: 6 }}>
-          比較するモデル ({selected.length})
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          flexWrap: "wrap", gap: 8, marginBottom: 6,
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: PLX_MUTED }}>
+            比較するモデル ({selected.length} 選択 · 実行 {modelsToRun.length})
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 11, color: PLX_MUTED, fontWeight: 600 }}>並べる数:</span>
+            {[1, 2, 3, 4, 5, 6].map((n) => {
+              const on = sideBySide === n;
+              return (
+                <button
+                  key={n}
+                  onClick={() => onSideBySideChange(n)}
+                  title={`最大 ${n} モデルを横並びで実行`}
+                  style={{
+                    fontSize: 11, fontWeight: 700, width: 28, height: 26,
+                    borderRadius: 6,
+                    border: `1px solid ${on ? PLX_GREEN : PLX_BORDER}`,
+                    background: on ? PLX_GREEN_50 : "#fff",
+                    color: on ? PLX_GREEN : PLX_TEXT,
+                    cursor: "pointer",
+                  }}
+                >{n}</button>
+              );
+            })}
+          </div>
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
           {options.map((m) => {
@@ -267,18 +518,123 @@
     );
   }
 
+  function ArenaHistory({ history, onCopyAll, onClear }) {
+    return (
+      <div style={{
+        marginTop: 12, padding: 10, borderRadius: 8,
+        border: `1px solid ${PLX_BORDER}`, background: "#fff",
+        maxHeight: 160, overflow: "auto",
+      }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8, marginBottom: 8,
+          position: "sticky", top: 0, background: "#fff",
+        }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: PLX_MUTED, flex: 1 }}>
+            比較履歴 ({history.length})
+          </span>
+          <button onClick={onCopyAll} style={_arenaBtn}>📋 すべてコピー</button>
+          <button onClick={onClear} style={{ ..._arenaBtn, color: PLX_RED }}>消去</button>
+        </div>
+        {history.map((h, i) => {
+          const label = h.jan || h.title || "—";
+          const rows = h.result?.results || [];
+          const found = rows.filter((r) => r.found).length;
+          const total = rows.length;
+          const runCost = _sumCompareCostUsd(rows);
+          return (
+            <div key={`${h.at}-${i}`} style={{
+              fontSize: 10, padding: "5px 0",
+              borderTop: i ? `1px dashed ${PLX_BORDER}` : "none",
+              fontFamily: "ui-monospace, monospace",
+              color: PLX_TEXT,
+            }}>
+              <span style={{ color: PLX_MUTED }}>{h.at?.slice(0, 19).replace("T", " ")}</span>
+              {" · "}{label}
+              {" · "}{(h.models || []).join(", ")}
+              {" · "}{found}/{total} found
+              {runCost > 0 && <> · {_fmtUsd(runCost)}</>}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   function ArenaResults({ result }) {
     // Side-by-side columns, one per model. Min-width per column so very
     // narrow viewports get horizontal scroll instead of squishing.
     const n = result.results.length;
+    const totalUsd = _sumCompareCostUsd(result.results);
+    const totalJpy = result.results.reduce(
+      (s, r) => s + (Number(r.total_cost_jpy) || 0), 0,
+    );
+    const anyMock = result.results.some((r) => r.is_mock);
+    return (
+      <div>
+        {totalUsd > 0 || anyMock ? (
+          <div style={{
+            padding: "10px 14px 0", fontSize: 11, color: PLX_MUTED,
+            display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center",
+          }}>
+            <span style={{ fontWeight: 700, color: PLX_TEXT }}>Run cost (tokens, estimate)</span>
+            <span>{_fmtUsd(totalUsd)} USD</span>
+            <span>{_fmtJpy(totalJpy)}</span>
+            {anyMock && <span style={{ color: PLX_WARN }}>mock — $0</span>}
+            <span style={{ fontSize: 10 }}>Web search surcharges may apply beyond token estimate</span>
+          </div>
+        ) : null}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: `repeat(${n}, minmax(320px, 1fr))`,
+          gap: 12, padding: 14,
+        }}>
+          {result.results.map((r) => (
+            <ArenaResultColumn key={r.model} r={r} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  function ArenaCostPanel({ r }) {
+    const breakdown = r.cost_breakdown || [];
+    if (r.is_mock) {
+      return (
+        <div style={{
+          marginTop: 6, padding: 8, background: "#F3F4F6", borderRadius: 6,
+          fontSize: 10, color: PLX_MUTED,
+        }}>
+          Cost: mock mode ($0)
+        </div>
+      );
+    }
+    if (breakdown.length === 0 && r.total_cost_usd == null) return null;
+    const unknownPricing = breakdown.some((b) => b.pricing_known === false);
     return (
       <div style={{
-        display: "grid",
-        gridTemplateColumns: `repeat(${n}, minmax(320px, 1fr))`,
-        gap: 12, padding: 14,
+        marginTop: 6, padding: 8, background: "#EFF6FF", borderRadius: 6,
+        border: "1px solid #BFDBFE",
       }}>
-        {result.results.map((r) => (
-          <ArenaResultColumn key={r.model} r={r} />
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#1E40AF", marginBottom: 4 }}>
+          Cost (estimate)
+          {unknownPricing && (
+            <span style={{ fontWeight: 600, color: PLX_WARN, marginLeft: 6 }}>
+              · unknown model rate
+            </span>
+          )}
+        </div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: PLX_TEXT, marginBottom: 6 }}>
+          {_fmtUsd(r.total_cost_usd)} · {_fmtJpy(r.total_cost_jpy)}
+        </div>
+        {breakdown.map((b) => (
+          <div key={`${b.step}-${b.model}`} style={{
+            fontSize: 10, color: "#1E3A8A", marginTop: 3,
+            fontFamily: "ui-monospace, monospace",
+          }}>
+            {b.step}: {b.model} — in {b.input_tokens?.toLocaleString()} / out {b.output_tokens?.toLocaleString()}
+            {" · "}{_fmtUsd(b.cost_usd)}
+            {b.cached_input_tokens > 0 && ` · cached ${b.cached_input_tokens}`}
+          </div>
         ))}
       </div>
     );
@@ -323,8 +679,15 @@
           <div style={{ fontSize: 10, color: PLX_MUTED, marginTop: 4 }}>
             {r.wall_time_ms} ms · {candidateCount} 候補 ·
             {" "}{verifiedCount}/{candidateCount} JAN URL 一致
+            {(r.total_cost_usd > 0 || r.is_mock) && (
+              <> · <span style={{ color: PLX_TEXT, fontWeight: 600 }}>
+                {_fmtUsd(r.total_cost_usd)}{r.is_mock ? " mock" : ""}
+              </span></>
+            )}
           </div>
         </div>
+
+        <ArenaCostPanel r={r} />
 
         {r.error_message && (
           <div style={{
@@ -429,6 +792,17 @@
   // Host: provides window.PLX_AI_ARENA and renders the modal.
   // Mounted globally by app.jsx the same way CommandPaletteHost is.
   // ──────────────────────────────────────────────────────────────────────
+  async function _copyLastFromStorage() {
+    try {
+      const raw = localStorage.getItem(_LAST_RESULT_KEY);
+      if (!raw) return { ok: false, reason: "no_last" };
+      await _copyText(raw);
+      return { ok: true };
+    } catch {
+      return { ok: false, reason: "clipboard" };
+    }
+  }
+
   function AiArenaHost() {
     const [open, setOpen] = React.useState(false);
     React.useEffect(() => {
@@ -436,6 +810,8 @@
         open:   () => setOpen(true),
         close:  () => setOpen(false),
         toggle: () => setOpen((o) => !o),
+        copyLast: _copyLastFromStorage,
+        hasLast: () => !!localStorage.getItem(_LAST_RESULT_KEY),
       };
     }, []);
     return <AiArena open={open} onClose={() => setOpen(false)} />;

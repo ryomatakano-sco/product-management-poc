@@ -106,6 +106,19 @@ class AiSuggestionCompareRequest(BaseModel):
     models: list[str]
 
 
+class AiCompareStepCost(BaseModel):
+    """Per-agent-step cost (search + extraction) for one compare column."""
+
+    step: str
+    model: str
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cached_input_tokens: int = 0
+    requests: int = 0
+    cost_usd: float = 0
+    pricing_known: bool = True
+
+
 class AiSuggestionCompareResult(BaseModel):
     """One model's lookup result. Mirrors AiSuggestionDebug per-model so the
     frontend can reuse the same column renderer."""
@@ -117,6 +130,10 @@ class AiSuggestionCompareResult(BaseModel):
     candidates: list[AiDebugCandidate] = []
     dropped_candidates: list[AiDebugDropped] = []
     error_message: str | None = None
+    is_mock: bool = False
+    total_cost_usd: float | None = None
+    total_cost_jpy: float | None = None
+    cost_breakdown: list[AiCompareStepCost] = []
 
 
 class AiSuggestionCompare(BaseModel):

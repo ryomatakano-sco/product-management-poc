@@ -42,18 +42,36 @@ _ALLOWED_DOMAINS: list[str] = [
     "www.super-delivery.com", "www.oroshi-uri.com", "www.netsea.jp",
 ]
 
-_WEB_SEARCH_KWARGS = dict(
-    # filters MUST be the Pydantic model — dict here silently breaks at
-    # request-build time. See the matching note in backend/app/services/ai_agent.py.
-    filters=WebSearchToolFilters(allowed_domains=_ALLOWED_DOMAINS),
-    user_location={
-        "type": "approximate",
-        "country": "JP",
-        "city": "Tokyo",
-        "timezone": "Asia/Tokyo",
-    },
-    search_context_size="high",
-)
+# Per-model capability matrix — mirror of backend/app/services/ai_agent.py.
+# See that file's MODEL_NO_WEB_SEARCH / MODEL_NO_SEARCH_FILTERS / MODEL_NO_TEMPERATURE
+# constants for the discovery rationale. Keep these two lists in sync.
+_MODEL_NO_WEB_SEARCH = {"gpt-4.1-nano", "gpt-5-nano"}
+_MODEL_NO_SEARCH_FILTERS = {"gpt-4.1-mini", "gpt-5-mini"}
+_MODEL_NO_TEMPERATURE = {"gpt-5", "gpt-5-mini", "gpt-5-nano", "o3-mini", "o4-mini"}
+
+
+def _web_search_tool_for(model: str):
+    """Return the right WebSearchTool config for `model`, or None if unsupported."""
+    if model in _MODEL_NO_WEB_SEARCH:
+        return None
+    if model in _MODEL_NO_SEARCH_FILTERS:
+        return WebSearchTool()  # preview tool, no allow-list
+    return WebSearchTool(
+        filters=WebSearchToolFilters(allowed_domains=_ALLOWED_DOMAINS),
+        user_location={
+            "type": "approximate",
+            "country": "JP",
+            "city": "Tokyo",
+            "timezone": "Asia/Tokyo",
+        },
+        search_context_size="high",
+    )
+
+
+def _model_settings_for(model: str, temperature: float):
+    if model in _MODEL_NO_TEMPERATURE:
+        return ModelSettings()
+    return ModelSettings(temperature=temperature)
 
 
 SEARCH_SYSTEM_PROMPT = """\
@@ -116,13 +134,19 @@ EXTRACTION_SYSTEM_PROMPT = """\
 
 
 def create_search_agent(model: str) -> Agent:
-    """Create the web search agent (returns plain text)."""
+    """Create the web search agent (returns plain text).
+
+    Raises ValueError when the model can't do web search (e.g. gpt-4.1-nano).
+    """
+    tool = _web_search_tool_for(model)
+    if tool is None:
+        raise ValueError(f"model '{model}' does not support web search")
     return Agent(
         name="JAN Search Agent",
         instructions=SEARCH_SYSTEM_PROMPT,
         model=model,
-        tools=[WebSearchTool(**_WEB_SEARCH_KWARGS)],
-        model_settings=ModelSettings(temperature=0.1),
+        tools=[tool],
+        model_settings=_model_settings_for(model, temperature=0.1),
     )
 
 
@@ -133,7 +157,7 @@ def create_extraction_agent(model: str) -> Agent[ProductLookupResult]:
         instructions=EXTRACTION_SYSTEM_PROMPT,
         model=model,
         output_type=ProductLookupResult,
-        model_settings=ModelSettings(temperature=0.0),
+        model_settings=_model_settings_for(model, temperature=0.0),
     )
 
 
@@ -203,13 +227,19 @@ NAME_EXTRACTION_SYSTEM_PROMPT = """\
 
 
 def create_name_search_agent(model: str) -> Agent:
-    """Create the web search agent for product-name-based lookup (returns plain text)."""
+    """Create the web search agent for product-name-based lookup (returns plain text).
+
+    Raises ValueError when the model can't do web search.
+    """
+    tool = _web_search_tool_for(model)
+    if tool is None:
+        raise ValueError(f"model '{model}' does not support web search")
     return Agent(
         name="Product Name Search Agent",
         instructions=NAME_SEARCH_SYSTEM_PROMPT,
         model=model,
-        tools=[WebSearchTool(**_WEB_SEARCH_KWARGS)],
-        model_settings=ModelSettings(temperature=0.1),
+        tools=[tool],
+        model_settings=_model_settings_for(model, temperature=0.1),
     )
 
 

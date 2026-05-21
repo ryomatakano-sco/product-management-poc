@@ -13,8 +13,11 @@ from __future__ import annotations
 
 import logging
 import os
+from dataclasses import dataclass, field
 
 from pydantic import BaseModel
+
+from app.services.ai_pricing import estimate_token_cost_usd, usd_jpy_rate
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +34,87 @@ logger = logging.getLogger(__name__)
 # DEFAULT_MODEL is kept as an alias so the existing import in
 # routers/ai_suggestions.py (which records it as the session's `model_name`)
 # keeps working without changes.
-SEARCH_MODEL = "gpt-4.1-mini"
+SEARCH_MODEL = "gpt-4.1"      # full 4.1 — only model that accepts our GA web_search filters
 EXTRACTION_MODEL = "gpt-4.1-nano"
 DEFAULT_MODEL = SEARCH_MODEL
+
+
+# ---------------------------------------------------------------------------
+# Per-model capability matrix.
+#
+# Discovered empirically via the dev arena 2026-05-21:
+#   - gpt-4.1 (full): accepts WebSearchTool(filters=..., user_location=...,
+#     search_context_size=...). Accepts temperature.
+#   - gpt-4.1-mini: REJECTS `filters` parameter ("Parameter 'filters' not
+#     supported with model 'gpt-4.1-mini'"). Can still use bare WebSearchTool
+#     (the preview tool), just without filters. Accepts temperature.
+#   - gpt-4.1-nano: REJECTS web search entirely ("Tool 'web_search_preview'
+#     is not supported with gpt-4.1-nano"). Extraction-only.
+#   - gpt-5 / gpt-5-mini / gpt-5-nano: REJECT `temperature` parameter
+#     ("Unsupported parameter: 'temperature' is not supported with this model").
+#     Web-search capability is the same as 4.1 family.
+#
+# `MODEL_NO_WEB_SEARCH` lists models that can't act as a search agent at all.
+# `MODEL_NO_TEMPERATURE` lists models that reject ModelSettings(temperature=...).
+# `MODEL_NO_SEARCH_FILTERS` lists models that accept web search but not the
+#   GA `filters` parameter (so we fall back to bare WebSearchTool — no allow-
+#   list, but at least the tool runs).
+# ---------------------------------------------------------------------------
+MODEL_NO_WEB_SEARCH: frozenset[str] = frozenset({
+    "gpt-4.1-nano",
+    "gpt-5-nano",
+})
+MODEL_NO_SEARCH_FILTERS: frozenset[str] = frozenset({
+    "gpt-4.1-mini",
+    "gpt-5-mini",
+})
+MODEL_NO_TEMPERATURE: frozenset[str] = frozenset({
+    "gpt-5",
+    "gpt-5-mini",
+    "gpt-5-nano",
+    "o3-mini",
+    "o4-mini",
+})
+
+
+def model_can_search(model: str) -> bool:
+    """True when this model can be used as the search-agent's LLM."""
+    return model not in MODEL_NO_WEB_SEARCH
+
+
+def _search_tool_for(model: str):
+    """Build the WebSearchTool with the right kwargs for this model.
+
+    Returns ``None`` when the model can't do web search at all — callers
+    should refuse to construct a search agent in that case.
+    """
+    from agents import WebSearchTool
+    from agents.tool import WebSearchToolFilters
+    if model in MODEL_NO_WEB_SEARCH:
+        return None
+    if model in MODEL_NO_SEARCH_FILTERS:
+        # The mini variants can't take filters → fall back to the preview
+        # tool. The agent will still search the open web; just no allow-list.
+        return WebSearchTool()
+    # Full 4.1 / gpt-5 / future models that accept the GA tool surface.
+    return WebSearchTool(
+        filters=WebSearchToolFilters(allowed_domains=_ALLOWED_DOMAINS),
+        user_location={
+            "type": "approximate",
+            "country": "JP",
+            "city": "Tokyo",
+            "timezone": "Asia/Tokyo",
+        },
+        search_context_size="high",
+    )
+
+
+def _model_settings_for(model: str, temperature: float):
+    """ModelSettings with temperature omitted for models that reject it."""
+    from agents import ModelSettings
+    if model in MODEL_NO_TEMPERATURE:
+        return ModelSettings()  # use the model's own defaults
+    return ModelSettings(temperature=temperature)
 
 
 # Search allow-list — hostnames only (subdomains included automatically per
@@ -127,6 +208,68 @@ class ExtractionResult(BaseModel):
     raw_search_notes: str = ""
 
 
+@dataclass
+class LookupStepUsage:
+    step: str  # "search" | "extraction"
+    model: str
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cached_input_tokens: int = 0
+    requests: int = 0
+    cost_usd: float = 0.0
+    pricing_known: bool = False
+
+
+@dataclass
+class ProductLookupOutcome:
+    """Lookup result plus token/cost telemetry for dev tooling."""
+
+    result: ExtractionResult
+    is_mock: bool = False
+    total_cost_usd: float = 0.0
+    total_cost_jpy: float = 0.0
+    cost_breakdown: list[LookupStepUsage] = field(default_factory=list)
+
+
+def _usage_from_run(run_result, model: str, step: str) -> LookupStepUsage:
+    u = run_result.context_wrapper.usage
+    cached = 0
+    if u.input_tokens_details is not None:
+        cached = getattr(u.input_tokens_details, "cached_tokens", 0) or 0
+    cost_usd, known = estimate_token_cost_usd(
+        model,
+        input_tokens=u.input_tokens,
+        output_tokens=u.output_tokens,
+        cached_input_tokens=cached,
+    )
+    return LookupStepUsage(
+        step=step,
+        model=model,
+        input_tokens=u.input_tokens,
+        output_tokens=u.output_tokens,
+        cached_input_tokens=cached,
+        requests=u.requests,
+        cost_usd=cost_usd,
+        pricing_known=known,
+    )
+
+
+def _outcome_from_steps(
+    result: ExtractionResult,
+    steps: list[LookupStepUsage],
+    *,
+    is_mock: bool,
+) -> ProductLookupOutcome:
+    total_usd = round(sum(s.cost_usd for s in steps), 6)
+    return ProductLookupOutcome(
+        result=result,
+        is_mock=is_mock,
+        total_cost_usd=total_usd,
+        total_cost_jpy=round(total_usd * usd_jpy_rate(), 2),
+        cost_breakdown=steps,
+    )
+
+
 # --- System prompts ---
 
 SEARCH_SYSTEM_PROMPT = """\
@@ -197,42 +340,37 @@ EXTRACTION_SYSTEM_PROMPT = """\
 
 
 def _create_search_agent(model: str):
-    # Lazy imports because the agents package is optional in mock mode.
-    from agents import Agent, ModelSettings, WebSearchTool
-    from agents.tool import WebSearchToolFilters
-    # Passing filters/user_location/search_context_size promotes the tool
-    # from `web_search_preview` (which silently ignores filters) to GA
-    # `web_search`. NOTE: `filters` must be the WebSearchToolFilters
-    # Pydantic model — a plain dict silently passes the constructor but
-    # blows up later in OpenAIResponsesModel._build_response_create_kwargs
-    # ("'dict' object has no attribute 'model_dump'"). `user_location` is
-    # a TypedDict and accepts a plain dict.
+    """Construct the web-search agent for `model`.
+
+    Tool kwargs are selected via _search_tool_for(model) and ModelSettings
+    via _model_settings_for so each model's per-API quirks are honoured.
+    Raises ValueError if the model can't do web search at all — caller
+    should surface this as a per-model error rather than crashing the run.
+    """
+    from agents import Agent
+    tool = _search_tool_for(model)
+    if tool is None:
+        raise ValueError(
+            f"model '{model}' does not support web search "
+            "(see MODEL_NO_WEB_SEARCH). Use it as an extraction model only."
+        )
     return Agent(
         name="Product Search Agent",
         instructions=SEARCH_SYSTEM_PROMPT,
         model=model,
-        tools=[WebSearchTool(
-            filters=WebSearchToolFilters(allowed_domains=_ALLOWED_DOMAINS),
-            user_location={
-                "type": "approximate",
-                "country": "JP",
-                "city": "Tokyo",
-                "timezone": "Asia/Tokyo",
-            },
-            search_context_size="high",
-        )],
-        model_settings=ModelSettings(temperature=0.1),
+        tools=[tool],
+        model_settings=_model_settings_for(model, temperature=0.1),
     )
 
 
 def _create_extraction_agent(model: str):
-    from agents import Agent, ModelSettings  # lazy
+    from agents import Agent  # lazy
     return Agent(
         name="Product Data Extractor",
         instructions=EXTRACTION_SYSTEM_PROMPT,
         model=model,
         output_type=ExtractionResult,
-        model_settings=ModelSettings(temperature=0.0),
+        model_settings=_model_settings_for(model, temperature=0.0),
     )
 
 
@@ -241,10 +379,10 @@ async def run_product_lookup(
     title: str | None = None,
     model: str | None = None,
     extraction_model: str | None = None,
-) -> ExtractionResult:
+) -> ProductLookupOutcome:
     """Run the two-agent pipeline for product data extraction.
 
-    Returns an ExtractionResult with candidates and raw_search_notes.
+    Returns a ProductLookupOutcome (result + per-step token/cost telemetry).
     Falls back to ``_mock_lookup`` when ``OPENAI_API_KEY`` is unset.
 
     ``model`` overrides ``SEARCH_MODEL`` (the web-search agent), and
@@ -254,11 +392,14 @@ async def run_product_lookup(
     """
     if not _ai_enabled():
         logger.info("AI lookup running in MOCK mode (no OPENAI_API_KEY)")
-        return _mock_lookup(jan=jan, title=title)
+        return _outcome_from_steps(_mock_lookup(jan=jan, title=title), [], is_mock=True)
 
     from agents import Runner  # lazy
-    search_agent = _create_search_agent(model or SEARCH_MODEL)
-    extraction_agent = _create_extraction_agent(extraction_model or EXTRACTION_MODEL)
+
+    search_model = model or SEARCH_MODEL
+    extract_model = extraction_model or EXTRACTION_MODEL
+    search_agent = _create_search_agent(search_model)
+    extraction_agent = _create_extraction_agent(extract_model)
 
     parts = []
     if jan:
@@ -270,11 +411,18 @@ async def run_product_lookup(
     # Step 1: web search
     search_result = await Runner.run(search_agent, query)
     raw_text: str = search_result.final_output
+    search_usage = _usage_from_run(search_result, search_model, "search")
 
     # Step 2: structured extraction
     extraction_input = f"検索クエリ: {query}\n\n以下は検索エージェントの出力です:\n\n{raw_text}"
     extraction_result = await Runner.run(extraction_agent, extraction_input)
-    return extraction_result.final_output
+    extract_usage = _usage_from_run(extraction_result, extract_model, "extraction")
+
+    return _outcome_from_steps(
+        extraction_result.final_output,
+        [search_usage, extract_usage],
+        is_mock=False,
+    )
 
 
 # --- Mock fallback ------------------------------------------------------------

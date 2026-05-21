@@ -19,12 +19,13 @@ from app.schemas.ai_suggestion import (
     AiOptionApply,
     AiSuggestionCompare,
     AiSuggestionCompareRequest,
+    AiCompareStepCost,
     AiSuggestionCompareResult,
     AiSuggestionDebug,
     AiSuggestionRead,
     AiSuggestionRequest,
 )
-from app.services.ai_agent import DEFAULT_MODEL, run_product_lookup
+from app.services.ai_agent import DEFAULT_MODEL, model_can_search, run_product_lookup
 from app.services.jan import normalize_jan, validate_check_digit
 
 
@@ -113,7 +114,8 @@ async def create_ai_suggestion(body: AiSuggestionRequest, db: DB, store_id: Stor
     await db.flush()
 
     try:
-        result = await run_product_lookup(jan=jan, title=title)
+        outcome = await run_product_lookup(jan=jan, title=title)
+        result = outcome.result
 
         # Persist candidates as field_options
         for i, candidate in enumerate(result.candidates):
@@ -228,7 +230,8 @@ async def debug_ai_suggestion(body: AiSuggestionRequest):
     title = body.title
 
     try:
-        result = await run_product_lookup(jan=jan, title=title)
+        outcome = await run_product_lookup(jan=jan, title=title)
+        result = outcome.result
     except Exception as e:
         logger.error("AI debug failed: %s", e, exc_info=True)
         return AiSuggestionDebug(
@@ -286,9 +289,25 @@ async def debug_ai_suggestion(body: AiSuggestionRequest):
 # ---------------------------------------------------------------------------
 
 
+def _step_costs_from_outcome(outcome) -> list[AiCompareStepCost]:
+    return [
+        AiCompareStepCost(
+            step=s.step,
+            model=s.model,
+            input_tokens=s.input_tokens,
+            output_tokens=s.output_tokens,
+            cached_input_tokens=s.cached_input_tokens,
+            requests=s.requests,
+            cost_usd=s.cost_usd,
+            pricing_known=s.pricing_known,
+        )
+        for s in outcome.cost_breakdown
+    ]
+
+
 def _build_compare_result_from_lookup(
     model_id: str,
-    raw_result,
+    outcome,
     jan: str | None,
     wall_time_ms: int,
 ) -> AiSuggestionCompareResult:
@@ -296,6 +315,7 @@ def _build_compare_result_from_lookup(
 
     Kept private to this module — only the /compare endpoint needs it.
     """
+    raw_result = outcome.result
     kept: list[AiDebugCandidate] = []
     dropped: list[AiDebugDropped] = []
     for c in raw_result.candidates:
@@ -322,6 +342,10 @@ def _build_compare_result_from_lookup(
         raw_search_notes=raw_result.raw_search_notes,
         candidates=kept,
         dropped_candidates=dropped,
+        is_mock=outcome.is_mock,
+        total_cost_usd=outcome.total_cost_usd,
+        total_cost_jpy=outcome.total_cost_jpy,
+        cost_breakdown=_step_costs_from_outcome(outcome),
     )
 
 
@@ -352,10 +376,23 @@ async def compare_ai_suggestion(body: AiSuggestionCompareRequest):
 
     async def _one(model_id: str) -> AiSuggestionCompareResult:
         start = time.perf_counter()
+        # Fast-fail: refuse to spend a request on a model that we know can't
+        # do web search. Catches gpt-4.1-nano and gpt-5-nano up-front before
+        # we hit OpenAI's 400.
+        if not model_can_search(model_id):
+            return AiSuggestionCompareResult(
+                model=model_id,
+                found=False,
+                wall_time_ms=int((time.perf_counter() - start) * 1000),
+                error_message=(
+                    f"{model_id} は web 検索に対応していません。"
+                    " 検索エージェントには gpt-4.1 / gpt-4.1-mini / gpt-5 / gpt-5-mini を選択してください。"
+                ),
+            )
         try:
-            raw = await run_product_lookup(jan=jan, title=title, model=model_id)
+            outcome = await run_product_lookup(jan=jan, title=title, model=model_id)
             elapsed = int((time.perf_counter() - start) * 1000)
-            return _build_compare_result_from_lookup(model_id, raw, jan, elapsed)
+            return _build_compare_result_from_lookup(model_id, outcome, jan, elapsed)
         except Exception as e:  # noqa: BLE001 — surface error per model
             elapsed = int((time.perf_counter() - start) * 1000)
             logger.error("Compare run failed for model=%s: %s", model_id, e, exc_info=True)

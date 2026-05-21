@@ -205,17 +205,7 @@ function DevSections({ status }) {
         {/* Model arena — side-by-side comparison of N models on the same
             JAN. Lives in the dev panel because it's a dev tool, not a
             user-facing feature. Hooks up to POST /ai-suggestions/compare. */}
-        <button
-          onClick={() => window.PLX_AI_ARENA && window.PLX_AI_ARENA.open()}
-          style={{
-            marginTop: 8, padding: "6px 12px", borderRadius: 6,
-            border: `1px solid ${PLX_GREEN}`, background: "#fff",
-            color: PLX_GREEN, fontWeight: 700, fontSize: 11, cursor: "pointer",
-            display: "inline-flex", alignItems: "center", gap: 6,
-          }}
-        >
-          🧪 AI モデル比較
-        </button>
+        <DevAiArenaActions />
       </DevSection>
 
       <DevSection title="Runtime">
@@ -228,6 +218,65 @@ function DevSections({ status }) {
         ))}
       </DevSection>
     </>
+  );
+}
+
+function DevAiArenaActions() {
+  const [copyMsg, setCopyMsg] = React.useState(null);
+  const hasLast = React.useCallback(
+    () => window.PLX_AI_ARENA?.hasLast?.() ?? false,
+    [],
+  );
+  const [canCopy, setCanCopy] = React.useState(hasLast);
+
+  React.useEffect(() => {
+    setCanCopy(hasLast());
+    const t = setInterval(() => setCanCopy(hasLast()), 2000);
+    return () => clearInterval(t);
+  }, [hasLast]);
+
+  const rowBtn = {
+    padding: "6px 12px", borderRadius: 6,
+    border: `1px solid ${PLX_BORDER}`, background: "#fff",
+    color: PLX_TEXT, fontWeight: 700, fontSize: 11, cursor: "pointer",
+    display: "inline-flex", alignItems: "center", gap: 6,
+  };
+
+  async function copyLast() {
+    if (!window.PLX_AI_ARENA?.copyLast) return;
+    const res = await window.PLX_AI_ARENA.copyLast();
+    if (res?.ok) {
+      setCopyMsg("Copied");
+      setTimeout(() => setCopyMsg(null), 2000);
+    } else {
+      setCopyMsg(res?.reason === "no_last" ? "No run yet" : "Copy failed");
+      setTimeout(() => setCopyMsg(null), 2500);
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+      <button
+        onClick={() => window.PLX_AI_ARENA && window.PLX_AI_ARENA.open()}
+        style={{ ...rowBtn, borderColor: PLX_GREEN, color: PLX_GREEN }}
+      >
+        🧪 AI モデル比較
+      </button>
+      <button
+        onClick={copyLast}
+        disabled={!canCopy}
+        title="直近の比較結果 (JSON) をクリップボードにコピー"
+        style={{
+          ...rowBtn, opacity: canCopy ? 1 : 0.45,
+          cursor: canCopy ? "pointer" : "not-allowed",
+        }}
+      >
+        📋 直近をコピー
+      </button>
+      {copyMsg && (
+        <span style={{ fontSize: 10, color: PLX_GREEN, fontWeight: 700 }}>{copyMsg}</span>
+      )}
+    </div>
   );
 }
 
