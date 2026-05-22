@@ -390,7 +390,9 @@ async def compare_ai_suggestion(body: AiSuggestionCompareRequest):
                 ),
             )
         try:
-            outcome = await run_product_lookup(jan=jan, title=title, model=model_id)
+            outcome = await run_product_lookup(
+                jan=jan, title=title, model=model_id, allow_fallback=False,
+            )
             elapsed = int((time.perf_counter() - start) * 1000)
             return _build_compare_result_from_lookup(model_id, outcome, jan, elapsed)
         except Exception as e:  # noqa: BLE001 — surface error per model

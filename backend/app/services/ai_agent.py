@@ -34,9 +34,44 @@ logger = logging.getLogger(__name__)
 # DEFAULT_MODEL is kept as an alias so the existing import in
 # routers/ai_suggestions.py (which records it as the session's `model_name`)
 # keeps working without changes.
-SEARCH_MODEL = "gpt-4.1"      # full 4.1 — only model that accepts our GA web_search filters
+# Default ladder picked from the 2026-05-21 dev-arena data:
+#   - Interactive default: gpt-4.1 — allow-list compliant, finds every easy
+#     JAN we tested, ~$0.05 / ~38s. The right balance for live "AI lookup"
+#     clicks where Yoshioka-grade demo correctness matters.
+#   - Fallback: gpt-5-mini — kicks in when gpt-4.1 returns nothing useful.
+#     Cheaper than full gpt-5 (~$0.029 vs ~$0.167) with the same honest
+#     "this JAN is the discontinued sibling, here's what I actually found"
+#     reasoning that wins on rare/long-tail SKUs. Allow-list compliant too.
+#   - Extraction: gpt-4.1-nano — pure text→JSON at temp=0, model choice is
+#     irrelevant beyond "cheap and reliable JSON output".
+# Override at runtime via the dev-arena "+ 任意のモデル ID" box or the
+# `model`/`extraction_model` kwargs on run_product_lookup.
+SEARCH_MODEL = "gpt-4.1"
+FALLBACK_SEARCH_MODEL = "gpt-5-mini"
 EXTRACTION_MODEL = "gpt-4.1-nano"
 DEFAULT_MODEL = SEARCH_MODEL
+
+
+def _looks_unhelpful(result: "ExtractionResult") -> bool:
+    """Heuristic: did the primary search agent fail to return anything we
+    can show to the user?
+
+    Triggers the FALLBACK_SEARCH_MODEL escalation. Conservative on purpose —
+    we only escalate when the result is *clearly* useless, because the
+    fallback adds ~$0.03 and ~2min to the call. Specifically:
+      - found=false, or
+      - zero candidates, or
+      - every candidate is missing a source_url (the gpt-4.1-mini-style
+        hallucination pattern seen on JAN 4901616008359).
+    """
+    if not getattr(result, "found", False):
+        return True
+    cands = list(result.candidates or [])
+    if not cands:
+        return True
+    if all(not c.source_url for c in cands):
+        return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -390,6 +425,7 @@ async def run_product_lookup(
     title: str | None = None,
     model: str | None = None,
     extraction_model: str | None = None,
+    allow_fallback: bool = True,
 ) -> ProductLookupOutcome:
     """Run the two-agent pipeline for product data extraction.
 
@@ -400,6 +436,13 @@ async def run_product_lookup(
     ``extraction_model`` overrides ``EXTRACTION_MODEL`` (the structured-output
     agent). Both default to their module-level constants — see the comments
     near the top of this file for the rationale.
+
+    When ``allow_fallback`` is True and the caller did not override ``model``,
+    a primary run that produces an unhelpful result (see ``_looks_unhelpful``)
+    is automatically retried with ``FALLBACK_SEARCH_MODEL``. The fallback's
+    candidates replace the primary's, and the cost breakdown carries both
+    steps so dev tooling can see the escalation happened. The compare arena
+    sets ``allow_fallback=False`` to keep each column comparing one model.
     """
     if not _ai_enabled():
         logger.info("AI lookup running in MOCK mode (no OPENAI_API_KEY)")
@@ -407,9 +450,7 @@ async def run_product_lookup(
 
     from agents import Runner  # lazy
 
-    search_model = model or SEARCH_MODEL
     extract_model = extraction_model or EXTRACTION_MODEL
-    search_agent = _create_search_agent(search_model)
     extraction_agent = _create_extraction_agent(extract_model)
 
     parts = []
@@ -419,21 +460,57 @@ async def run_product_lookup(
         parts.append(f"商品名: {title}")
     query = "\n".join(parts) + "\nこの商品を検索して情報を収集してください。"
 
-    # Step 1: web search
-    search_result = await Runner.run(search_agent, query)
-    raw_text: str = search_result.final_output
-    search_usage = _usage_from_run(search_result, search_model, "search")
+    async def _run_search(search_model: str, step_label: str) -> tuple[str, LookupStepUsage]:
+        agent = _create_search_agent(search_model)
+        run_res = await Runner.run(agent, query)
+        return run_res.final_output, _usage_from_run(run_res, search_model, step_label)
 
-    # Step 2: structured extraction
+    primary_model = model or SEARCH_MODEL
+    user_override = model is not None and model != SEARCH_MODEL
+
+    raw_text, primary_usage = await _run_search(primary_model, "search")
+    usages: list[LookupStepUsage] = [primary_usage]
+
     extraction_input = f"検索クエリ: {query}\n\n以下は検索エージェントの出力です:\n\n{raw_text}"
     extraction_result = await Runner.run(extraction_agent, extraction_input)
     extract_usage = _usage_from_run(extraction_result, extract_model, "extraction")
+    usages.append(extract_usage)
+    primary_extraction: ExtractionResult = extraction_result.final_output
 
-    return _outcome_from_steps(
-        extraction_result.final_output,
-        [search_usage, extract_usage],
-        is_mock=False,
+    # Fallback ladder: gpt-4.1 → gpt-5-mini. Only escalates when (a) the
+    # caller didn't pin a specific model (arena compare passes its own
+    # model with allow_fallback=False) and (b) the primary clearly missed.
+    should_fallback = (
+        allow_fallback
+        and not user_override
+        and FALLBACK_SEARCH_MODEL
+        and FALLBACK_SEARCH_MODEL != primary_model
+        and _looks_unhelpful(primary_extraction)
     )
+    if not should_fallback:
+        return _outcome_from_steps(primary_extraction, usages, is_mock=False)
+
+    logger.info(
+        "AI lookup: primary model %s returned unhelpful result for jan=%s title=%s; "
+        "escalating to %s",
+        primary_model, jan, title, FALLBACK_SEARCH_MODEL,
+    )
+    try:
+        fb_text, fb_usage = await _run_search(FALLBACK_SEARCH_MODEL, "search_fallback")
+        usages.append(fb_usage)
+        fb_extraction_input = (
+            f"検索クエリ: {query}\n\n以下は検索エージェントの出力です:\n\n{fb_text}"
+        )
+        fb_extraction = await Runner.run(extraction_agent, fb_extraction_input)
+        usages.append(_usage_from_run(fb_extraction, extract_model, "extraction_fallback"))
+        fb_result: ExtractionResult = fb_extraction.final_output
+        # Only adopt the fallback if it actually improved things — otherwise
+        # keep the primary so dev tooling sees the original signal.
+        winner = fb_result if not _looks_unhelpful(fb_result) else primary_extraction
+        return _outcome_from_steps(winner, usages, is_mock=False)
+    except Exception as e:  # noqa: BLE001 — fallback must never crash the call
+        logger.warning("Fallback model %s failed: %s", FALLBACK_SEARCH_MODEL, e)
+        return _outcome_from_steps(primary_extraction, usages, is_mock=False)
 
 
 # --- Mock fallback ------------------------------------------------------------

@@ -23,7 +23,7 @@ from sqlalchemy import text
 
 from app.config import ENV_FILES, settings
 from app.db import engine
-from app.services.ai_agent import EXTRACTION_MODEL, SEARCH_MODEL
+from app.services.ai_agent import EXTRACTION_MODEL, FALLBACK_SEARCH_MODEL, SEARCH_MODEL
 
 
 router = APIRouter(prefix="/dev", tags=["dev"])
@@ -53,6 +53,7 @@ def _ai_status() -> dict:
         "openai_api_key_tail": (f"…{key[-4:]}" if len(key) >= 8 else ""),
         "mock_ai_env": os.environ.get("MOCK_AI", ""),
         "search_model": SEARCH_MODEL,
+        "fallback_search_model": FALLBACK_SEARCH_MODEL,
         "extraction_model": EXTRACTION_MODEL,
     }
 

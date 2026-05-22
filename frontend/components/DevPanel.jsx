@@ -200,6 +200,9 @@ function DevSections({ status }) {
         <DevKv k="OPENAI_API_KEY" v={ai.openai_api_key_set ? `set ${ai.openai_api_key_tail}` : "unset"} />
         <DevKv k="MOCK_AI" v={ai.mock_ai_env || "unset"} />
         <DevKv k="search model" v={ai.search_model} />
+        {ai.fallback_search_model && (
+          <DevKv k="fallback model" v={ai.fallback_search_model} />
+        )}
         <DevKv k="extraction model" v={ai.extraction_model} />
         <DevEnvEditor ai={ai} writeTarget={rt.env_write_target} />
         {/* Model arena — side-by-side comparison of N models on the same
