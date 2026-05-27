@@ -45,7 +45,7 @@ function Support() {
 
       {/* FAQ accordion */}
       <div style={{
-        background: "#fff", borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+        background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
         boxShadow: T.SHADOW_SM, padding: 24, marginBottom: 20,
       }}>
         <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, marginBottom: 14 }}>
@@ -171,7 +171,7 @@ function ContactForm() {
 
   return (
     <div id="plx-contact-form" style={{
-      background: "#fff", borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+      background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
       boxShadow: T.SHADOW_SM, padding: 24, marginBottom: 20,
     }}>
       <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, marginBottom: 14 }}>お問い合わせフォーム</h3>
@@ -227,7 +227,7 @@ function ContactForm() {
 function QuickLink({ icon, title, desc, onClick }) {
   return (
     <div onClick={onClick} style={{
-      background: "#fff", borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+      background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
       padding: 20, cursor: "pointer",
       display: "flex", alignItems: "center", gap: 14,
     }}
@@ -248,7 +248,7 @@ function QuickLink({ icon, title, desc, onClick }) {
 function FooterCard({ title, children }) {
   return (
     <div style={{
-      background: "#fff", borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+      background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
       padding: 20,
     }}>
       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>{title}</div>

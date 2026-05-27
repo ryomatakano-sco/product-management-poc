@@ -74,7 +74,7 @@ function Select({ value, onChange, options, minWidth = 160 }) {
     <div style={{ position: "relative" }}>
       <select value={value} onChange={(e) => onChange(e.target.value)} style={{
         height: 38, padding: "0 32px 0 14px", borderRadius: 9,
-        border: `1px solid ${PLX_BORDER}`, fontSize: 13, background: "#fff",
+        border: `1px solid ${PLX_BORDER}`, fontSize: 13, background: T.PLX_CARD_BG,
         cursor: "pointer", appearance: "none", WebkitAppearance: "none",
         color: PLX_TEXT, minWidth,
       }}>
@@ -99,7 +99,7 @@ function SegmentedControl({ value, onChange, options }) {
           <button key={o.value} onClick={() => onChange(o.value)} style={{
             fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 9999,
             border: "none",
-            background: on ? "#fff" : "transparent",
+            background: on ? T.PLX_CARD_BG : "transparent",
             color: on ? PLX_GREEN : PLX_MUTED,
             boxShadow: on ? "0 1px 3px rgba(0,0,0,.06)" : "none",
             cursor: "pointer",
@@ -143,7 +143,7 @@ function FormRow({ label, children, hint, required, requiredFor, error }) {
 
 const formInput = {
   width: "100%", height: 38, border: `1px solid ${PLX_BORDER}`, borderRadius: 9,
-  padding: "0 14px", fontSize: 13, outline: "none", background: "#fff",
+  padding: "0 14px", fontSize: 13, outline: "none", background: T.PLX_CARD_BG,
   boxSizing: "border-box", color: PLX_TEXT,
 };
 
@@ -155,7 +155,7 @@ const btnPrimary = {
 
 const btnSecondary = {
   height: 38, padding: "0 18px", borderRadius: 9999,
-  background: "#fff", color: PLX_TEXT, border: `1px solid ${PLX_BORDER}`,
+  background: T.PLX_CARD_BG, color: PLX_TEXT, border: `1px solid ${PLX_BORDER}`,
   fontWeight: 700, fontSize: 13, cursor: "pointer",
 };
 

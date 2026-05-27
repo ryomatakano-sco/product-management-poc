@@ -401,7 +401,7 @@ function ProductCreate({ editId }) {
             padding: "16px 20px", display: "flex", alignItems: "center", gap: 16,
           }}>
             <div style={{
-              width: 44, height: 44, borderRadius: 12, background: "#fff",
+              width: 44, height: 44, borderRadius: 12, background: T.PLX_CARD_BG,
               display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
               boxShadow: "0 4px 12px rgba(26,166,138,.15)",
             }}>
@@ -442,7 +442,7 @@ function ProductCreate({ editId }) {
                   title="現在空欄の項目だけ AI で埋めます。入力済みの値はそのまま残ります。"
                   style={{
                     height: 32, padding: "0 14px", borderRadius: 9999,
-                    background: "#fff", color: PLX_GREEN,
+                    background: T.PLX_CARD_BG, color: PLX_GREEN,
                     border: `1px solid ${PLX_GREEN}`,
                     fontWeight: 700, fontSize: 11, cursor: "pointer",
                     whiteSpace: "nowrap",
@@ -507,7 +507,7 @@ function ProductCreate({ editId }) {
                   onClick={(e) => { if (!reorderUrl) e.preventDefault(); }} style={{
                     height: 38, padding: "0 14px", borderRadius: 9,
                     border: `1px solid ${reorderUrl ? PLX_GREEN : PLX_BORDER}`,
-                    background: reorderUrl ? "#fff" : "#F9FAFB",
+                    background: reorderUrl ? T.PLX_CARD_BG : T.PLX_SURFACE_50,
                     color: reorderUrl ? PLX_GREEN : PLX_SUBTLE,
                     fontWeight: 700, fontSize: 12,
                     cursor: reorderUrl ? "pointer" : "not-allowed",
@@ -530,7 +530,7 @@ function ProductCreate({ editId }) {
               <div style={{
                 minHeight: 38, border: `1px solid ${PLX_BORDER}`, borderRadius: 9,
                 padding: "6px 10px", display: "flex", flexWrap: "wrap", gap: 6,
-                alignItems: "center", background: "#fff",
+                alignItems: "center", background: T.PLX_CARD_BG,
               }}>
                 {tags.map((t) => (
                   <span key={t} style={{
@@ -566,7 +566,7 @@ function ProductCreate({ editId }) {
                   <button key={t.id}
                     onClick={() => !tags.includes(t.name) && setTags([...tags, t.name])} style={{
                       fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 9999,
-                      border: `1px dashed ${PLX_BORDER}`, background: "#fff",
+                      border: `1px dashed ${PLX_BORDER}`, background: T.PLX_CARD_BG,
                       color: PLX_MUTED, cursor: "pointer",
                     }}>＋ {t.name}</button>
                 ))}
@@ -709,7 +709,7 @@ function ProductCreate({ editId }) {
               border: `1px solid ${PLX_GREEN_LIGHT}`,
             }}>
               <div style={{
-                width: 44, height: 44, borderRadius: 8, background: "#fff",
+                width: 44, height: 44, borderRadius: 8, background: T.PLX_CARD_BG,
                 border: `1px solid ${PLX_BORDER}`, display: "flex",
                 alignItems: "center", justifyContent: "center", flexShrink: 0,
               }}>
@@ -781,7 +781,7 @@ function ProductCreate({ editId }) {
 function FormSection({ title, subtitle, children }) {
   return (
     <div style={{
-      background: "#fff", borderRadius: 14,
+      background: T.PLX_CARD_BG, borderRadius: 14,
       border: `1px solid ${PLX_BORDER}`, padding: "20px 22px",
     }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 14, marginBottom: 14 }}>
@@ -800,13 +800,13 @@ function RadioRow({ checked, onClick, label, sub }) {
     <button onClick={onClick} style={{
       textAlign: "left", padding: "12px 14px", borderRadius: 10,
       border: `1px solid ${checked ? PLX_GREEN : PLX_BORDER}`,
-      background: checked ? PLX_GREEN_50 : "#fff",
+      background: checked ? PLX_GREEN_50 : T.PLX_CARD_BG,
       cursor: "pointer", display: "flex", gap: 11, alignItems: "flex-start",
     }}>
       <span style={{
         width: 16, height: 16, borderRadius: "50%",
         border: `2px solid ${checked ? PLX_GREEN : PLX_BORDER}`,
-        background: "#fff", display: "flex",
+        background: T.PLX_CARD_BG, display: "flex",
         alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2,
       }}>
         {checked && <span style={{ width: 8, height: 8, borderRadius: "50%", background: PLX_GREEN }} />}
@@ -836,14 +836,14 @@ function ItemKindToggle({ value, onChange }) {
           <button key={o.value} onClick={() => onChange(o.value)} style={{
             textAlign: "left", padding: "12px 16px", borderRadius: 10,
             border: `1.5px solid ${on ? o.color : PLX_BORDER}`,
-            background: on ? o.bg : "#fff",
+            background: on ? o.bg : T.PLX_CARD_BG,
             cursor: "pointer",
             display: "flex", alignItems: "center", gap: 11,
           }}>
             <span style={{
               width: 18, height: 18, borderRadius: "50%",
               border: `2px solid ${on ? o.color : PLX_BORDER}`,
-              background: "#fff", display: "flex",
+              background: T.PLX_CARD_BG, display: "flex",
               alignItems: "center", justifyContent: "center", flexShrink: 0,
             }}>
               {on && <span style={{ width: 9, height: 9, borderRadius: "50%", background: o.color }} />}
@@ -965,7 +965,7 @@ function AiAssistModal({ onClose, onApply, seed }) {
         />
       )}
       <div onClick={(e) => e.stopPropagation()} style={{
-        background: "#fff", borderRadius: 18, width: 680, maxHeight: "86%",
+        background: T.PLX_CARD_BG, borderRadius: 18, width: 680, maxHeight: "86%",
         boxShadow: "0 24px 60px rgba(17,24,39,.22)", overflow: "hidden",
         display: "flex", flexDirection: "column",
       }}>
@@ -1010,7 +1010,7 @@ function AiAssistModal({ onClose, onApply, seed }) {
                       <button key={o.v} onClick={() => setMode(o.v)} style={{
                         fontSize: 12, fontWeight: 700, padding: "7px 18px",
                         borderRadius: 9999, border: "none",
-                        background: on ? "#fff" : "transparent",
+                        background: on ? T.PLX_CARD_BG : "transparent",
                         color: on ? PLX_GREEN : PLX_MUTED,
                         boxShadow: on ? "0 1px 3px rgba(0,0,0,.06)" : "none",
                         cursor: "pointer",
@@ -1030,7 +1030,7 @@ function AiAssistModal({ onClose, onApply, seed }) {
                         width: "100%", height: 54, border: `1.5px solid ${PLX_GREEN_LIGHT}`,
                         borderRadius: 12, padding: "0 150px 0 18px", fontSize: 18,
                         fontFamily: "ui-monospace,SFMono-Regular,monospace",
-                        letterSpacing: ".05em", outline: "none", background: "#fff",
+                        letterSpacing: ".05em", outline: "none", background: T.PLX_CARD_BG,
                         boxSizing: "border-box", color: PLX_TEXT, fontWeight: 600,
                       }} />
                     <button
@@ -1052,7 +1052,7 @@ function AiAssistModal({ onClose, onApply, seed }) {
                     placeholder="例: GUM デンタルブラシ" style={{
                       width: "100%", height: 54, border: `1.5px solid ${PLX_GREEN_LIGHT}`,
                       borderRadius: 12, padding: "0 18px", fontSize: 16,
-                      outline: "none", background: "#fff", boxSizing: "border-box",
+                      outline: "none", background: T.PLX_CARD_BG, boxSizing: "border-box",
                       color: PLX_TEXT, fontWeight: 600,
                     }} />
                 )}
@@ -1153,14 +1153,14 @@ function AiAssistModal({ onClose, onApply, seed }) {
                         <button key={opt.id} onClick={() => togglePick(f.key, opt)} style={{
                           textAlign: "left", padding: "10px 14px", borderRadius: 10,
                           border: `1px solid ${on ? PLX_GREEN : PLX_BORDER}`,
-                          background: on ? PLX_GREEN_50 : "#fff",
+                          background: on ? PLX_GREEN_50 : T.PLX_CARD_BG,
                           cursor: "pointer", display: "flex",
                           alignItems: "center", gap: 12,
                         }}>
                           <span style={{
                             width: 14, height: 14, borderRadius: 4,
                             border: `2px solid ${on ? PLX_GREEN : PLX_BORDER}`,
-                            background: on ? PLX_GREEN : "#fff",
+                            background: on ? PLX_GREEN : T.PLX_CARD_BG,
                             display: "flex", alignItems: "center", justifyContent: "center",
                             flexShrink: 0,
                           }}>
@@ -1348,7 +1348,7 @@ function BarcodeScanner({ onDetected, onClose }) {
       alignItems: "center", justifyContent: "center", padding: 20,
     }}>
       <div style={{
-        background: "#fff", borderRadius: 16, padding: 16, maxWidth: 460, width: "100%",
+        background: T.PLX_CARD_BG, borderRadius: 16, padding: 16, maxWidth: 460, width: "100%",
         boxShadow: "0 24px 60px rgba(0,0,0,0.5)",
       }}>
         <div style={{
@@ -1468,7 +1468,7 @@ function ConfirmSaveModal({ isEdit, status, before, after, refData, onCancel, on
       display: "flex", alignItems: "center", justifyContent: "center",
     }}>
       <div onClick={(e) => e.stopPropagation()} style={{
-        background: "#fff", borderRadius: 16, width: 600, maxWidth: "92%",
+        background: T.PLX_CARD_BG, borderRadius: 16, width: 600, maxWidth: "92%",
         maxHeight: "82vh", boxShadow: "0 24px 60px rgba(17,24,39,.22)",
         overflow: "hidden", display: "flex", flexDirection: "column",
       }}>

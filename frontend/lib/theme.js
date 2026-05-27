@@ -52,6 +52,12 @@ const _LIGHT = {
   PLX_SURFACE_0:   "#FFFFFF",
   PLX_SURFACE_50:  "#F2F3F5",
   PLX_SURFACE_100: "#EEF3F9",
+  // Card/modal/input fill — replaces hardcoded "#fff" backgrounds.
+  // In light mode this IS white; in dark mode it's an elevated near-black.
+  PLX_CARD_BG:     "#FFFFFF",
+  PLX_INPUT_BG:    "#FFFFFF",
+  PLX_KBD_BG:      "#FFFFFF",
+  PLX_ON_BRAND:    "#FFFFFF",   // text/icon colour on the brand button
   PLX_SIDEBAR_BG:        "#002041",
   PLX_SIDEBAR_INK:       "#D6DEEC",
   PLX_SIDEBAR_INK_DIM:   "#7C8BA6",
@@ -115,6 +121,12 @@ const _DARK = {
   PLX_SURFACE_0:   "#0F1419",   // page background → near-black
   PLX_SURFACE_50:  "#161C24",   // card backgrounds slightly lifted
   PLX_SURFACE_100: "#1F2630",
+  // Dark equivalents for the new explicit tokens. Cards are slightly
+  // lifted from the page background so they read as elevated surfaces.
+  PLX_CARD_BG:     "#161C24",
+  PLX_INPUT_BG:    "#1F2630",
+  PLX_KBD_BG:      "#2A323D",
+  PLX_ON_BRAND:    "#FFFFFF",
   PLX_SIDEBAR_BG:        "#0A0E13",
   PLX_SIDEBAR_INK:       "#D6DEEC",
   PLX_SIDEBAR_INK_DIM:   "#7C8BA6",

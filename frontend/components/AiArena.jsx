@@ -241,7 +241,7 @@
         paddingTop: 40, overflow: "auto",
       }}>
         <div onClick={(e) => e.stopPropagation()} style={{
-          background: "#fff", borderRadius: 14, width: "min(1280px, 96%)",
+          background: T.PLX_CARD_BG, borderRadius: 14, width: "min(1280px, 96%)",
           maxHeight: "92vh", boxShadow: "0 24px 60px rgba(17,24,39,.35)",
           overflow: "hidden", display: "flex", flexDirection: "column",
           border: `1px solid ${PLX_BORDER}`,
@@ -333,7 +333,7 @@
 
   const _arenaBtn = {
     height: 28, padding: "0 10px", borderRadius: 6,
-    border: `1px solid ${PLX_BORDER}`, background: "#fff",
+    border: `1px solid ${PLX_BORDER}`, background: T.PLX_CARD_BG,
     color: PLX_TEXT, fontSize: 11, fontWeight: 700, cursor: "pointer",
   };
 
@@ -415,7 +415,7 @@
               <button key={o.v} onClick={() => setMode(o.v)} style={{
                 fontSize: 11, fontWeight: 700, padding: "4px 12px",
                 borderRadius: 9999, border: `1px solid ${on ? PLX_GREEN : PLX_BORDER}`,
-                background: on ? PLX_GREEN_50 : "#fff",
+                background: on ? PLX_GREEN_50 : T.PLX_CARD_BG,
                 color: on ? PLX_GREEN : PLX_MUTED, cursor: "pointer",
               }}>{o.l}</button>
             );
@@ -469,7 +469,7 @@
                     fontSize: 11, fontWeight: 700, width: 28, height: 26,
                     borderRadius: 6,
                     border: `1px solid ${on ? PLX_GREEN : PLX_BORDER}`,
-                    background: on ? PLX_GREEN_50 : "#fff",
+                    background: on ? PLX_GREEN_50 : T.PLX_CARD_BG,
                     color: on ? PLX_GREEN : PLX_TEXT,
                     cursor: "pointer",
                   }}
@@ -485,7 +485,7 @@
               <button key={m} onClick={() => onToggle(m)} style={{
                 fontSize: 11, fontWeight: 700, padding: "4px 11px",
                 borderRadius: 9999, border: `1px solid ${on ? PLX_GREEN : PLX_BORDER}`,
-                background: on ? PLX_GREEN_50 : "#fff",
+                background: on ? PLX_GREEN_50 : T.PLX_CARD_BG,
                 color: on ? PLX_GREEN : PLX_TEXT,
                 cursor: "pointer", fontFamily: "ui-monospace, monospace",
               }}>
@@ -508,7 +508,7 @@
           />
           <button onClick={onAddCustom} disabled={!customInput.trim()} style={{
             height: 28, padding: "0 12px", borderRadius: 6,
-            border: `1px solid ${PLX_BORDER}`, background: "#fff",
+            border: `1px solid ${PLX_BORDER}`, background: T.PLX_CARD_BG,
             color: PLX_TEXT, fontSize: 11, fontWeight: 700,
             cursor: customInput.trim() ? "pointer" : "not-allowed",
             opacity: customInput.trim() ? 1 : 0.5,
@@ -522,12 +522,12 @@
     return (
       <div style={{
         marginTop: 12, padding: 10, borderRadius: 8,
-        border: `1px solid ${PLX_BORDER}`, background: "#fff",
+        border: `1px solid ${PLX_BORDER}`, background: T.PLX_CARD_BG,
         maxHeight: 160, overflow: "auto",
       }}>
         <div style={{
           display: "flex", alignItems: "center", gap: 8, marginBottom: 8,
-          position: "sticky", top: 0, background: "#fff",
+          position: "sticky", top: 0, background: T.PLX_CARD_BG,
         }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: PLX_MUTED, flex: 1 }}>
             比較履歴 ({history.length})
@@ -655,7 +655,7 @@
     const verifiedCount = (r.candidates || []).filter((c) => c.jan_verified).length;
     return (
       <div style={{
-        background: "#fff", border: `1px solid ${PLX_BORDER}`, borderRadius: 10,
+        background: T.PLX_CARD_BG, border: `1px solid ${PLX_BORDER}`, borderRadius: 10,
         padding: 12, display: "flex", flexDirection: "column", gap: 8,
         maxHeight: "65vh", overflow: "auto",
       }}>

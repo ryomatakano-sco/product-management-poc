@@ -386,7 +386,7 @@ function PlxTopBar({ title, breadcrumbs, headerRight }) {
         </span>
         <span>商品 / 仕入先 / 発注書を検索…</span>
         <kbd style={{
-          fontSize: 10, color: T.PLX_INK_500, background: "#fff",
+          fontSize: 10, color: T.PLX_INK_500, background: T.PLX_CARD_BG,
           padding: "1px 6px", borderRadius: 4,
           border: `1px solid ${T.PLX_LINE_200}`,
           fontFamily: "ui-monospace, monospace",

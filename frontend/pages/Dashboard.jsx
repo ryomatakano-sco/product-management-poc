@@ -53,7 +53,7 @@ function Dashboard() {
         <div style={{
           display: "inline-flex", alignItems: "center", gap: 8,
           height: 36, padding: "0 14px",
-          background: "#fff", border: `1px solid ${T.PLX_LINE_200}`,
+          background: T.PLX_CARD_BG, border: `1px solid ${T.PLX_LINE_200}`,
           borderRadius: 9999, fontSize: 13, fontWeight: 600, color: T.PLX_INK_700,
         }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.PLX_INK_500}
@@ -114,7 +114,7 @@ function Dashboard() {
 }
 
 const dashCard = {
-  background: "#fff", borderRadius: 14, border: `1px solid ${PLX_BORDER}`,
+  background: T.PLX_CARD_BG, borderRadius: 14, border: `1px solid ${PLX_BORDER}`,
   padding: "18px 20px",
 };
 
@@ -240,7 +240,7 @@ function AiSummaryCard({ summary, onRegenerate }) {
 function AiSummarySkeleton() {
   return (
     <div style={{
-      background: "#fff", border: `1px solid ${PLX_BORDER}`, borderRadius: 16,
+      background: T.PLX_CARD_BG, border: `1px solid ${PLX_BORDER}`, borderRadius: 16,
       padding: "20px 24px", marginTop: 8,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
@@ -275,7 +275,7 @@ function KpiTile({ icon, label, value, unit, delta, tone = "green", clickable, o
                        PLX_GREEN_LIGHT;
   return (
     <div onClick={clickable ? onClick : undefined} style={{
-      background: "#fff", borderRadius: 14, border: `1px solid ${PLX_BORDER}`,
+      background: T.PLX_CARD_BG, borderRadius: 14, border: `1px solid ${PLX_BORDER}`,
       padding: "16px 18px", height: 104,
       cursor: clickable ? "pointer" : "default",
       transition: "box-shadow .15s, transform .15s",
@@ -324,7 +324,7 @@ function KpiIcon({ name, color }) {
 function KpiSkeleton() {
   return (
     <div style={{
-      background: "#fff", borderRadius: 14, border: `1px solid ${PLX_BORDER}`,
+      background: T.PLX_CARD_BG, borderRadius: 14, border: `1px solid ${PLX_BORDER}`,
       padding: "16px 18px", height: 104,
     }}>
       <div style={{ display: "flex", alignItems: "center" }}>

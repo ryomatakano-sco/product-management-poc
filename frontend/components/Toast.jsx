@@ -57,7 +57,7 @@ function ToastContainer() {
           <div key={t.id} style={{
             pointerEvents: "auto",
             minWidth: 280, maxWidth: 380,
-            background: "#fff", border: `1px solid ${p.border}`,
+            background: T.PLX_CARD_BG, border: `1px solid ${p.border}`,
             borderLeft: `4px solid ${p.border}`,
             borderRadius: T.RADIUS_MD, boxShadow: T.SHADOW_LG,
             padding: "12px 16px",

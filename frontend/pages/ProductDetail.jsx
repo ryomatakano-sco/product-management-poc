@@ -112,7 +112,7 @@ function ProductDetail({ productId }) {
 
       {/* Hero */}
       <div style={{
-        background: "#fff", borderRadius: 16, border: `1px solid ${PLX_BORDER}`,
+        background: T.PLX_CARD_BG, borderRadius: 16, border: `1px solid ${PLX_BORDER}`,
         padding: "22px 26px", display: "grid",
         gridTemplateColumns: "160px 1fr auto", gap: 24, alignItems: "flex-start",
       }}>
@@ -247,7 +247,7 @@ function ProductDetail({ productId }) {
 
       {/* Tabs */}
       <div style={{
-        background: "#fff", borderRadius: 16, border: `1px solid ${PLX_BORDER}`,
+        background: T.PLX_CARD_BG, borderRadius: 16, border: `1px solid ${PLX_BORDER}`,
         marginTop: 18, overflow: "hidden",
       }}>
         <div style={{ display: "flex", borderBottom: `1px solid ${PLX_BORDER}`, padding: "0 22px" }}>
@@ -313,7 +313,7 @@ function ConfirmDeleteModal({ title, message, confirmLabel, onConfirm, onCancel,
       display: "flex", alignItems: "center", justifyContent: "center",
     }}>
       <div onClick={(e) => e.stopPropagation()} style={{
-        background: "#fff", borderRadius: 16, width: 420, maxWidth: "90%",
+        background: T.PLX_CARD_BG, borderRadius: 16, width: 420, maxWidth: "90%",
         boxShadow: "0 24px 60px rgba(17,24,39,.22)", padding: 24,
       }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 12 }}>
@@ -384,7 +384,7 @@ function UrlLink({ url }) {
 function StatCard({ label, value, unit, sub, hint }) {
   return (
     <div style={{
-      background: "#fff", borderRadius: 14,
+      background: T.PLX_CARD_BG, borderRadius: 14,
       padding: "16px 20px", border: `1px solid ${PLX_BORDER}`,
     }}>
       <div style={{ fontSize: 11, color: PLX_MUTED, fontWeight: 600 }}>{label}</div>
@@ -470,7 +470,7 @@ function VariantsTable({ variants, onAdjust, onEdit }) {
             <span style={{ textAlign: "right", display: "flex", gap: 6, justifyContent: "flex-end" }}>
               <button onClick={() => onAdjust(v)} style={{
                 fontSize: 11, fontWeight: 700, padding: "5px 11px", borderRadius: 9999,
-                border: `1px solid ${PLX_GREEN}`, background: "#fff", color: PLX_GREEN,
+                border: `1px solid ${PLX_GREEN}`, background: T.PLX_CARD_BG, color: PLX_GREEN,
                 cursor: "pointer",
               }}>在庫を調整</button>
               <button
@@ -478,7 +478,7 @@ function VariantsTable({ variants, onAdjust, onEdit }) {
                 title="商品の編集ページを開きます"
                 style={{
                   fontSize: 11, fontWeight: 600, padding: "5px 11px", borderRadius: 9999,
-                  border: `1px solid ${PLX_BORDER}`, background: "#fff", color: PLX_TEXT,
+                  border: `1px solid ${PLX_BORDER}`, background: T.PLX_CARD_BG, color: PLX_TEXT,
                   cursor: "pointer",
                 }}
               >編集</button>
@@ -605,7 +605,7 @@ function InventoryAdjustModal({ variant, onClose, onApplied }) {
 
   const pmBtn = {
     width: 34, height: 34, borderRadius: 9,
-    border: `1px solid ${PLX_BORDER}`, background: "#fff",
+    border: `1px solid ${PLX_BORDER}`, background: T.PLX_CARD_BG,
     cursor: "pointer", fontWeight: 700, fontSize: 16, color: PLX_TEXT,
   };
 
@@ -616,7 +616,7 @@ function InventoryAdjustModal({ variant, onClose, onApplied }) {
       alignItems: "center", justifyContent: "center", zIndex: 50,
     }}>
       <div onClick={(e) => e.stopPropagation()} style={{
-        background: "#fff", borderRadius: 16, padding: "24px 28px", width: 480,
+        background: T.PLX_CARD_BG, borderRadius: 16, padding: "24px 28px", width: 480,
         boxShadow: "0 24px 60px rgba(17,24,39,.18)",
       }}>
         <SectionLabel>在庫調整</SectionLabel>

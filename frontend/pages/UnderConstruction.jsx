@@ -12,7 +12,7 @@ function UnderConstruction({ navId, title, breadcrumbs }) {
         minHeight: 480, padding: 24,
       }}>
         <div style={{
-          background: "#fff", border: `1px solid ${T.PLX_LINE_200}`,
+          background: T.PLX_CARD_BG, border: `1px solid ${T.PLX_LINE_200}`,
           borderRadius: T.RADIUS_LG, boxShadow: T.SHADOW_SM,
           maxWidth: 520, padding: 48, textAlign: "center",
         }}>
@@ -43,7 +43,7 @@ function UnderConstruction({ navId, title, breadcrumbs }) {
           <div style={{ display: "flex", gap: 12, justifyContent: "center", marginBottom: 16 }}>
             <button onClick={() => navigate("/dashboard")} style={{
               height: 38, padding: "0 16px", borderRadius: T.RADIUS_MD,
-              background: "#fff", color: T.PLX_INK_700,
+              background: T.PLX_CARD_BG, color: T.PLX_INK_700,
               border: `1px solid ${T.PLX_LINE_200}`,
               fontWeight: 600, fontSize: 13, cursor: "pointer",
             }}>← ダッシュボードに戻る</button>

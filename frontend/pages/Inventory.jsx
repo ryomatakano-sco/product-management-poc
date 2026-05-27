@@ -55,7 +55,7 @@ function Inventory({ query }) {
 
       {/* Filter card */}
       <div style={{
-        background: "#fff", borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+        background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
         padding: "14px 18px", display: "flex", gap: 12, alignItems: "center", marginBottom: 14,
       }}>
         <input value={q} onChange={(e) => setQ(e.target.value)}
@@ -95,7 +95,7 @@ function Inventory({ query }) {
 
       {/* Table */}
       <div style={{
-        background: "#fff", borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+        background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
         boxShadow: T.SHADOW_SM, overflow: "hidden",
       }}>
         <div style={{
@@ -182,7 +182,7 @@ function KpiTile({ label, value, unit, tone, onClick, clickable }) {
                 T.PLX_GREEN_600;
   return (
     <div onClick={clickable ? onClick : undefined} style={{
-      background: "#fff", borderRadius: T.RADIUS_LG,
+      background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG,
       border: `1px solid ${T.PLX_LINE_200}`, boxShadow: T.SHADOW_SM,
       padding: 18, cursor: clickable ? "pointer" : "default",
       transition: "transform .15s, box-shadow .15s",
@@ -209,7 +209,7 @@ function Chip({ on, onClick, label, tone }) {
     <button onClick={onClick} style={{
       fontSize: 12, fontWeight: 600, padding: "6px 12px",
       borderRadius: 9999,
-      background: on ? bg : "#fff",
+      background: on ? bg : T.PLX_CARD_BG,
       color: on ? color : T.PLX_INK_700,
       border: `1px solid ${on ? color : T.PLX_LINE_200}`,
       cursor: "pointer",

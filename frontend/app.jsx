@@ -2,6 +2,12 @@
 // fallback. The router state comes from useHashRoute() in lib/hooks.js.
 
 function App() {
+  // Subscribe at the root so theme/locale toggles re-render the WHOLE tree
+  // immediately — not just the toggle buttons. Without these the rest of
+  // the UI keeps showing the previous palette/locale until a manual reload.
+  // Cost: one extra render per click, which is fine for a click-driven event.
+  usePlxTheme();
+  usePlxLocale();
   const route = useHashRoute();
   let page;
 

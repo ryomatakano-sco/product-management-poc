@@ -122,7 +122,7 @@ function ProductList({ initialQuery }) {
 
       {/* Filter bar */}
       <div style={{
-        background: "#fff", borderRadius: 14, padding: "16px 20px",
+        background: T.PLX_CARD_BG, borderRadius: 14, padding: "16px 20px",
         border: `1px solid ${PLX_BORDER}`, display: "flex", flexDirection: "column", gap: 14,
       }}>
         <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
@@ -180,7 +180,7 @@ function ProductList({ initialQuery }) {
               )} style={{
                 fontSize: 11, fontWeight: 600, padding: "5px 11px", borderRadius: 9999,
                 border: `1px solid ${on ? PLX_GREEN : PLX_BORDER}`,
-                background: on ? PLX_GREEN_LIGHT : "#fff",
+                background: on ? PLX_GREEN_LIGHT : T.PLX_CARD_BG,
                 color: on ? PLX_GREEN : PLX_TEXT, cursor: "pointer",
               }}>{on && "✓ "}{t.name}</button>
             );
@@ -190,7 +190,7 @@ function ProductList({ initialQuery }) {
 
       {/* Table */}
       <div style={{
-        background: "#fff", borderRadius: 14, border: `1px solid ${PLX_BORDER}`,
+        background: T.PLX_CARD_BG, borderRadius: 14, border: `1px solid ${PLX_BORDER}`,
         marginTop: 16, overflow: "hidden",
       }}>
         <div style={{
@@ -378,7 +378,7 @@ function QuickChip({ on, onClick, dot, check, label, color, bg }) {
     <button onClick={onClick} style={{
       fontSize: 11, fontWeight: 700, padding: "5px 11px", borderRadius: 9999,
       border: `1px solid ${on ? color : PLX_BORDER}`,
-      background: on ? bg : "#fff", color: on ? color : PLX_TEXT,
+      background: on ? bg : T.PLX_CARD_BG, color: on ? color : PLX_TEXT,
       cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6,
     }}>
       {dot && <span style={{ width: 7, height: 7, borderRadius: "50%", background: dot }} />}

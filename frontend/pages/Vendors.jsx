@@ -26,7 +26,7 @@ function Vendors() {
       <PlxPageHead title="仕入先" subtitle={`全 ${allRows.length} 社`} right={headerRight} />
 
       <div style={{
-        background: "#fff", borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+        background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
         padding: "14px 18px", marginBottom: 14,
       }}>
         <input value={q} onChange={(e) => setQ(e.target.value)}
@@ -36,7 +36,7 @@ function Vendors() {
       {vendorsQ.error && <PlxErrorBanner error={vendorsQ.error} onRetry={vendorsQ.refetch} />}
 
       <div style={{
-        background: "#fff", borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+        background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
         boxShadow: T.SHADOW_SM, overflow: "hidden",
       }}>
         <div style={{
@@ -114,7 +114,7 @@ function VendorDetail({ id }) {
           }}>← 仕入先一覧へ戻る</button>
 
           <div style={{
-            background: "#fff", borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+            background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
             boxShadow: T.SHADOW_SM, padding: 24, marginBottom: 16,
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
@@ -136,7 +136,7 @@ function VendorDetail({ id }) {
           </div>
 
           <div style={{
-            background: "#fff", borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+            background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
             boxShadow: T.SHADOW_SM, padding: 24,
           }}>
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, marginBottom: 12 }}>メモ</h3>

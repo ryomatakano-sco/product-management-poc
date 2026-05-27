@@ -29,7 +29,7 @@ function Settings({ query }) {
       <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", gap: 18, alignItems: "flex-start" }}>
         {/* Left nav */}
         <div style={{
-          background: "#fff", borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+          background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
           boxShadow: T.SHADOW_SM, padding: 6, position: "sticky", top: 24,
         }}>
           {SETTINGS_SECTIONS.map((s) => (
@@ -58,7 +58,7 @@ function Settings({ query }) {
           {ns === "integrations" && <IntegrationsSettings />}
           {(ns === "users" || ns === "api") && (
             <div style={{
-              background: "#fff", borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+              background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
               padding: 48, textAlign: "center", color: T.PLX_INK_500,
             }}>この項目は近日対応予定です。</div>
           )}
@@ -73,7 +73,7 @@ function Settings({ query }) {
 function SettingsCard({ title, children, onSave, saving }) {
   return (
     <div style={{
-      background: "#fff", borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+      background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
       boxShadow: T.SHADOW_SM, padding: 24, marginBottom: 16,
     }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
@@ -179,7 +179,7 @@ function ToggleRow({ label, on, onChange }) {
       }}>
         <span style={{
           position: "absolute", top: 2, left: on ? 18 : 2,
-          width: 18, height: 18, background: "#fff", borderRadius: "50%",
+          width: 18, height: 18, background: T.PLX_CARD_BG, borderRadius: "50%",
           transition: "left .12s", boxShadow: "0 1px 2px rgba(0,0,0,.2)",
         }} />
       </span>

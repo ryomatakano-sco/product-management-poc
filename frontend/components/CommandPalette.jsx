@@ -143,7 +143,7 @@
         paddingTop: 100,
       }}>
         <div onClick={(e) => e.stopPropagation()} style={{
-          background: "#fff", borderRadius: 14, width: 640, maxWidth: "92%",
+          background: T.PLX_CARD_BG, borderRadius: 14, width: 640, maxWidth: "92%",
           maxHeight: "70vh", boxShadow: "0 24px 60px rgba(17,24,39,.32)",
           overflow: "hidden", display: "flex", flexDirection: "column",
           border: `1px solid ${T.PLX_LINE_200 || "#E5E7EB"}`,
@@ -235,7 +235,7 @@
                   </div>
                 </div>
                 <span style={{
-                  fontSize: 10, color: PLX_MUTED, background: "#fff",
+                  fontSize: 10, color: PLX_MUTED, background: T.PLX_CARD_BG,
                   border: `1px solid ${T.PLX_LINE_200 || "#E5E7EB"}`,
                   padding: "2px 6px", borderRadius: 4,
                 }}>Enter</span>
@@ -353,7 +353,7 @@
               </div>
               {active && (
                 <span style={{
-                  fontSize: 10, color: PLX_MUTED, background: "#fff",
+                  fontSize: 10, color: PLX_MUTED, background: T.PLX_CARD_BG,
                   border: `1px solid ${T.PLX_LINE_200 || "#E5E7EB"}`,
                   padding: "2px 6px", borderRadius: 4,
                 }}>↵</span>

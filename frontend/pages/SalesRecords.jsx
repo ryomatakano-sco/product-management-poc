@@ -43,7 +43,7 @@ function SalesRecords({ query }) {
       {salesQ.error && <PlxErrorBanner error={salesQ.error} onRetry={salesQ.refetch} />}
 
       <div style={{
-        background: "#fff", borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+        background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
         boxShadow: T.SHADOW_SM, overflow: "hidden",
       }}>
         {salesQ.loading && <div style={{ padding: 40, textAlign: "center", color: T.PLX_INK_500 }}>読み込み中…</div>}

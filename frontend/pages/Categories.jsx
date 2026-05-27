@@ -80,7 +80,7 @@ function Categories() {
       <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 18, alignItems: "flex-start" }}>
         {/* Left pane: tree */}
         <div style={{
-          background: "#fff", borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+          background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
           boxShadow: T.SHADOW_SM, padding: 6, minHeight: 320,
         }}>
           {treeQ.loading && <CategoriesSkeleton />}
@@ -107,7 +107,7 @@ function Categories() {
 
         {/* Right pane: detail */}
         <div style={{
-          background: "#fff", borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+          background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
           boxShadow: T.SHADOW_SM, padding: 22, minHeight: 320, position: "sticky", top: 24,
         }}>
           {!selected && !treeQ.loading && (
@@ -370,7 +370,7 @@ function Modal({ title, onClose, children }) {
       display: "flex", alignItems: "center", justifyContent: "center",
     }}>
       <div onClick={(e) => e.stopPropagation()} style={{
-        background: "#fff", width: 560, maxWidth: "92%", maxHeight: "90%",
+        background: T.PLX_CARD_BG, width: 560, maxWidth: "92%", maxHeight: "90%",
         overflowY: "auto", borderRadius: T.RADIUS_LG, boxShadow: T.SHADOW_LG,
         padding: 24,
       }}>

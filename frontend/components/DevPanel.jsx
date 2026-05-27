@@ -86,7 +86,7 @@ function DevToggleButton({ open, onClick }) {
         position: "fixed", left: 16, bottom: 16, zIndex: 9999,
         width: 40, height: 40, borderRadius: "50%",
         border: `1px solid ${PLX_BORDER}`,
-        background: open ? PLX_TEXT : "#fff",
+        background: open ? PLX_TEXT : T.PLX_CARD_BG,
         color: open ? "#fff" : PLX_TEXT,
         cursor: "pointer",
         display: "flex", alignItems: "center", justifyContent: "center",
@@ -107,7 +107,7 @@ function DevPanelBody({ status, error, loading, storeId, onStoreIdChange, onRefr
       style={{
         position: "fixed", left: 16, bottom: 68, zIndex: 9999,
         width: 340, maxHeight: "calc(100vh - 100px)", overflow: "auto",
-        background: "#fff", border: `1px solid ${PLX_BORDER}`,
+        background: T.PLX_CARD_BG, border: `1px solid ${PLX_BORDER}`,
         borderRadius: 12, boxShadow: "0 12px 32px rgba(0,0,0,.14)",
         fontSize: 12, color: PLX_TEXT,
       }}
@@ -163,7 +163,7 @@ function DevIconBtn({ children, onClick, title }) {
   return (
     <button onClick={onClick} title={title} style={{
       width: 26, height: 26, borderRadius: 6, border: `1px solid ${PLX_BORDER}`,
-      background: "#fff", color: PLX_TEXT, cursor: "pointer",
+      background: T.PLX_CARD_BG, color: PLX_TEXT, cursor: "pointer",
       display: "flex", alignItems: "center", justifyContent: "center",
     }}>{children}</button>
   );
@@ -283,7 +283,7 @@ function DevAiArenaActions() {
 
   const rowBtn = {
     padding: "6px 12px", borderRadius: 6,
-    border: `1px solid ${PLX_BORDER}`, background: "#fff",
+    border: `1px solid ${PLX_BORDER}`, background: T.PLX_CARD_BG,
     color: PLX_TEXT, fontWeight: 700, fontSize: 11, cursor: "pointer",
     display: "inline-flex", alignItems: "center", gap: 6,
   };
@@ -405,7 +405,7 @@ function DevStoreSwitcher({ storeId, onChange }) {
         />
         <button onClick={commit} style={{
           padding: "4px 10px", borderRadius: 6,
-          border: `1px solid ${PLX_BORDER}`, background: "#fff",
+          border: `1px solid ${PLX_BORDER}`, background: T.PLX_CARD_BG,
           cursor: "pointer", fontSize: 12,
         }}>Apply &amp; reload</button>
         <span style={{ marginLeft: "auto", color: PLX_MUTED, fontSize: 11 }}>
@@ -419,7 +419,7 @@ function DevStoreSwitcher({ storeId, onChange }) {
 function DevLinks() {
   const link = {
     display: "inline-block", padding: "4px 8px", borderRadius: 6,
-    border: `1px solid ${PLX_BORDER}`, background: "#fff",
+    border: `1px solid ${PLX_BORDER}`, background: T.PLX_CARD_BG,
     color: PLX_TEXT, textDecoration: "none", fontSize: 11,
     fontFamily: "var(--font-mono)",
   };
@@ -505,7 +505,7 @@ function DevEnvEditor({ ai, writeTarget }) {
   return (
     <div style={{
       marginTop: 8, padding: 8, borderRadius: 6,
-      border: `1px solid ${PLX_BORDER}`, background: "#fff",
+      border: `1px solid ${PLX_BORDER}`, background: T.PLX_CARD_BG,
     }}>
       <label style={editorLabel}>OPENAI_API_KEY</label>
       <input
@@ -554,7 +554,7 @@ function DevEnvEditor({ ai, writeTarget }) {
 
 const miniBtnStyle = {
   padding: "3px 8px", borderRadius: 6, fontSize: 11,
-  border: `1px solid ${PLX_BORDER}`, background: "#fff",
+  border: `1px solid ${PLX_BORDER}`, background: T.PLX_CARD_BG,
   color: PLX_TEXT, cursor: "pointer",
 };
 
