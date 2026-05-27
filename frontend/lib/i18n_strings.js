@@ -14,6 +14,38 @@ window._PLX_DICT_EN = {
   // Page title (set via i18n.js, not React tree)
   "SCO 商品管理 — paylight X": "SCO Product Management — paylight X",
 
+  // ─── Buttons / actions the user called out ─────────────────────────
+  // These are full inline literals from JSX text children. Plain "削除"
+  // (no emoji) is already in the main quantifiers/short-labels block;
+  // the emoji-prefixed variants are common-enough to live here.
+  "キャンセル": "Cancel",
+  "🗑 削除": "🗑 Delete",
+  "✓ 登録": "✓ Register",   // already covered earlier — kept for clarity
+  "← 商品一覧へ戻る": "← Back to products",  // already covered — kept
+
+  // ─── AI summary card (dashboard) ────────────────────────────────────
+  "AIサマリー": "AI Summary",
+  "AIサマリー — 1日1回 朝6:00 更新": "AI Summary — refreshed daily at 06:00",
+  "AIサマリーを生成中…": "Generating AI summary…",
+
+  // ─── Hints / explanations the auto-translator missed ───────────────
+  "クリックでこの URL を開いて再発注できます": "Click to open this URL and reorder",
+  "商品の特長・用途・サイズなどを記入します。": "Describe features, use case, size, etc.",  // dup-safe
+  "変更された項目はありません。「キャンセル」で戻って編集を続けられます。":
+    "No changes were made. Click “Cancel” to go back and keep editing.",
+  "送信・入荷記録・キャンセルなどの操作は近日対応予定です。":
+    "Send, receive, and cancel actions coming soon.",
+  "本日は ${jpDate}。本院の商品管理サマリーをお届けします。":
+    "Today is ${jpDate}. Here is your product management summary.",
+  "本日": "Today",
+  "ジャンルコードでの検索の方が精度が高いです": "Searching by JAN gives better accuracy",
+  "※ AI による候補は参考情報です。価格・在庫など最終確定値は必ず担当者がご確認ください。":
+    "※ AI suggestions are reference only. Please verify price, stock, etc. before confirming.",
+  "ステータス": "Status",
+  "公開中": "Published",
+  "下書き": "Draft",
+
+
   // Appearance + language toggle copy
   "外観・言語": "Appearance & Language",
   "テーマ": "Theme",

@@ -31,19 +31,23 @@
   // Props whose string value should be translated through t().
   const _PROP_KEYS = new Set(["title", "placeholder", "aria-label", "alt"]);
 
+  // Matches a JSX text child like "\n      クリックで…\n    " — captures
+  // (leading whitespace) (inner content) (trailing whitespace).
+  const _WS_WRAP = /^(\s*)([\s\S]*?)(\s*)$/;
+
   function _trChild(node) {
-    if (typeof node === "string") {
-      // Only translate when the string actually exists in the dictionary
-      // OR when locale=ja (in which case t() is a no-op anyway). This
-      // avoids the cost of t() on every short ASCII/symbol string.
-      const dict = window._PLX_DICT_EN || {};
-      const locale = window.PLX_I18N?.get?.() || "ja";
-      if (locale === "en" && (node in dict)) {
-        return dict[node];
-      }
-      // Also translate when JA chars are present even if not in dict,
-      // because t() falls back to the JA key — so this is a no-op.
-      return node;
+    if (typeof node !== "string") return node;
+    const dict = window._PLX_DICT_EN || {};
+    const locale = window.PLX_I18N?.get?.() || "ja";
+    if (locale !== "en") return node;
+    // 1. Exact match
+    if (node in dict) return dict[node];
+    // 2. Trimmed match — JSX text children often carry leading/trailing
+    //    whitespace from source indentation. Preserve the wrapping so we
+    //    don't collapse layout-relevant whitespace.
+    const m = _WS_WRAP.exec(node);
+    if (m && m[2] && (m[2] in dict)) {
+      return m[1] + dict[m[2]] + m[3];
     }
     return node;
   }
