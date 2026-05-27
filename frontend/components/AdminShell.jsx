@@ -392,10 +392,12 @@ function PlxTopBar({ title, breadcrumbs, headerRight }) {
           fontFamily: "ui-monospace, monospace",
         }}>Ctrl+K</kbd>
       </button>
+      <PlxLocaleToggle />
+      <PlxThemeToggle />
       {/* Bell */}
       <button style={{
         width: 36, height: 36, borderRadius: T.RADIUS_MD, border: `1px solid ${T.PLX_LINE_200}`,
-        background: "#fff", cursor: "pointer",
+        background: T.PLX_SURFACE_0, cursor: "pointer",
         display: "flex", alignItems: "center", justifyContent: "center", position: "relative",
       }}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.PLX_INK_700}
@@ -405,10 +407,70 @@ function PlxTopBar({ title, breadcrumbs, headerRight }) {
         </svg>
         <span style={{
           position: "absolute", top: 6, right: 8, width: 7, height: 7,
-          borderRadius: "50%", background: T.PLX_RED_600, border: "2px solid #fff",
+          borderRadius: "50%", background: T.PLX_RED_600, border: `2px solid ${T.PLX_SURFACE_0}`,
         }} />
       </button>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Theme + locale toggles for the topbar. Mirrored in DevPanel +
+// Settings page; all three read/write the same window.PLX_THEME /
+// window.PLX_I18N singletons so toggling anywhere updates everything.
+// ─────────────────────────────────────────────────────────────────────
+function PlxThemeToggle() {
+  const [theme] = usePlxTheme();
+  const isDark = theme === "dark";
+  return (
+    <button
+      onClick={() => window.PLX_THEME.toggle()}
+      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      aria-label="Toggle theme"
+      style={{
+        width: 36, height: 36, borderRadius: T.RADIUS_MD,
+        border: `1px solid ${T.PLX_LINE_200}`,
+        background: T.PLX_SURFACE_0, cursor: "pointer",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+    >
+      {isDark ? (
+        // sun
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.PLX_AMBER_600}
+          strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+        </svg>
+      ) : (
+        // moon
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.PLX_INK_700}
+          strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      )}
+    </button>
+  );
+}
+
+function PlxLocaleToggle() {
+  const [locale] = usePlxLocale();
+  const next = locale === "ja" ? "en" : "ja";
+  return (
+    <button
+      onClick={() => window.PLX_I18N.set(next)}
+      title={`Switch to ${next === "en" ? "English" : "日本語"}`}
+      aria-label="Toggle language"
+      style={{
+        height: 36, padding: "0 12px", borderRadius: T.RADIUS_MD,
+        border: `1px solid ${T.PLX_LINE_200}`,
+        background: T.PLX_SURFACE_0, cursor: "pointer",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 12, fontWeight: 700, color: T.PLX_INK_700,
+        fontFamily: "ui-monospace, monospace", letterSpacing: ".06em",
+      }}
+    >
+      {locale === "en" ? "EN" : "JA"}
+    </button>
   );
 }
 

@@ -220,6 +220,49 @@ function DevSections({ status }) {
           <DevKv key={p} k=".env loaded" v={p} />
         ))}
       </DevSection>
+
+      <DevSection title="Appearance & Language">
+        <DevThemeLocaleControls />
+      </DevSection>
+    </>
+  );
+}
+
+// Mirror of the topbar toggles — same singletons, just rendered as
+// labelled rows here so it's clear which preset you're on.
+function DevThemeLocaleControls() {
+  const [theme] = usePlxTheme();
+  const [locale] = usePlxLocale();
+  const rowStyle = {
+    display: "flex", alignItems: "center", gap: 8, padding: "6px 0",
+  };
+  const pillBase = {
+    padding: "4px 10px", borderRadius: 9999, fontSize: 11, fontWeight: 700,
+    cursor: "pointer", border: `1px solid ${PLX_BORDER}`,
+    background: "transparent", color: PLX_TEXT,
+  };
+  const pillActive = {
+    ...pillBase,
+    background: PLX_GREEN,
+    color: "#fff",
+    border: `1px solid ${PLX_GREEN}`,
+  };
+  return (
+    <>
+      <div style={rowStyle}>
+        <span style={{ width: 60, color: PLX_MUTED }}>Theme</span>
+        <button style={theme === "light" ? pillActive : pillBase}
+          onClick={() => window.PLX_THEME.set("light")}>☀ Light</button>
+        <button style={theme === "dark" ? pillActive : pillBase}
+          onClick={() => window.PLX_THEME.set("dark")}>☾ Dark</button>
+      </div>
+      <div style={rowStyle}>
+        <span style={{ width: 60, color: PLX_MUTED }}>Language</span>
+        <button style={locale === "ja" ? pillActive : pillBase}
+          onClick={() => window.PLX_I18N.set("ja")}>日本語</button>
+        <button style={locale === "en" ? pillActive : pillBase}
+          onClick={() => window.PLX_I18N.set("en")}>English</button>
+      </div>
     </>
   );
 }

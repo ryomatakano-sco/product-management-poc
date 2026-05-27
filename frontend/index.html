@@ -32,6 +32,9 @@
     }
     * { box-sizing: border-box; }
     html, body, #root { height: 100%; margin: 0; }
+    /* `theme_runtime.js` overrides body color/background dynamically when
+       dark mode toggles. The defaults below are only used during the
+       boot splash before React mounts. */
     body {
       font-family: var(--font-sans);
       color: var(--color-text);
@@ -39,6 +42,14 @@
       font-size: 14px;
       line-height: 1.5;
       -webkit-font-smoothing: antialiased;
+      transition: background 0.18s ease, color 0.18s ease;
+    }
+    /* Dark-mode boot fallback — applied via data-theme="dark" the moment
+       theme_runtime.js reads localStorage, before React paints. Avoids a
+       white flash on reload when the user has dark mode persisted. */
+    html[data-theme="dark"] body {
+      color: #ECEEF1;
+      background: #0F1419;
     }
     h1, h2, h3, h4 { margin: 0; line-height: 1.3; font-weight: 700; }
     button, input, select, textarea { font-family: inherit; }
@@ -59,6 +70,21 @@
 <body>
   <div id="root"><div class="boot">読み込み中…</div></div>
 
+  <!-- Boot script: apply persisted theme to <html data-theme> BEFORE any
+       React script loads, so dark-mode users don't see a white flash. -->
+  <script>
+    try {
+      var _t = localStorage.getItem("sco.theme.v1");
+      if (_t === "dark" || _t === "light") {
+        document.documentElement.setAttribute("data-theme", _t);
+      }
+      var _l = localStorage.getItem("sco.locale.v1");
+      if (_l === "ja" || _l === "en") {
+        document.documentElement.setAttribute("lang", _l);
+      }
+    } catch (e) { /* private mode etc. */ }
+  </script>
+
   <!-- React + Babel from CDN (dev builds — fine for PoC) -->
   <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
@@ -76,6 +102,16 @@
     later files read from `window`. No build step, no bundler.
   -->
   <script type="text/babel" data-presets="env,react" src="./lib/theme.js"></script>
+  <!-- theme_runtime.js mutates window.T in place when the user toggles
+       dark mode. Components keep referencing T.PLX_* — those names now
+       resolve at-render. Must load AFTER theme.js. -->
+  <script type="text/babel" data-presets="env,react" src="./lib/theme_runtime.js"></script>
+  <!-- i18n: t() helper + EN dictionary + auto-translation of JSX text
+       children. Must load BEFORE any component (the auto-translator
+       monkey-patches React.createElement). -->
+  <script type="text/babel" data-presets="env,react" src="./lib/i18n.js"></script>
+  <script type="text/babel" data-presets="env,react" src="./lib/i18n_strings.js"></script>
+  <script type="text/babel" data-presets="env,react" src="./lib/i18n_autotr.js"></script>
   <script type="text/babel" data-presets="env,react" src="./lib/api.js"></script>
   <script type="text/babel" data-presets="env,react" src="./lib/hooks.js"></script>
   <script type="text/babel" data-presets="env,react" src="./lib/recent_searches.js"></script>

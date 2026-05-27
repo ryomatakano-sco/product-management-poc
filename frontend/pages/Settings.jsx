@@ -5,6 +5,7 @@
 
 const SETTINGS_SECTIONS = [
   { id: "general",       label: "一般",          icon: "settings" },
+  { id: "appearance",    label: "外観・言語",    icon: "palette" },
   { id: "notifications", label: "通知",          icon: "bell" },
   { id: "tax_rates",     label: "税率",          icon: "calc" },
   { id: "ai",            label: "AI設定",        icon: "sparkles" },
@@ -50,6 +51,7 @@ function Settings({ query }) {
         {/* Right pane */}
         <div>
           {ns === "general" && <GeneralSettings />}
+          {ns === "appearance" && <AppearanceSettings />}
           {ns === "notifications" && <NotificationsSettings />}
           {ns === "tax_rates" && <TaxRatesSettings />}
           {ns === "ai" && <AiSettings />}
@@ -292,6 +294,59 @@ function IntegrationTile({ name, extra, connected }) {
       <button onClick={() => window.PLX_TOAST.warn("デモ用未実装")} style={{
         ...btnSecondary, marginTop: 10, height: 32, padding: "0 14px", fontSize: 12,
       }}>{connected ? "再認証" : "接続する"}</button>
+    </div>
+  );
+}
+
+// Appearance & language — local-only, no backend roundtrip. Reads from
+// window.PLX_THEME and window.PLX_I18N (both persist to localStorage).
+function AppearanceSettings() {
+  const [theme] = usePlxTheme();
+  const [locale] = usePlxLocale();
+  const pillBase = {
+    padding: "8px 18px", borderRadius: 9999, fontSize: 13, fontWeight: 700,
+    cursor: "pointer", border: `1px solid ${T.PLX_LINE_200}`,
+    background: T.PLX_SURFACE_0, color: T.PLX_INK_900,
+  };
+  const pillActive = {
+    ...pillBase,
+    background: T.PLX_GREEN_600, color: "#fff",
+    border: `1px solid ${T.PLX_GREEN_600}`,
+  };
+  const sectionStyle = { marginBottom: 22 };
+  const labelStyle = {
+    fontSize: 13, fontWeight: 700, color: T.PLX_INK_900, marginBottom: 4,
+  };
+  const hintStyle = {
+    fontSize: 11, color: T.PLX_INK_500, marginBottom: 10,
+  };
+  const rowStyle = { display: "flex", gap: 10 };
+  return (
+    <div style={{
+      background: T.PLX_SURFACE_0, borderRadius: T.RADIUS_LG,
+      border: `1px solid ${T.PLX_LINE_200}`,
+      padding: 24, boxShadow: T.SHADOW_SM,
+    }}>
+      <div style={sectionStyle}>
+        <div style={labelStyle}>テーマ</div>
+        <div style={hintStyle}>表示テーマを切り替えます。ブラウザに保存されます。</div>
+        <div style={rowStyle}>
+          <button style={theme === "light" ? pillActive : pillBase}
+            onClick={() => window.PLX_THEME.set("light")}>☀ ライト</button>
+          <button style={theme === "dark" ? pillActive : pillBase}
+            onClick={() => window.PLX_THEME.set("dark")}>☾ ダーク</button>
+        </div>
+      </div>
+      <div style={sectionStyle}>
+        <div style={labelStyle}>言語</div>
+        <div style={hintStyle}>UI 表示言語を切り替えます。商品名・仕入先名などのデータはそのままです。</div>
+        <div style={rowStyle}>
+          <button style={locale === "ja" ? pillActive : pillBase}
+            onClick={() => window.PLX_I18N.set("ja")}>日本語</button>
+          <button style={locale === "en" ? pillActive : pillBase}
+            onClick={() => window.PLX_I18N.set("en")}>English</button>
+        </div>
+      </div>
     </div>
   );
 }
