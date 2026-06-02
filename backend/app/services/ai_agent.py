@@ -238,6 +238,39 @@ def _ai_enabled() -> bool:
     return bool(key)
 
 
+# ---------------------------------------------------------------------------
+# Per-process lookup cache.
+#
+# A single JAN often gets looked up repeatedly in one editing session (user
+# clicks "AI lookup", closes the modal, reopens it; dev arena re-runs the same
+# code). Each miss is a full search + extraction (~38s+). The inputs fully
+# determine the output, so caching by the input tuple is accuracy-neutral:
+# identical args → identical result, just without the LLM round-trips.
+#
+# Bounded FIFO (cap 256) so a long-lived process can't grow unbounded. Mock
+# results are never cached (cheap to recompute, and we want mock toggling to
+# take effect immediately). Process-local on purpose — keeps the PoC simple;
+# a cross-process/Redis cache is listed as "proposed, not done" in the audit.
+# ---------------------------------------------------------------------------
+_LOOKUP_CACHE: "dict[tuple, ProductLookupOutcome]" = {}
+_LOOKUP_CACHE_MAX = 256
+
+
+def _cache_key(
+    jan: str | None,
+    title: str | None,
+    model: str | None,
+    extraction_model: str | None,
+    allow_fallback: bool,
+) -> tuple:
+    return (jan, title, model, extraction_model, allow_fallback)
+
+
+def clear_lookup_cache() -> None:
+    """Drop all cached lookups. Exposed for tests and manual cache busting."""
+    _LOOKUP_CACHE.clear()
+
+
 # --- Pydantic model for extraction (internal, not persisted directly) ---
 
 class FieldCandidate(BaseModel):
@@ -341,7 +374,13 @@ SEARCH_SYSTEM_PROMPT = """\
 - 商品名・正式名称（title）
 - 商品名カナ読み（name_kana）— これのみモデル推定OK（読み変換のため）
 - メーカー / ブランド（brand）
-- 商品説明 1-3文（description）
+- 商品説明 1-3文（description）— **重要: 必ず自分の言葉で再構成して記述すること。**
+  収集した複数ソースの事実（用途・特徴・対象・成分など）をもとに、1〜3文の
+  オリジナルの説明文を**新たに作文**してください。商品ページの紹介文・キャッチ
+  コピー・説明文を**そのまま（逐語的に）転記・コピーすることは禁止**します
+  （著作権上の理由）。文の構成・語順・言い回しは原文と明確に変え、事実のみを
+  反映させてください。原文の特徴的なフレーズをそのまま流用しないこと。
+  description には URL を併記しなくて構いません（合成テキストのため）。
 - カテゴリ: 歯ブラシ / 歯間ブラシ / フロス / 洗口液 / 歯磨剤 / その他（category）
 - 適応・用途（indications）: 歯周病, 知覚過敏, インプラント周囲, 矯正中, 子供用, 高齢者, ドライマウス 等 — **商品ページに明記されている場合のみ**
 - JANコード / バーコード番号（barcode）
@@ -381,17 +420,65 @@ EXTRACTION_SYSTEM_PROMPT = """\
 5. indications のように複数値がある場合は、JSON配列文字列として value に格納（例: '["歯周病", "知覚過敏"]'）。
 6. image_url のように複数ある場合も同様に JSON配列文字列。
 7. confidence は 0.0〜1.0 でソースの信頼度を推定。URL無しの緩和フィールド候補は 0.6 以下にしてください。
+   **ただし `description` は例外。** description は検索エージェントが複数ソースの事実から
+   意図的に再構成した合成テキストであり、単一の URL を持たないのが正常です。URL が無いことを
+   理由に減点しないでください。description の confidence は、元になった事実の裏付けの強さで
+   評価してください（裏付けが十分なら 0.8 前後でも可）。source_url は空欄のままで構いません。
 8. raw_search_notes に検索ノートをそのままコピー。
 """
 
 
-def _create_search_agent(model: str):
+def _master_list_block(
+    categories: list[str] | None,
+    vendors: list[str] | None,
+) -> str:
+    """Build the per-store master-list injection appended to the search prompt.
+
+    Item-3 (Fukunaga 2026-05-29): instead of letting the model free-generate
+    brand/category — which then fails the client-side exact match against the
+    store's master spelling (歯磨剤 vs 歯磨き粉, サンスター株式会社 vs サンスター)
+    — we inject the store's actual category + vendor names and instruct the
+    model to pick the EXACT string from the list when one applies.
+
+    Returns "" when neither list is provided, so callers that don't pass lists
+    get the original prompt verbatim (no behaviour change for them).
+    """
+    cats = [c for c in (categories or []) if c and c.strip()]
+    vends = [v for v in (vendors or []) if v and v.strip()]
+    if not cats and not vends:
+        return ""
+    lines = [
+        "",
+        "## マスタ参照（重要）",
+        "以下はこの店舗に登録済みのマスタ一覧です。`category` と `brand` は、"
+        "**一覧に該当する項目があれば、リスト内の表記をそのまま（一字一句）使用**"
+        "してください。一覧の表記とウェブ上の表記が異なる場合（例: 「歯磨き粉」→"
+        "「歯磨剤」、「サンスター株式会社」→「サンスター」）も、必ず一覧側の表記に"
+        "合わせてください。該当が無い場合のみ、ウェブ上の名称を使用して構いません。",
+    ]
+    if cats:
+        lines.append("")
+        lines.append("### 利用可能なカテゴリ一覧:")
+        lines.append("[" + ", ".join(cats) + "]")
+    if vends:
+        lines.append("")
+        lines.append("### 利用可能な仕入先一覧:")
+        lines.append("[" + ", ".join(vends) + "]")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _create_search_agent(model: str, master_list_block: str = ""):
     """Construct the web-search agent for `model`.
 
     Tool kwargs are selected via _search_tool_for(model) and ModelSettings
     via _model_settings_for so each model's per-API quirks are honoured.
     Raises ValueError if the model can't do web search at all — caller
     should surface this as a per-model error rather than crashing the run.
+
+    ``master_list_block`` (item-3) is appended to the system prompt so the
+    agent can pick canonical category/vendor names from the store's master
+    list. Empty string → original prompt unchanged.
     """
     from agents import Agent
     tool = _search_tool_for(model)
@@ -400,9 +487,10 @@ def _create_search_agent(model: str):
             f"model '{model}' does not support web search "
             "(see MODEL_NO_WEB_SEARCH). Use it as an extraction model only."
         )
+    instructions = SEARCH_SYSTEM_PROMPT + master_list_block
     return Agent(
         name="Product Search Agent",
-        instructions=SEARCH_SYSTEM_PROMPT,
+        instructions=instructions,
         model=model,
         tools=[tool],
         model_settings=_model_settings_for(model, temperature=0.1),
@@ -425,28 +513,56 @@ async def run_product_lookup(
     title: str | None = None,
     model: str | None = None,
     extraction_model: str | None = None,
-    allow_fallback: bool = True,
+    allow_fallback: bool = False,
+    categories: list[str] | None = None,
+    vendors: list[str] | None = None,
 ) -> ProductLookupOutcome:
     """Run the two-agent pipeline for product data extraction.
 
     Returns a ProductLookupOutcome (result + per-step token/cost telemetry).
     Falls back to ``_mock_lookup`` when ``OPENAI_API_KEY`` is unset.
 
+    ``categories`` / ``vendors`` (item-3) are the store's master-list names.
+    When provided, they are injected into the search prompt so the agent picks
+    canonical category/brand spellings from the list rather than free-generating
+    web variants. Both default to None → original prompt, no behaviour change.
+
     ``model`` overrides ``SEARCH_MODEL`` (the web-search agent), and
     ``extraction_model`` overrides ``EXTRACTION_MODEL`` (the structured-output
     agent). Both default to their module-level constants — see the comments
     near the top of this file for the rationale.
 
-    When ``allow_fallback`` is True and the caller did not override ``model``,
-    a primary run that produces an unhelpful result (see ``_looks_unhelpful``)
-    is automatically retried with ``FALLBACK_SEARCH_MODEL``. The fallback's
-    candidates replace the primary's, and the cost breakdown carries both
-    steps so dev tooling can see the escalation happened. The compare arena
-    sets ``allow_fallback=False`` to keep each column comparing one model.
+    ``allow_fallback`` is **opt-in (default False)**. It used to default True,
+    which meant every weak primary result silently re-ran the *entire* search +
+    extraction on ``FALLBACK_SEARCH_MODEL`` (gpt-5-mini) — ~$0.03 and ~2 min
+    added to the call. Now a caller must explicitly ask for that long-tail
+    recall. When True and the caller did not override ``model``, an unhelpful
+    primary result (see ``_looks_unhelpful``) is retried with the fallback
+    model; its candidates replace the primary's and the cost breakdown carries
+    both steps. The compare arena passes False to keep each column single-model.
+
+    Identical-input lookups are served from a per-process cache
+    (``_LOOKUP_CACHE``); real results are cached, mock results are not.
     """
     if not _ai_enabled():
         logger.info("AI lookup running in MOCK mode (no OPENAI_API_KEY)")
         return _outcome_from_steps(_mock_lookup(jan=jan, title=title), [], is_mock=True)
+
+    # Build the master-list prompt block once; fold it into the cache key so a
+    # different store's lists don't collide with another store's cached result.
+    master_block = _master_list_block(categories, vendors)
+    cache_key = _cache_key(jan, title, model, extraction_model, allow_fallback) + (master_block,)
+    cached = _LOOKUP_CACHE.get(cache_key)
+    if cached is not None:
+        logger.info("AI lookup cache HIT for jan=%s title=%s", jan, title)
+        return cached
+
+    def _store(outcome: ProductLookupOutcome) -> ProductLookupOutcome:
+        if len(_LOOKUP_CACHE) >= _LOOKUP_CACHE_MAX:
+            # FIFO evict the oldest entry (dicts preserve insertion order).
+            _LOOKUP_CACHE.pop(next(iter(_LOOKUP_CACHE)))
+        _LOOKUP_CACHE[cache_key] = outcome
+        return outcome
 
     from agents import Runner  # lazy
 
@@ -461,7 +577,7 @@ async def run_product_lookup(
     query = "\n".join(parts) + "\nこの商品を検索して情報を収集してください。"
 
     async def _run_search(search_model: str, step_label: str) -> tuple[str, LookupStepUsage]:
-        agent = _create_search_agent(search_model)
+        agent = _create_search_agent(search_model, master_list_block=master_block)
         run_res = await Runner.run(agent, query)
         return run_res.final_output, _usage_from_run(run_res, search_model, step_label)
 
@@ -488,7 +604,7 @@ async def run_product_lookup(
         and _looks_unhelpful(primary_extraction)
     )
     if not should_fallback:
-        return _outcome_from_steps(primary_extraction, usages, is_mock=False)
+        return _store(_outcome_from_steps(primary_extraction, usages, is_mock=False))
 
     logger.info(
         "AI lookup: primary model %s returned unhelpful result for jan=%s title=%s; "
@@ -507,10 +623,10 @@ async def run_product_lookup(
         # Only adopt the fallback if it actually improved things — otherwise
         # keep the primary so dev tooling sees the original signal.
         winner = fb_result if not _looks_unhelpful(fb_result) else primary_extraction
-        return _outcome_from_steps(winner, usages, is_mock=False)
+        return _store(_outcome_from_steps(winner, usages, is_mock=False))
     except Exception as e:  # noqa: BLE001 — fallback must never crash the call
         logger.warning("Fallback model %s failed: %s", FALLBACK_SEARCH_MODEL, e)
-        return _outcome_from_steps(primary_extraction, usages, is_mock=False)
+        return _store(_outcome_from_steps(primary_extraction, usages, is_mock=False))
 
 
 # --- Mock fallback ------------------------------------------------------------

@@ -23,7 +23,22 @@
       "Bash(cd /c/Users/takano.ryoma/Downloads/sco/product-management/backend && sleep 3 && docker compose exec api python -m app.seed 2>&1)",
       "Bash(cd /c/Users/takano.ryoma/Downloads/sco/product-management/backend && docker compose exec db mysql -u appuser -papppass product_management -e \"\nSET FOREIGN_KEY_CHECKS=0;\nTRUNCATE TABLE product_tags;\nTRUNCATE TABLE product_images;\nTRUNCATE TABLE product_variants;\nTRUNCATE TABLE products;\nTRUNCATE TABLE tags;\nTRUNCATE TABLE categories;\nTRUNCATE TABLE vendors;\nTRUNCATE TABLE branches;\nTRUNCATE TABLE stores;\nSET FOREIGN_KEY_CHECKS=1;\n\" 2>&1)",
       "Bash(cd /c/Users/takano.ryoma/Downloads/sco/product-management/backend && sleep 2 && docker compose exec api python -m app.seed 2>&1)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "PowerShell($env:MOCK_AI=\"1\"; .\\\\.venv\\\\Scripts\\\\python.exe _tmp_e2e_test.py)",
+      "Bash(git checkout *)",
+      "Bash(git --no-pager diff --stat fix/search-accuracy-latency -- backend/)",
+      "Bash(git --no-pager diff --stat HEAD)",
+      "Bash(git --no-pager diff --cached --stat)",
+      "PowerShell($\\(Get-Location\\).Path)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe _tmp_item2_live.py)",
+      "Bash(git --no-pager diff --stat -- docs/audits/item1_test_report.md docs/audits/item2_test_report.md)",
+      "Bash(git --no-pager diff --stat fix/search-accuracy-latency -- backend/app/services/ai_agent.py)",
+      "Bash(command -v node)",
+      "Bash(node _tmp_match_test.mjs)",
+      "Bash(git add *)",
+      "Bash(git --no-pager diff --stat fix/description-generation -- backend/ frontend/pages/ProductCreate.jsx)",
+      "Bash(git --no-pager diff --stat fix/description-generation -- backend/app/services/ai_agent.py backend/app/routers/ai_suggestions.py frontend/pages/ProductCreate.jsx)",
+      "Bash(git --no-pager log --oneline main..HEAD)"
     ]
   }
 }

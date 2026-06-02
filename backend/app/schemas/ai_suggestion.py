@@ -10,6 +10,11 @@ from app.models.ai_session import AiSessionStatus
 class AiSuggestionRequest(BaseModel):
     jan: str | None = None
     title: str | None = None
+    # Opt-in escalation to FALLBACK_SEARCH_MODEL (gpt-5-mini) when the primary
+    # result looks unhelpful. Defaults False: the always-on fallback re-ran the
+    # whole search and added ~2min to every weak lookup. Callers that want the
+    # long-tail recall (and accept the latency) can set this True.
+    allow_fallback: bool = False
 
 
 class AiFieldOptionRead(BaseModel):

@@ -12,6 +12,8 @@ from sqlalchemy.orm import selectinload
 
 from app.deps import DB, StoreId
 from app.models.ai_session import AiSessionStatus, AiSuggestionFieldOption, AiSuggestionSession
+from app.models.category import Category
+from app.models.vendor import Vendor, VendorStatus
 from app.schemas.ai_suggestion import (
     AiDebugCandidate,
     AiDebugDropped,
@@ -59,6 +61,69 @@ router = APIRouter(prefix="/ai-suggestions", tags=["ai-suggestions"])
 STRICT_CITATION_FIELDS: frozenset[str] = frozenset(
     {"price", "weight", "image_url", "fluoride_ppm", "dimensions"}
 )
+
+
+def jan_verified_for(jan: str | None, source_url: str | None) -> bool:
+    """Wave-1 (no-fetch) JAN-presence check: True when the queried JAN appears
+    verbatim in the candidate's source URL.
+
+    Retailers (Matsukiyo / Welcia / Rakuten / Hands …) bake the JAN literal into
+    the URL path, so finding it there is near-conclusive evidence the page is
+    about *that exact* product. Manufacturer slug URLs won't match — handled by
+    the "drop only when something else verified" rule in `wrong_product_drop`.
+    """
+    return bool(jan and source_url and jan in source_url)
+
+
+def wrong_product_drop(jan: str | None, candidates) -> bool:
+    """Decide whether the wrong-product guard should fire for this result set.
+
+    The accuracy bug: a JAN search for an Ora2 product returns a validly-cited
+    GUM product. The fix is to drop candidates whose URL doesn't contain the
+    queried JAN — BUT only when we have positive evidence of the right product
+    elsewhere in the set. Otherwise we'd discard every manufacturer-official
+    candidate (Tier-1 slug URLs never contain the JAN), gutting recall.
+
+    Rule: the guard fires only on a JAN search where *at least one* candidate
+    is jan_verified. In that case the unverified candidates are the likely
+    wrong-product noise and get dropped. If zero candidates verify (e.g. only
+    manufacturer slugs were cited) we can't distinguish right from wrong cheaply,
+    so we keep everything and leave it to the human + the Wave-2 fetch verifier.
+
+    Title/name-only searches pass ``jan=None`` → returns False → nothing dropped.
+    """
+    if not jan:
+        return False
+    return any(jan_verified_for(jan, getattr(c, "source_url", None)) for c in candidates)
+
+
+async def _load_master_lists(db, store_id: int) -> tuple[list[str], list[str]]:
+    """Fetch the store's category names + active vendor names for prompt injection.
+
+    Item-3 (server-side mapping fix): these are passed to ``run_product_lookup``
+    so the search agent emits canonical master-list spellings. Vendor list is
+    limited to status=active (don't steer the model toward archived suppliers).
+    Capped at 200 each to keep the prompt bounded.
+    """
+    cat_rows = (
+        await db.execute(
+            select(Category.name)
+            .where(Category.store_id == store_id)
+            .order_by(Category.sort_order, Category.name)
+            .limit(200)
+        )
+    ).scalars().all()
+    vend_rows = (
+        await db.execute(
+            select(Vendor.company_name)
+            .where(Vendor.store_id == store_id, Vendor.status == VendorStatus.active)
+            .order_by(Vendor.company_name)
+            .limit(200)
+        )
+    ).scalars().all()
+    categories = [c for c in cat_rows if c and c.strip()]
+    vendors = [v for v in vend_rows if v and v.strip()]
+    return categories, vendors
 
 
 def _session_to_read(session: AiSuggestionSession) -> AiSuggestionRead:
@@ -113,9 +178,21 @@ async def create_ai_suggestion(body: AiSuggestionRequest, db: DB, store_id: Stor
     db.add(session)
     await db.flush()
 
+    # Item-3: inject the store's master lists so the agent emits canonical
+    # category/vendor spellings (server-side half of the mapping fix).
+    categories, vendors = await _load_master_lists(db, store_id)
+
     try:
-        outcome = await run_product_lookup(jan=jan, title=title)
+        outcome = await run_product_lookup(
+            jan=jan, title=title, allow_fallback=body.allow_fallback,
+            categories=categories, vendors=vendors,
+        )
         result = outcome.result
+
+        # Wrong-product guard: on a JAN search where at least one candidate's
+        # URL contains the queried JAN, the unverified candidates are likely a
+        # different product (the Ora2-search-returns-GUM bug) — drop them.
+        drop_unverified = wrong_product_drop(jan, result.candidates)
 
         # Persist candidates as field_options
         for i, candidate in enumerate(result.candidates):
@@ -124,6 +201,8 @@ async def create_ai_suggestion(body: AiSuggestionRequest, db: DB, store_id: Stor
             # are kept even without an inline citation — the search agent's
             # narrative as a whole is the source.
             if candidate.field_name in STRICT_CITATION_FIELDS and not candidate.source_url:
+                continue
+            if drop_unverified and not jan_verified_for(jan, candidate.source_url):
                 continue
             opt = AiSuggestionFieldOption(
                 session_id=session.id,
@@ -230,7 +309,9 @@ async def debug_ai_suggestion(body: AiSuggestionRequest):
     title = body.title
 
     try:
-        outcome = await run_product_lookup(jan=jan, title=title)
+        outcome = await run_product_lookup(
+            jan=jan, title=title, allow_fallback=body.allow_fallback,
+        )
         result = outcome.result
     except Exception as e:
         logger.error("AI debug failed: %s", e, exc_info=True)
@@ -246,6 +327,9 @@ async def debug_ai_suggestion(body: AiSuggestionRequest):
 
     kept: list[AiDebugCandidate] = []
     dropped: list[AiDebugDropped] = []
+    # Same wrong-product guard as the create path, surfaced here as drop reasons
+    # so /debug shows exactly what production would persist.
+    drop_unverified = wrong_product_drop(jan, result.candidates)
     for c in result.candidates:
         if c.field_name in STRICT_CITATION_FIELDS and not c.source_url:
             dropped.append(
@@ -262,7 +346,16 @@ async def debug_ai_suggestion(body: AiSuggestionRequest):
         # near-conclusive evidence the page is about that exact product.
         # Manufacturer slug URLs (jp.sunstar.com/oralcare/gum/product_054.html)
         # won't match — that's expected. See Wave 2 for fetch-based verifier.
-        verified = bool(jan and c.source_url and jan in c.source_url)
+        verified = jan_verified_for(jan, c.source_url)
+        if drop_unverified and not verified:
+            dropped.append(
+                AiDebugDropped(
+                    field_name=c.field_name,
+                    value=c.value,
+                    reason="JAN not present in source_url (wrong-product guard)",
+                )
+            )
+            continue
         kept.append(
             AiDebugCandidate(
                 field_name=c.field_name,
@@ -318,6 +411,7 @@ def _build_compare_result_from_lookup(
     raw_result = outcome.result
     kept: list[AiDebugCandidate] = []
     dropped: list[AiDebugDropped] = []
+    drop_unverified = wrong_product_drop(jan, raw_result.candidates)
     for c in raw_result.candidates:
         if c.field_name in STRICT_CITATION_FIELDS and not c.source_url:
             dropped.append(AiDebugDropped(
@@ -326,7 +420,14 @@ def _build_compare_result_from_lookup(
                 reason="missing source_url for strict-citation field",
             ))
             continue
-        verified = bool(jan and c.source_url and jan in c.source_url)
+        verified = jan_verified_for(jan, c.source_url)
+        if drop_unverified and not verified:
+            dropped.append(AiDebugDropped(
+                field_name=c.field_name,
+                value=c.value,
+                reason="JAN not present in source_url (wrong-product guard)",
+            ))
+            continue
         kept.append(AiDebugCandidate(
             field_name=c.field_name,
             value=c.value,

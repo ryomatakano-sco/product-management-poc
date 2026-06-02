@@ -28,6 +28,41 @@ window._PLX_DICT_EN = {
   "AIサマリー — 1日1回 朝6:00 更新": "AI Summary — refreshed daily at 06:00",
   "AIサマリーを生成中…": "Generating AI summary…",
 
+  // ─── Standalone short labels the user called out 2026-05-27 ───────
+  "クイック": "Quick",
+  "クイックフィルタ": "Quick filters",
+  "支払方法": "Payment method",
+  "詳細を見る →": "View details →",
+  "＋ 新しい商品を追加": "+ Add new product",
+  "＋ 発注書を作成": "+ Create purchase order",
+  "＋ 仕入先を追加": "+ Add vendor",
+  "＋ 店舗を追加": "+ Add branch",
+
+  // ─── JSX-segment fragments ─────────────────────────────────────────
+  // When JSX has  `<span>全 {total} 件の発注書</span>`  React passes the
+  // text either as one interpolated child or as two adjacent string
+  // children depending on the compiler. We add BOTH shapes so the
+  // auto-translator catches whichever React produces.
+  "全 ": "Total ",
+  " 件の商品が登録されています": " products registered",
+  " 件の発注書": " purchase orders",
+  " 社": " companies",
+  " 拠点": " branches",
+  "本日は ": "Today is ",
+  "。本院の商品管理サマリーをお届けします。": ". Here is your product management summary.",
+
+  // ─── Templates for the chip labels (PurchaseOrders / Inventory) ───
+  // Most of these already exist; adding the bare/standalone variants.
+  "在庫低下 (${kpis.lowStock})": "Low stock (${kpis.lowStock})",
+  "在庫切れ (${kpis.outOfStock})": "Out of stock (${kpis.outOfStock})",
+  "期限間近 (${kpis.expiring})": "Expiring soon (${kpis.expiring})",
+  "すべて (${kpis.total})": "All (${kpis.total})",
+  "送信済 (${kpis.sent})": "Sent (${kpis.sent})",
+  "一部入荷 (${kpis.partial})": "Partial (${kpis.partial})",
+  "入荷済 (${kpis.received})": "Received (${kpis.received})",
+  "キャンセル (${kpis.cancelled})": "Cancelled (${kpis.cancelled})",
+  "下書き (${kpis.draft})": "Draft (${kpis.draft})",
+
   // ─── Hints / explanations the auto-translator missed ───────────────
   "クリックでこの URL を開いて再発注できます": "Click to open this URL and reorder",
   "商品の特長・用途・サイズなどを記入します。": "Describe features, use case, size, etc.",  // dup-safe
