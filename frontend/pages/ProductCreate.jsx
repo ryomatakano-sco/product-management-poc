@@ -17,6 +17,53 @@ function _keepInteger(s) {
   return s.replace(/[^0-9]/g, "");
 }
 
+// --- Master-list matching ---------------------------------------------------
+// AI free-generates brand/category strings off web pages ("サンスター株式会社",
+// "歯磨き粉"); the store's master list stores a canonical spelling ("サンスター",
+// "歯磨剤"). A raw === silently fails on every variant, leaving the dropdown
+// empty. `_normMaster` canonicalises both sides so a normalised compare matches
+// the common variants without introducing fuzzy false-positives.
+//
+// Steps: NFKC (full-width → ASCII, combine) → lower-case → strip ALL whitespace
+// (incl. full-width 　) → strip common company suffixes/affixes → trim leftover
+// punctuation. Kept deliberately conservative: it only removes legal-entity
+// noise and spacing, never partial-matches distinct names.
+const _COMPANY_AFFIXES = [
+  // Japanese legal-entity forms, parenthesised or bare.
+  "株式会社", "(株)", "（株）", "㈱",
+  "有限会社", "(有)", "（有）", "㈲",
+  "合同会社", "合資会社", "合名会社",
+  "医療法人", "一般社団法人",
+  // Latin forms (after lower-casing + space-strip, so match lowercased/spaceless).
+  "co.,ltd.", "co.,ltd", "co.ltd.", "co.ltd", "co.,ltd.,",
+  "ltd.", "ltd", "inc.", "inc", "corp.", "corp", "k.k.", "kk",
+];
+function _normMaster(s) {
+  if (typeof s !== "string") return "";
+  let t = s.normalize("NFKC").toLowerCase();
+  // Strip every kind of whitespace, including the full-width space NFKC leaves.
+  t = t.replace(/[\s　]+/g, "");
+  // Remove company affixes wherever they appear (prefix or suffix).
+  for (const aff of _COMPANY_AFFIXES) {
+    t = t.split(aff).join("");
+  }
+  // Drop leftover wrapping punctuation/brackets that affixes were inside of.
+  t = t.replace(/[()（）「」【】・,，.。]/g, "");
+  return t.trim();
+}
+
+// Find the master-list row whose `field` matches `aiValue` after normalisation.
+// Tries exact === first (fast path, preserves prior behaviour), then the
+// normalised compare. Returns the row or undefined — never a partial guess.
+function _matchMaster(items, field, aiValue) {
+  if (!Array.isArray(items) || !aiValue) return undefined;
+  const exact = items.find((x) => x[field] === aiValue);
+  if (exact) return exact;
+  const target = _normMaster(aiValue);
+  if (!target) return undefined;
+  return items.find((x) => _normMaster(x[field]) === target);
+}
+
 function ProductCreate({ editId }) {
   // When editId is set, we PATCH an existing product instead of POSTing a new
   // one. The form prefills from a GET of the existing product. Variants/tags
@@ -273,11 +320,13 @@ function ProductCreate({ editId }) {
     if (picks.title       && (!onlyFillEmpty || !name))         setName(picks.title.value);
     if (picks.name_kana   && (!onlyFillEmpty || !nameKana))     setNameKana(picks.name_kana.value);
     if (picks.brand && vendorsQ.data?.items && (!onlyFillEmpty || !vendorId)) {
-      const v = vendorsQ.data.items.find((x) => x.company_name === picks.brand.value);
+      // Normalised compare: tolerates 「サンスター株式会社」vs「サンスター」,
+      // full-width spaces, Co.,Ltd suffixes, etc. (see _matchMaster).
+      const v = _matchMaster(vendorsQ.data.items, "company_name", picks.brand.value);
       if (v) setVendorId(String(v.id));
     }
     if (picks.category && categoriesQ.data?.items && (!onlyFillEmpty || !categoryId)) {
-      const c = categoriesQ.data.items.find((x) => x.name === picks.category.value);
+      const c = _matchMaster(categoriesQ.data.items, "name", picks.category.value);
       if (c) setCategoryId(String(c.id));
     }
     if (picks.price && (!onlyFillEmpty || !variant.price)) {
