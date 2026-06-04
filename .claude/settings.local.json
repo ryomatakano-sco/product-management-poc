@@ -38,7 +38,9 @@
       "Bash(git add *)",
       "Bash(git --no-pager diff --stat fix/description-generation -- backend/ frontend/pages/ProductCreate.jsx)",
       "Bash(git --no-pager diff --stat fix/description-generation -- backend/app/services/ai_agent.py backend/app/routers/ai_suggestions.py frontend/pages/ProductCreate.jsx)",
-      "Bash(git --no-pager log --oneline main..HEAD)"
+      "Bash(git --no-pager log --oneline main..HEAD)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ]
   }
 }
