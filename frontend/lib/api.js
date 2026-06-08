@@ -83,6 +83,15 @@ const api = {
     request(`/ai-suggestions`, { method: "POST", body: JSON.stringify(body) }),
   getAiSuggestion: (id) => request(`/ai-suggestions/${id}`),
 
+  // --- scan relay (desktop⟷phone companion scanner, Option 2) ---
+  // Desktop opens a pairing session; phone POSTs the scanned code; desktop polls.
+  createScanSession: () => request(`/scan-sessions`, { method: "POST" }),
+  getScanSession:    (token) => request(`/scan-sessions/${encodeURIComponent(token)}`),
+  submitScanSession: (token, code) =>
+    request(`/scan-sessions/${encodeURIComponent(token)}/scan`, {
+      method: "POST", body: JSON.stringify({ code }),
+    }),
+
   // --- dashboard (Yoshioka 2026-05-11) ---
   getDashboardSummary:        () => request(`/dashboard/summary`),
   regenerateDashboardSummary: () => request(`/dashboard/summary/regenerate`, { method: "POST" }),

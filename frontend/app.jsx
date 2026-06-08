@@ -9,6 +9,14 @@ function App() {
   usePlxTheme();
   usePlxLocale();
   const route = useHashRoute();
+
+  // Standalone phone scan view (Option 2). Render it bare — no sidebar, no
+  // command palette / dev panel — so a phone opening the pairing QR sees only
+  // the camera. Early-return before the admin chrome is composed.
+  if (route.name === "scan") {
+    return <ScanReceiver token={route.query.token} />;
+  }
+
   let page;
 
   // The three existing product pages keep their `detail` / `create` / `list`

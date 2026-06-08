@@ -50,6 +50,10 @@ function parseHash() {
     }
   }
   if (!h || h === "/" || h === "/dashboard") return { name: "dashboard", query };
+  // Standalone phone scan view (Option 2 companion scanner). Rendered without
+  // the admin shell — `#/scan?token=...` is opened on a phone via the desktop's
+  // pairing QR.
+  if (h === "/scan") return { name: "scan", query };
   if (h === "/products") return { name: "list", query };
   if (h === "/products/new") return { name: "create", query };
   const edit = h.match(/^\/products\/(\d+)\/edit$/);

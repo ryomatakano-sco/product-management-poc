@@ -930,6 +930,8 @@ function AiAssistModal({ onClose, onApply, seed }) {
   const [session, setSession] = React.useState(null);
   const [error, setError] = React.useState(null);
   const [scanOpen, setScanOpen] = React.useState(false);
+  // Option 2: desktop⟷phone pairing overlay (shows a QR the phone scans).
+  const [pairOpen, setPairOpen] = React.useState(false);
 
   // Seed-driven auto-lookup. Fires once on first mount if the modal was
   // opened with a seed value (from the "No results? Try AI" CTA or the
@@ -954,9 +956,22 @@ function AiAssistModal({ onClose, onApply, seed }) {
   const onScanDetected = (code) => {
     setScanOpen(false);
     setMode("jan");
-    setJan(code);
+    // The scanner only latches a valid JAN (see `validate` below), so `code`
+    // is already a JAN — normalize it (full-width → ASCII) before showing/using.
+    const clean = (window.plxCleanJan && window.plxCleanJan(code)) || code;
+    setJan(clean);
     // Fire lookup on next microtask so the input visibly updates first.
-    Promise.resolve().then(() => lookup({ janOverride: code }));
+    Promise.resolve().then(() => lookup({ janOverride: clean }));
+  };
+
+  // Called when the phone (via the pairing relay) sends back a scanned JAN.
+  // Same outcome as a local scan: close the overlay, show the JAN, run lookup.
+  const onPhoneJan = (jan) => {
+    setPairOpen(false);
+    setMode("jan");
+    const clean = (window.plxCleanJan && window.plxCleanJan(jan)) || jan;
+    setJan(clean);
+    Promise.resolve().then(() => lookup({ janOverride: clean }));
   };
 
   const lookup = async (opts) => {
@@ -1011,7 +1026,11 @@ function AiAssistModal({ onClose, onApply, seed }) {
         <BarcodeScanner
           onDetected={onScanDetected}
           onClose={() => setScanOpen(false)}
+          validate={(c) => (window.plxIsValidJan ? window.plxIsValidJan(c) : true)}
         />
+      )}
+      {pairOpen && (
+        <PhonePairModal onClose={() => setPairOpen(false)} onJan={onPhoneJan} />
       )}
       <div onClick={(e) => e.stopPropagation()} style={{
         background: T.PLX_CARD_BG, borderRadius: 18, width: 680, maxHeight: "86%",
@@ -1106,6 +1125,24 @@ function AiAssistModal({ onClose, onApply, seed }) {
                     }} />
                 )}
               </div>
+
+              {/* Option 2: scan with a phone. Opens a pairing QR; the phone
+                  scans the product barcode and the JAN flows back here. Shown
+                  only in JAN mode (it's a barcode shortcut). */}
+              {mode === "jan" && (
+                <button
+                  onClick={() => setPairOpen(true)}
+                  style={{
+                    width: "100%", height: 40, borderRadius: 10, marginBottom: 4,
+                    background: "transparent", color: PLX_GREEN,
+                    border: `1.5px solid ${PLX_GREEN_LIGHT}`, cursor: "pointer",
+                    fontWeight: 700, fontSize: 12.5,
+                    display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  }}
+                >
+                  📱 スマホでスキャン
+                </button>
+              )}
               <div style={{
                 fontSize: 11, color: PLX_MUTED, marginBottom: 18, paddingLeft: 4,
                 display: "flex", alignItems: "center", gap: 6,
@@ -1285,21 +1322,178 @@ function ConfBar({ val }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PhonePairModal — desktop⟷phone companion scanner (Option 2).
+//
+// Desktop opens a relay "pairing session" and renders its token as a QR code.
+// The user scans that QR with their phone, which opens `/app/#/scan?token=…`
+// (ScanReceiver). The phone reads the product's JAN barcode and POSTs it to the
+// relay; this modal polls the relay and, on arrival, hands the JAN to the
+// existing JAN lookup via `onJan`. No image leaves either device — only the JAN.
+//
+// NOTE: the relay is in-memory + tokenized (see backend services/scan_relay.py).
+// This is a PoC companion path; it is a meaningful architecture addition that
+// should be confirmed with Fukunaga before integration/push.
+// ─────────────────────────────────────────────────────────────────────────────
+function PhonePairModal({ onClose, onJan }) {
+  const [token, setToken] = React.useState(null);
+  const [status, setStatus] = React.useState("creating"); // creating | waiting | done | expired | error
+  const [error, setError] = React.useState(null);
+  const qrBoxRef = React.useRef(null);
+  const onJanRef = React.useRef(onJan);
+  onJanRef.current = onJan;
+
+  // The URL the phone opens. Same origin as the desktop app (served at /app/),
+  // so no CORS and no extra config — the phone just needs network access to
+  // this host (same Wi-Fi / LAN in a clinic).
+  const phoneUrl = token
+    ? `${window.location.origin}/app/#/scan?token=${encodeURIComponent(token)}`
+    : "";
+
+  // 1) Create the pairing session on mount.
+  React.useEffect(() => {
+    let alive = true;
+    api.createScanSession()
+      .then((res) => { if (alive) { setToken(res.token); setStatus("waiting"); } })
+      .catch((e) => { if (alive) { setError(e.body?.detail || e.message); setStatus("error"); } });
+    return () => { alive = false; };
+  }, []);
+
+  // 2) Render the QR once we have a token and the QR lib is present.
+  React.useEffect(() => {
+    if (!token || !qrBoxRef.current) return;
+    qrBoxRef.current.innerHTML = "";
+    if (typeof window.QRCode === "undefined") {
+      // Lib failed to load — fall back to showing the raw URL so the user can
+      // still type it into the phone manually.
+      setError("QRコードの生成ライブラリを読み込めませんでした。下のURLをスマホで開いてください。");
+      return;
+    }
+    try {
+      new window.QRCode(qrBoxRef.current, {
+        text: phoneUrl, width: 196, height: 196,
+        correctLevel: window.QRCode.CorrectLevel ? window.QRCode.CorrectLevel.M : undefined,
+      });
+    } catch (e) {
+      setError("QRコードの生成に失敗しました。下のURLをスマホで開いてください。");
+    }
+  }, [token, phoneUrl]);
+
+  // 3) Poll the relay until the phone scans (or the token expires).
+  React.useEffect(() => {
+    if (status !== "waiting" || !token) return;
+    let alive = true;
+    const id = setInterval(async () => {
+      try {
+        const s = await api.getScanSession(token);
+        if (!alive) return;
+        if (s.status === "done" && s.jan) {
+          clearInterval(id);
+          setStatus("done");
+          onJanRef.current(s.jan);
+        } else if (s.status === "expired") {
+          clearInterval(id);
+          setStatus("expired");
+        }
+      } catch (e) { /* transient poll error — keep trying */ }
+    }, 1500);
+    return () => { alive = false; clearInterval(id); };
+  }, [status, token]);
+
+  return (
+    <div onClick={(e) => e.stopPropagation()} style={{
+      position: "fixed", inset: 0, background: "rgba(17,24,39,0.85)",
+      zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+    }}>
+      <div style={{
+        background: T.PLX_CARD_BG, borderRadius: 16, padding: 20, maxWidth: 380, width: "100%",
+        boxShadow: "0 24px 60px rgba(0,0,0,0.5)", textAlign: "center",
+      }}>
+        <div style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12,
+        }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: PLX_TEXT }}>📱 スマホでスキャン</div>
+          <button onClick={onClose} style={{
+            background: "none", border: "none", cursor: "pointer",
+            fontSize: 20, color: PLX_MUTED, padding: 4, lineHeight: 1,
+          }}>×</button>
+        </div>
+
+        {status === "creating" && (
+          <div style={{ padding: "30px 0", fontSize: 13, color: PLX_MUTED }}>ペアリングを準備中…</div>
+        )}
+
+        {(status === "waiting" || status === "done") && (
+          <>
+            <div style={{ fontSize: 12, color: PLX_MUTED, marginBottom: 14, lineHeight: 1.6 }}>
+              スマホのカメラで下のQRコードを読み取り、商品のバーコードをスキャンしてください。
+            </div>
+            <div ref={qrBoxRef} style={{
+              display: "inline-block", padding: 10, background: "#fff", borderRadius: 12,
+              minWidth: 196, minHeight: 196,
+            }} />
+            {phoneUrl && (
+              <div style={{
+                marginTop: 12, fontSize: 10.5, color: PLX_SUBTLE, wordBreak: "break-all",
+                fontFamily: "ui-monospace,SFMono-Regular,monospace",
+              }}>{phoneUrl}</div>
+            )}
+            <div style={{ marginTop: 12, fontSize: 12, color: PLX_GREEN, fontWeight: 700 }}>
+              {status === "done" ? "✓ 読み取りました" : "スマホの読み取りを待っています…"}
+            </div>
+          </>
+        )}
+
+        {status === "expired" && (
+          <div style={{ padding: "20px 0" }}>
+            <div style={{ fontSize: 13, color: PLX_WARN, fontWeight: 700, marginBottom: 10 }}>
+              ペアリングの有効期限が切れました
+            </div>
+            <button onClick={onClose} style={{
+              height: 38, padding: "0 18px", borderRadius: 9999, background: PLX_GREEN,
+              color: "#fff", border: "none", fontWeight: 700, fontSize: 12, cursor: "pointer",
+            }}>閉じる</button>
+          </div>
+        )}
+
+        {(status === "error" || error) && status !== "expired" && (
+          <div style={{
+            marginTop: 12, background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 10,
+            padding: "10px 12px", fontSize: 11.5, color: "#991B1B", lineHeight: 1.6,
+          }}>
+            {error || "ペアリングに失敗しました。"}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Barcode scanner — camera-based JAN reader for the AI Assist modal.
 // Uses html5-qrcode from CDN (see index.html). Lazy: only this component
 // touches `Html5Qrcode`, so other pages never load the camera stack.
 // ─────────────────────────────────────────────────────────────────────────────
-function BarcodeScanner({ onDetected, onClose }) {
+function BarcodeScanner({ onDetected, onClose, validate, onReject }) {
   const containerId = "plx-barcode-reader";
   const [error, setError] = React.useState(null);
   const [starting, setStarting] = React.useState(true);
+  // Set when a decoded code is rejected by `validate` (e.g. a QR, not a JAN),
+  // so we can nudge the user to point at the product's JAN barcode instead.
+  const [sawNonJan, setSawNonJan] = React.useState(false);
   // running flag lives in a ref so both onSuccess and the cleanup return
   // see a single shared "has the camera actually started?" state without
   // re-triggering the effect.
   const stateRef = React.useRef({ scanner: null, running: false, detected: false });
-  // Keep onDetected fresh without re-running the effect.
+  // Keep callbacks fresh without re-running the effect.
   const onDetectedRef = React.useRef(onDetected);
   onDetectedRef.current = onDetected;
+  // `validate` lets the caller accept only certain codes (e.g. a valid JAN).
+  // When it returns false the code is ignored and the camera keeps scanning —
+  // so a QR / Code-128 / bad-check-digit read never latches the scanner.
+  const validateRef = React.useRef(validate);
+  validateRef.current = validate;
+  const onRejectRef = React.useRef(onReject);
+  onRejectRef.current = onReject;
 
   React.useEffect(() => {
     if (typeof window.Html5Qrcode === "undefined") {
@@ -1339,11 +1533,22 @@ function BarcodeScanner({ onDetected, onClose }) {
       // The parent's onScanDetected setState may unmount us, which then runs
       // cleanup() below; the cleanup is what actually stops the scanner.
       if (stateRef.current.detected) return;
+      const code = String(decoded);
+      // Gate on the caller's validator. A non-JAN read (QR, Code-128, or a
+      // mistracked EAN with a bad check digit) is ignored so the camera keeps
+      // scanning until a real JAN appears. Only a valid code latches + fires.
+      const ok = validateRef.current ? !!validateRef.current(code) : true;
+      if (!ok) {
+        setSawNonJan(true);
+        if (onRejectRef.current) {
+          try { onRejectRef.current(code); } catch (e) {/* hint-only */}
+        }
+        return;
+      }
       stateRef.current.detected = true;
       // Hand the code to the parent in a microtask so React's batched
       // setState in the parent doesn't race with whatever Html5Qrcode is
       // doing internally on the current frame.
-      const code = String(decoded);
       Promise.resolve().then(() => {
         try { onDetectedRef.current(code); }
         catch (e) { console.error("onDetected threw:", e); }
@@ -1431,7 +1636,9 @@ function BarcodeScanner({ onDetected, onClose }) {
             }}>
               {starting
                 ? "カメラを起動しています…"
-                : "バーコードを枠内に合わせると自動で読み取ります"}
+                : sawNonJan
+                  ? "JAN（商品バーコード）を枠内に合わせてください"
+                  : "バーコードを枠内に合わせると自動で読み取ります"}
             </div>
           </>
         )}
@@ -1602,3 +1809,6 @@ function ConfirmRow({ label, b, a, changed, showBefore }) {
 }
 
 window.ProductCreate = ProductCreate;
+// Exported so the standalone phone scan view (pages/ScanReceiver.jsx) can reuse
+// the exact same camera component without duplicating the html5-qrcode plumbing.
+window.BarcodeScanner = BarcodeScanner;
