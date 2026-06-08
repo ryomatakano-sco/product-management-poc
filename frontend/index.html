@@ -98,6 +98,13 @@
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" crossorigin></script>
 
   <!--
+    QR code *generator* (desktop⟷phone companion scanner, Option 2). The
+    desktop renders a pairing URL as a QR for the phone to open. Distinct from
+    html5-qrcode above, which only *reads* codes. Exposes window.QRCode.
+  -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin></script>
+
+  <!--
     Load order matters: each module attaches its exports onto `window`,
     later files read from `window`. No build step, no bundler.
   -->
@@ -113,6 +120,9 @@
   <script type="text/babel" data-presets="env,react" src="./lib/i18n_strings.js"></script>
   <script type="text/babel" data-presets="env,react" src="./lib/i18n_autotr.js"></script>
   <script type="text/babel" data-presets="env,react" src="./lib/api.js"></script>
+  <!-- Client-side JAN validation (mirror of backend services/jan.py). Loaded
+       before the scanner so it can gate which codes feed the lookup. -->
+  <script type="text/babel" data-presets="env,react" src="./lib/jan.js"></script>
   <script type="text/babel" data-presets="env,react" src="./lib/hooks.js"></script>
   <script type="text/babel" data-presets="env,react" src="./lib/recent_searches.js"></script>
   <script type="text/babel" data-presets="env,react" src="./components/Atoms.jsx"></script>
@@ -128,6 +138,9 @@
   <script type="text/babel" data-presets="env,react" src="./pages/ProductList.jsx"></script>
   <script type="text/babel" data-presets="env,react" src="./pages/ProductDetail.jsx"></script>
   <script type="text/babel" data-presets="env,react" src="./pages/ProductCreate.jsx"></script>
+  <!-- Phone scan page (Option 2). Loads AFTER ProductCreate so it can reuse
+       window.BarcodeScanner. -->
+  <script type="text/babel" data-presets="env,react" src="./pages/ScanReceiver.jsx"></script>
   <script type="text/babel" data-presets="env,react" src="./pages/UnderConstruction.jsx"></script>
 
   <!-- 8 new pages added 2026-05-12 for the full 12-page sidebar -->

@@ -6,6 +6,13 @@
 .env.*.local
 !.env.example
 
+# Local dev TLS certs (self-signed, for the phone-camera HTTPS path). The
+# private key must never be committed — regenerate locally via gen-dev-cert.
+backend/.certs/
+*.key
+*.crt
+*.pem
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Local-only Claude context — not for the public repo. Holds internal
 # trade-off notes + conversation TL;DR that don't belong on GitHub.
