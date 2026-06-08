@@ -1336,24 +1336,32 @@ function ConfBar({ val }) {
 // ─────────────────────────────────────────────────────────────────────────────
 function PhonePairModal({ onClose, onJan }) {
   const [token, setToken] = React.useState(null);
+  const [phoneUrl, setPhoneUrl] = React.useState("");
   const [status, setStatus] = React.useState("creating"); // creating | waiting | done | expired | error
   const [error, setError] = React.useState(null);
   const qrBoxRef = React.useRef(null);
   const onJanRef = React.useRef(onJan);
   onJanRef.current = onJan;
 
-  // The URL the phone opens. Same origin as the desktop app (served at /app/),
-  // so no CORS and no extra config — the phone just needs network access to
-  // this host (same Wi-Fi / LAN in a clinic).
-  const phoneUrl = token
-    ? `${window.location.origin}/app/#/scan?token=${encodeURIComponent(token)}`
-    : "";
+  // Warn when the desktop itself is on localhost — the phone needs a LAN URL.
+  // The backend resolves its LAN IP into `phone_url`; this is just a heads-up
+  // if that resolution failed and we had to fall back to the desktop origin.
+  const onLocalhost = /^(localhost|127\.|\[::1\])/.test(window.location.hostname);
 
-  // 1) Create the pairing session on mount.
+  // 1) Create the pairing session on mount. The backend returns a phone_url
+  //    built from its LAN IP so the QR works across devices (not localhost).
   React.useEffect(() => {
     let alive = true;
     api.createScanSession()
-      .then((res) => { if (alive) { setToken(res.token); setStatus("waiting"); } })
+      .then((res) => {
+        if (!alive) return;
+        setToken(res.token);
+        // Prefer the server-provided LAN URL; fall back to the desktop origin.
+        const url = res.phone_url
+          || `${window.location.origin}/app/#/scan?token=${encodeURIComponent(res.token)}`;
+        setPhoneUrl(url);
+        setStatus("waiting");
+      })
       .catch((e) => { if (alive) { setError(e.body?.detail || e.message); setStatus("error"); } });
     return () => { alive = false; };
   }, []);
@@ -1436,6 +1444,16 @@ function PhonePairModal({ onClose, onJan }) {
                 marginTop: 12, fontSize: 10.5, color: PLX_SUBTLE, wordBreak: "break-all",
                 fontFamily: "ui-monospace,SFMono-Regular,monospace",
               }}>{phoneUrl}</div>
+            )}
+            {/^https?:\/\/(localhost|127\.|\[::1\])/.test(phoneUrl) && (
+              <div style={{
+                marginTop: 10, background: PLX_WARN_BG, borderRadius: 8,
+                padding: "8px 10px", fontSize: 10.5, color: PLX_WARN, lineHeight: 1.6,
+              }}>
+                このQRはこのPC（localhost）を指しています。スマホからは
+                同じWi‑Fiで <b>http://（このPCのIP）:8000/app/</b> を開いてから
+                もう一度お試しください。
+              </div>
             )}
             <div style={{ marginTop: 12, fontSize: 12, color: PLX_GREEN, fontWeight: 700 }}>
               {status === "done" ? "✓ 読み取りました" : "スマホの読み取りを待っています…"}

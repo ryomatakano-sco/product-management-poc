@@ -15,6 +15,13 @@ function ScanReceiver({ token }) {
   const [manual, setManual] = React.useState("");
   const busyRef = React.useRef(false);
 
+  // Mobile browsers block getUserMedia outside a secure context. Over plain
+  // http on a LAN IP the camera will never start, so don't even try — show a
+  // clear note and steer to manual entry (which works fine over http).
+  const cameraAllowed =
+    window.isSecureContext ||
+    /^(localhost|127\.|\[::1\])/.test(window.location.hostname);
+
   const submit = React.useCallback(async (rawCode) => {
     if (busyRef.current) return;
     const clean = (window.plxCleanJan && window.plxCleanJan(rawCode)) || rawCode;
@@ -98,7 +105,19 @@ function ScanReceiver({ token }) {
           商品のJANバーコードをカメラの枠内に合わせてください
         </div>
 
-        {phase === "scanning" && typeof window.BarcodeScanner !== "undefined" && (
+        {phase === "scanning" && !cameraAllowed && (
+          <div style={{
+            background: "#3a2a12", border: "1px solid #b45309", borderRadius: 10,
+            padding: "12px 14px", fontSize: 12.5, color: "#FCD34D", lineHeight: 1.7,
+          }}>
+            📷 カメラを使うには <b>HTTPS</b> 接続が必要です（スマホのブラウザの仕様）。
+            いまは <b>http</b> で開いているため、カメラは起動できません。
+            下の「手入力」でJANコードを入力するか、PCをHTTPSで公開してから
+            もう一度お試しください。
+          </div>
+        )}
+
+        {phase === "scanning" && cameraAllowed && typeof window.BarcodeScanner !== "undefined" && (
           // Reuse the exact camera component from the desktop modal. Only a
           // valid JAN latches (validate); non-JAN reads are ignored.
           <div style={{ position: "relative", height: 320 }}>
@@ -110,7 +129,7 @@ function ScanReceiver({ token }) {
           </div>
         )}
 
-        {phase === "scanning" && typeof window.BarcodeScanner === "undefined" && (
+        {phase === "scanning" && cameraAllowed && typeof window.BarcodeScanner === "undefined" && (
           <div style={{
             background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 10,
             padding: "12px 14px", fontSize: 12, color: "#991B1B", lineHeight: 1.6,

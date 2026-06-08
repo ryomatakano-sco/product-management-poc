@@ -10,6 +10,14 @@ class ScanSessionCreated(BaseModel):
 
     token: str
     expires_in_seconds: int = Field(..., description="TTL of the pairing token")
+    phone_url: str | None = Field(
+        None,
+        description=(
+            "Full URL the phone should open, built from the server's LAN IP so "
+            "the pairing QR works across devices (not localhost). None if the "
+            "LAN IP couldn't be determined — desktop falls back to its own origin."
+        ),
+    )
 
 
 class ScanSessionStatus(BaseModel):

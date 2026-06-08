@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from app.schemas.scan_session import (
     ScanSessionCreated,
@@ -32,12 +32,34 @@ router = APIRouter(prefix="/scan-sessions", tags=["scan-relay"])
 
 
 @router.post("", response_model=ScanSessionCreated, status_code=201)
-async def create_scan_session() -> ScanSessionCreated:
-    """Desktop opens a pairing session. Returns an unguessable, short-lived token."""
+async def create_scan_session(request: Request) -> ScanSessionCreated:
+    """Desktop opens a pairing session. Returns an unguessable, short-lived token.
+
+    Also returns ``phone_url`` built from the server's LAN IP + the port the
+    request came in on, so the pairing QR sends the phone to the PC's network
+    address (not ``localhost``, which on the phone is the phone itself). If the
+    desktop opened the app via the LAN IP already, that host is used as-is.
+    """
     sess = scan_relay.create_session()
+    phone_url = None
+    # Port the desktop reached us on (Host header), so the QR keeps the port.
+    port = request.url.port
+    host = request.url.hostname or ""
+    scheme = request.url.scheme
+    base_host = host
+    # If the desktop is on localhost/127.x, swap in the detected LAN IP so the
+    # phone can resolve it. Otherwise keep whatever host the desktop used.
+    if host in ("localhost", "127.0.0.1", "::1", ""):
+        ip = scan_relay.lan_ip()
+        if ip:
+            base_host = ip
+    if base_host:
+        netloc = f"{base_host}:{port}" if port else base_host
+        phone_url = f"{scheme}://{netloc}/app/#/scan?token={sess.token}"
     return ScanSessionCreated(
         token=sess.token,
         expires_in_seconds=scan_relay.SESSION_TTL_SECONDS,
+        phone_url=phone_url,
     )
 
 

@@ -26,6 +26,7 @@ endpoint enforce the exact same GS1 rules.
 from __future__ import annotations
 
 import secrets
+import socket
 import time
 from dataclasses import dataclass, field
 from threading import Lock
@@ -124,6 +125,29 @@ def submit_scan(token: str, raw_code: str) -> _Session:
         sess.status = "done"
         sess.scanned_at = _now()
         return sess
+
+
+def lan_ip() -> str | None:
+    """Best-effort primary LAN IPv4 of this host.
+
+    Used so the pairing QR points the phone at the PC's network address
+    (e.g. 192.168.0.164) rather than ``localhost`` — which on the phone would
+    resolve to the phone itself. Opens a UDP socket to a public address (no
+    packet is actually sent) and reads the local end the OS picked. Returns
+    None if it can't be determined (caller falls back to the request host).
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        return ip if ip and not ip.startswith("127.") else None
+    except Exception:
+        return None
+    finally:
+        try:
+            s.close()
+        except Exception:
+            pass
 
 
 def _reset_for_tests() -> None:

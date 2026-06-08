@@ -48,6 +48,15 @@ A camera barcode scan path where the phone scans and the JAN flows to the deskto
 
 **TODO / not done:** physical camera capture + on-device decode (not headless-testable — manual steps provided); HTTPS for the phone camera path in Nafis's environment; optional native `BarcodeDetector` fast-path; **Fukunaga alignment before push** (Option 2 is an architecture addition).
 
+## Connectivity fixes (2026-06-08, after first phone test failed)
+
+First phone test failed: the phone couldn't use the app at all. Root cause + fixes:
+- **Server bound to localhost.** `scripts/dev.bat` ran uvicorn `--host 127.0.0.1`, so the PC was the only client that could connect (confirmed: `netstat` showed `127.0.0.1:8000` LISTENING). **Fix:** bind `--host 0.0.0.0` so a phone on the same Wi-Fi can reach `http://<PC-IP>:8000` (this PC: `192.168.0.164`). If the phone still can't connect, allow Python through Windows Firewall (Private networks).
+- **QR pointed at localhost.** The QR was built from `window.location.origin`; if the desktop opened the app via `localhost`, the QR sent the phone to *itself*. **Fix:** the backend now resolves its LAN IP (`scan_relay.lan_ip()`) and returns a `phone_url` (`routers/scan_sessions.py` create), which the desktop QR uses; a localhost fallback shows a visible warning to open the app via the PC's IP.
+- **Phone camera blocked over http.** Mobile browsers block `getUserMedia` outside a secure context, so over plain `http://<LAN-IP>` the camera never starts. **Fix:** `ScanReceiver.jsx` detects the insecure context and shows a clear "HTTPS required" note instead of a confusing permission error, and steers the user to **manual JAN entry, which works over http**. For the camera on the phone, serve the app over **HTTPS** (e.g. a tunnel or TLS in front of uvicorn).
+
+Net: the phone can now reach the app and complete the flow via manual entry over http immediately; the phone **camera** still requires HTTPS.
+
 ## CURRENT STATE (one line)
 Option 2 desktop⟷phone relay scanner is built and automated-tested (logic + HTTP + JSX + JAN validation); camera capture is browser-only (manual steps given); unpushed and pending Fukunaga sign-off.
 
