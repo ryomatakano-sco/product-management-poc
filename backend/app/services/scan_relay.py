@@ -40,15 +40,26 @@ SESSION_TTL_SECONDS = 300  # 5 minutes — long enough to pick up a phone, short
 _MAX_SESSIONS = 500
 
 
+# How long (s) to suppress an identical JAN re-submitted back-to-back, so the
+# camera holding on one barcode for a moment doesn't enqueue it many times.
+_DUP_WINDOW_SECONDS = 3.0
+
+
+@dataclass
+class _ScanItem:
+    seq: int                 # 1-based monotonically increasing per session
+    jan: str
+    scanned_at: float
+
+
 @dataclass
 class _Session:
     token: str
     created_at: float
     expires_at: float
-    status: str = "pending"          # pending | done
-    jan: str | None = None
     store_id: int | None = None      # informational only; desktop drives the store
-    scanned_at: float | None = field(default=None)
+    items: list = field(default_factory=list)   # list[_ScanItem], scan history
+    _seq: int = 0                    # last assigned seq
 
 
 _SESSIONS: dict[str, _Session] = {}
@@ -87,10 +98,22 @@ def create_session(store_id: int | None = None) -> _Session:
 
 
 def get_session(token: str) -> _Session | None:
-    """Return the session if it exists and hasn't expired, else None."""
+    """Return the session if it exists and hasn't expired, else None.
+
+    Polling counts as activity: refresh the TTL (sliding window) so an open
+    desktop session panel keeps the pairing alive while it's in use.
+    """
     with _LOCK:
         _sweep_locked()
-        return _SESSIONS.get(token)
+        sess = _SESSIONS.get(token)
+        if sess is not None:
+            sess.expires_at = _now() + SESSION_TTL_SECONDS
+        return sess
+
+
+def items_since(sess: _Session, since: int) -> list:
+    """Scan items with seq strictly greater than ``since`` (the poll cursor)."""
+    return [it for it in sess.items if it.seq > since]
 
 
 class ScanRelayError(Exception):
@@ -102,12 +125,17 @@ class ScanRelayError(Exception):
         self.message = message
 
 
-def submit_scan(token: str, raw_code: str) -> _Session:
-    """Phone-side: attach a scanned code to a pairing session.
+def submit_scan(token: str, raw_code: str) -> tuple[_Session, _ScanItem]:
+    """Phone-side: append a scanned code to a pairing session's history.
 
     Validates the code as a JAN (NFKC normalize → 8/13 digits → GS1 mod-10),
-    exactly like the interactive endpoint. Raises ``ScanRelayError`` for an
+    exactly like the interactive endpoint. Supports MANY scans per pairing
+    (pair once, scan repeatedly). Raises ``ScanRelayError`` for an
     unknown/expired token or a non-JAN code (the phone keeps scanning).
+
+    Returns (session, item). If the same JAN is re-submitted within
+    ``_DUP_WINDOW_SECONDS`` (e.g. the camera lingered on one barcode), the
+    existing last item is returned instead of enqueuing a duplicate.
     """
     normalised = normalize_jan(raw_code)
     if normalised is None or not validate_check_digit(normalised):
@@ -118,13 +146,19 @@ def submit_scan(token: str, raw_code: str) -> _Session:
         sess = _SESSIONS.get(token)
         if sess is None:
             raise ScanRelayError("not_found", "ペアリングが見つかりません（期限切れの可能性）")
-        if sess.expires_at <= _now():
+        now = _now()
+        if sess.expires_at <= now:
             _SESSIONS.pop(token, None)
             raise ScanRelayError("expired", "ペアリングの有効期限が切れました")
-        sess.jan = normalised
-        sess.status = "done"
-        sess.scanned_at = _now()
-        return sess
+        sess.expires_at = now + SESSION_TTL_SECONDS  # sliding TTL on activity
+        # Suppress an immediate duplicate of the same JAN (camera lingering).
+        if sess.items and sess.items[-1].jan == normalised \
+                and (now - sess.items[-1].scanned_at) < _DUP_WINDOW_SECONDS:
+            return sess, sess.items[-1]
+        sess._seq += 1
+        item = _ScanItem(seq=sess._seq, jan=normalised, scanned_at=now)
+        sess.items.append(item)
+        return sess, item
 
 
 def lan_ip() -> str | None:

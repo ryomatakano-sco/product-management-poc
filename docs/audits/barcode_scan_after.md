@@ -57,6 +57,16 @@ First phone test failed: the phone couldn't use the app at all. Root cause + fix
 
 Net: the phone can now reach the app and complete the flow via manual entry over http immediately; the phone **camera** still requires HTTPS.
 
+## Multi-scan extension (2026-06-08)
+
+Per Nafis: pair once, scan many products, show history, open a new tab per product. Implemented as:
+
+- **Relay → queue.** `scan_relay.py`: session now holds a list of `_ScanItem{seq,jan,scanned_at}`; `submit_scan` appends (returns `(session,item)`, suppresses an immediate same-JAN duplicate within 3s); `get_session` refreshes a **sliding TTL** (polling/scanning keeps a long session alive); new `items_since(sess, since)` cursor helper. `routers/scan_sessions.py`: `GET /scan-sessions/{token}?since=<seq>` returns only newer items + `latest_seq`; `POST .../scan` returns `{seq,count}`. Schemas updated (`ScanItem`, list-based status).
+- **Phone → continuous + history.** `BarcodeScanner` gained a `continuous` prop (no permanent latch; global cooldown + same-code debounce). `ScanReceiver.jsx` rewritten: stays on the scanner after each scan, POSTs each valid JAN, shows a transient confirm + an on-page **history** list; manual entry stays and clears after submit; insecure-context still routes to manual entry.
+- **Desktop → session hub + tabs.** `PhonePairModal` replaced by `PhoneScanSession` (`ProductCreate.jsx`): polls with a cursor, dedupes by JAN, and for each new product opens a new browser tab `#/products/new?jan=…&autoscan=1`; pop-up-blocked items fall back to a one-click 「開く」 button; shows a received-products **history** with status. `ProductCreate` mount effect now reads `?jan=` from the URL and auto-opens the AI modal seeded (reuses the existing seed→auto-lookup). `api.getScanSession(token, since)` carries the cursor.
+
+Auto-run lookup per scan = each opened tab runs one OpenAI lookup (as chosen). Tested: relay queue + cursor via TestClient (only-new-items, dup-suppression, 422/expired); all changed JSX transforms clean. Camera capture/tab-open still browser-only (manual steps in the test report).
+
 ## CURRENT STATE (one line)
 Option 2 desktop⟷phone relay scanner is built and automated-tested (logic + HTTP + JSX + JAN validation); camera capture is browser-only (manual steps given); unpushed and pending Fukunaga sign-off.
 
