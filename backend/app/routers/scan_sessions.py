@@ -20,6 +20,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Request
 
 from app.schemas.scan_session import (
+    ScanItem,
     ScanSessionCreated,
     ScanSessionStatus,
     ScanSubmit,
@@ -64,8 +65,9 @@ async def create_scan_session(request: Request) -> ScanSessionCreated:
 
 
 @router.get("/{token}", response_model=ScanSessionStatus)
-async def get_scan_session(token: str) -> ScanSessionStatus:
-    """Desktop polls this. ``status`` is pending until the phone scans, then done.
+async def get_scan_session(token: str, since: int = 0) -> ScanSessionStatus:
+    """Desktop polls this with ``?since=<last seq seen>`` and gets only newer
+    scans. Multi-scan: one session accumulates many products.
 
     An unknown or expired token returns ``status="expired"`` (200, not 404) so
     the desktop poller can show a clean "re-open the QR" state without treating
@@ -73,18 +75,28 @@ async def get_scan_session(token: str) -> ScanSessionStatus:
     """
     sess = scan_relay.get_session(token)
     if sess is None:
-        return ScanSessionStatus(token=token, status="expired", jan=None)
-    return ScanSessionStatus(token=token, status=sess.status, jan=sess.jan)
+        return ScanSessionStatus(token=token, status="expired", items=[], latest_seq=since)
+    new_items = scan_relay.items_since(sess, since)
+    latest_seq = sess.items[-1].seq if sess.items else 0
+    last_jan = sess.items[-1].jan if sess.items else None
+    return ScanSessionStatus(
+        token=token,
+        status="active",
+        items=[ScanItem(seq=i.seq, jan=i.jan, scanned_at=i.scanned_at) for i in new_items],
+        latest_seq=latest_seq,
+        jan=last_jan,
+    )
 
 
 @router.post("/{token}/scan", response_model=ScanSubmitResult)
 async def submit_scan(token: str, body: ScanSubmit) -> ScanSubmitResult:
-    """Phone submits a decoded code. Validated as a JAN before it is accepted."""
+    """Phone submits a decoded code. Validated as a JAN before it is accepted.
+    Appends to the session history (supports many scans per pairing)."""
     try:
-        sess = scan_relay.submit_scan(token, body.code)
+        sess, item = scan_relay.submit_scan(token, body.code)
     except scan_relay.ScanRelayError as e:
         if e.code == "invalid_jan":
             raise HTTPException(422, detail=e.message)
         # not_found / expired
         raise HTTPException(410, detail=e.message)
-    return ScanSubmitResult(status=sess.status, jan=sess.jan)
+    return ScanSubmitResult(status="ok", jan=item.jan, seq=item.seq, count=len(sess.items))

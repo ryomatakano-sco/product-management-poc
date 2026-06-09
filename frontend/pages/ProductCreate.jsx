@@ -102,7 +102,23 @@ function ProductCreate({ editId }) {
       window.PLX_AI_PREFILL = null;
       setAiSeed(seed);
       setAiOpen(true);
+      return;
     }
+    // New-tab handoff from the phone multi-scan session: the desktop opens
+    // `#/products/new?jan=<JAN>&autoscan=1` in a fresh tab. Read the JAN from
+    // the URL and auto-open the AI modal seeded (same auto-lookup path).
+    try {
+      const hash = window.location.hash || "";
+      const qi = hash.indexOf("?");
+      if (qi >= 0) {
+        const q = new URLSearchParams(hash.slice(qi + 1));
+        const jan = (q.get("jan") || "").trim();
+        if (jan) {
+          setAiSeed({ mode: "jan", value: jan });
+          setAiOpen(true);
+        }
+      }
+    } catch (e) { /* ignore malformed hash */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -964,15 +980,8 @@ function AiAssistModal({ onClose, onApply, seed }) {
     Promise.resolve().then(() => lookup({ janOverride: clean }));
   };
 
-  // Called when the phone (via the pairing relay) sends back a scanned JAN.
-  // Same outcome as a local scan: close the overlay, show the JAN, run lookup.
-  const onPhoneJan = (jan) => {
-    setPairOpen(false);
-    setMode("jan");
-    const clean = (window.plxCleanJan && window.plxCleanJan(jan)) || jan;
-    setJan(clean);
-    Promise.resolve().then(() => lookup({ janOverride: clean }));
-  };
+  // (Multi-scan: the phone session opens a new tab per product — see
+  // PhoneScanSession — so there is no single-JAN handoff into this form.)
 
   const lookup = async (opts) => {
     const janOverride = opts && opts.janOverride;
@@ -1030,7 +1039,7 @@ function AiAssistModal({ onClose, onApply, seed }) {
         />
       )}
       {pairOpen && (
-        <PhonePairModal onClose={() => setPairOpen(false)} onJan={onPhoneJan} />
+        <PhoneScanSession onClose={() => setPairOpen(false)} />
       )}
       <div onClick={(e) => e.stopPropagation()} style={{
         background: T.PLX_CARD_BG, borderRadius: 18, width: 680, maxHeight: "86%",
@@ -1322,63 +1331,67 @@ function ConfBar({ val }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PhonePairModal — desktop⟷phone companion scanner (Option 2).
+// PhoneScanSession — desktop⟷phone companion scanner, MULTI-SCAN (Option 2).
 //
-// Desktop opens a relay "pairing session" and renders its token as a QR code.
-// The user scans that QR with their phone, which opens `/app/#/scan?token=…`
-// (ScanReceiver). The phone reads the product's JAN barcode and POSTs it to the
-// relay; this modal polls the relay and, on arrival, hands the JAN to the
-// existing JAN lookup via `onJan`. No image leaves either device — only the JAN.
+// Desktop opens a relay "pairing session" and shows its token as a QR code.
+// The phone scans the QR once (pairs), then scans MANY product barcodes; each
+// valid JAN is relayed here. This panel polls with a cursor and, for every NEW
+// product, opens a fresh browser tab at `#/products/new?jan=…&autoscan=1` which
+// reuses the existing JAN search / auto-fill. A scan history with per-product
+// status is shown. No image leaves either device — only the JAN string.
 //
-// NOTE: the relay is in-memory + tokenized (see backend services/scan_relay.py).
-// This is a PoC companion path; it is a meaningful architecture addition that
-// should be confirmed with Fukunaga before integration/push.
+// Pop-up note: opening a tab from a background poll (no click) may be blocked
+// by the browser. Blocked products stay in the list with a one-click 「開く」
+// button; allow pop-ups for this site to make it fully automatic.
+//
+// NOTE: in-memory tokenized relay (backend services/scan_relay.py). PoC
+// companion path; meaningful architecture addition — confirm with Fukunaga
+// before integration/push.
 // ─────────────────────────────────────────────────────────────────────────────
-function PhonePairModal({ onClose, onJan }) {
+function PhoneScanSession({ onClose }) {
   const [token, setToken] = React.useState(null);
   const [phoneUrl, setPhoneUrl] = React.useState("");
-  const [status, setStatus] = React.useState("creating"); // creating | waiting | done | expired | error
+  const [phase, setPhase] = React.useState("creating"); // creating | ready | expired | error
   const [error, setError] = React.useState(null);
+  const [products, setProducts] = React.useState([]);   // [{jan, seq, at, opened}]
+  const [popupBlocked, setPopupBlocked] = React.useState(false);
   const qrBoxRef = React.useRef(null);
-  const onJanRef = React.useRef(onJan);
-  onJanRef.current = onJan;
+  const cursorRef = React.useRef(0);
+  const seenRef = React.useRef(new Set());
 
-  // Warn when the desktop itself is on localhost — the phone needs a LAN URL.
-  // The backend resolves its LAN IP into `phone_url`; this is just a heads-up
-  // if that resolution failed and we had to fall back to the desktop origin.
-  const onLocalhost = /^(localhost|127\.|\[::1\])/.test(window.location.hostname);
+  const openTab = (jan) => {
+    const url = `${window.location.origin}/app/#/products/new?jan=${encodeURIComponent(jan)}&autoscan=1`;
+    const w = window.open(url, "_blank");
+    if (!w) { setPopupBlocked(true); return false; }
+    return true;
+  };
 
-  // 1) Create the pairing session on mount. The backend returns a phone_url
-  //    built from its LAN IP so the QR works across devices (not localhost).
+  // 1) Create the pairing session on mount.
   React.useEffect(() => {
     let alive = true;
     api.createScanSession()
       .then((res) => {
         if (!alive) return;
         setToken(res.token);
-        // Prefer the server-provided LAN URL; fall back to the desktop origin.
-        const url = res.phone_url
-          || `${window.location.origin}/app/#/scan?token=${encodeURIComponent(res.token)}`;
-        setPhoneUrl(url);
-        setStatus("waiting");
+        setPhoneUrl(res.phone_url
+          || `${window.location.origin}/app/#/scan?token=${encodeURIComponent(res.token)}`);
+        setPhase("ready");
       })
-      .catch((e) => { if (alive) { setError(e.body?.detail || e.message); setStatus("error"); } });
+      .catch((e) => { if (alive) { setError(e.body?.detail || e.message); setPhase("error"); } });
     return () => { alive = false; };
   }, []);
 
-  // 2) Render the QR once we have a token and the QR lib is present.
+  // 2) Render the QR once we have a token.
   React.useEffect(() => {
     if (!token || !qrBoxRef.current) return;
     qrBoxRef.current.innerHTML = "";
     if (typeof window.QRCode === "undefined") {
-      // Lib failed to load — fall back to showing the raw URL so the user can
-      // still type it into the phone manually.
       setError("QRコードの生成ライブラリを読み込めませんでした。下のURLをスマホで開いてください。");
       return;
     }
     try {
       new window.QRCode(qrBoxRef.current, {
-        text: phoneUrl, width: 196, height: 196,
+        text: phoneUrl, width: 168, height: 168,
         correctLevel: window.QRCode.CorrectLevel ? window.QRCode.CorrectLevel.M : undefined,
       });
     } catch (e) {
@@ -1386,26 +1399,28 @@ function PhonePairModal({ onClose, onJan }) {
     }
   }, [token, phoneUrl]);
 
-  // 3) Poll the relay until the phone scans (or the token expires).
+  // 3) Poll with a cursor; open a new tab per NEW product (deduped by JAN).
   React.useEffect(() => {
-    if (status !== "waiting" || !token) return;
+    if (phase !== "ready" || !token) return;
     let alive = true;
     const id = setInterval(async () => {
       try {
-        const s = await api.getScanSession(token);
+        const s = await api.getScanSession(token, cursorRef.current);
         if (!alive) return;
-        if (s.status === "done" && s.jan) {
-          clearInterval(id);
-          setStatus("done");
-          onJanRef.current(s.jan);
-        } else if (s.status === "expired") {
-          clearInterval(id);
-          setStatus("expired");
+        if (s.status === "expired") { clearInterval(id); setPhase("expired"); return; }
+        for (const it of (s.items || [])) {
+          if (it.seq > cursorRef.current) cursorRef.current = it.seq;
+          if (seenRef.current.has(it.jan)) continue;   // dedupe same product
+          seenRef.current.add(it.jan);
+          const opened = openTab(it.jan);
+          setProducts((p) => [{ jan: it.jan, seq: it.seq, at: Date.now(), opened }, ...p]);
         }
       } catch (e) { /* transient poll error — keep trying */ }
     }, 1500);
     return () => { alive = false; clearInterval(id); };
-  }, [status, token]);
+  }, [phase, token]);
+
+  const localhostQr = /^https?:\/\/(localhost|127\.|\[::1\])/.test(phoneUrl);
 
   return (
     <div onClick={(e) => e.stopPropagation()} style={{
@@ -1413,55 +1428,102 @@ function PhonePairModal({ onClose, onJan }) {
       zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
     }}>
       <div style={{
-        background: T.PLX_CARD_BG, borderRadius: 16, padding: 20, maxWidth: 380, width: "100%",
+        background: T.PLX_CARD_BG, borderRadius: 16, padding: 18, maxWidth: 420, width: "100%",
+        maxHeight: "88vh", overflow: "auto",
         boxShadow: "0 24px 60px rgba(0,0,0,0.5)", textAlign: "center",
       }}>
         <div style={{
-          display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12,
+          display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10,
         }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: PLX_TEXT }}>📱 スマホでスキャン</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: PLX_TEXT }}>📱 スマホで連続スキャン</div>
           <button onClick={onClose} style={{
             background: "none", border: "none", cursor: "pointer",
             fontSize: 20, color: PLX_MUTED, padding: 4, lineHeight: 1,
           }}>×</button>
         </div>
 
-        {status === "creating" && (
+        {phase === "creating" && (
           <div style={{ padding: "30px 0", fontSize: 13, color: PLX_MUTED }}>ペアリングを準備中…</div>
         )}
 
-        {(status === "waiting" || status === "done") && (
+        {phase === "ready" && (
           <>
-            <div style={{ fontSize: 12, color: PLX_MUTED, marginBottom: 14, lineHeight: 1.6 }}>
-              スマホのカメラで下のQRコードを読み取り、商品のバーコードをスキャンしてください。
+            <div style={{ fontSize: 12, color: PLX_MUTED, marginBottom: 10, lineHeight: 1.6 }}>
+              QRをスマホで読み取り、商品のバーコードを<b>続けて</b>スキャンしてください。
+              新しい商品ごとに登録タブが開きます。
             </div>
             <div ref={qrBoxRef} style={{
               display: "inline-block", padding: 10, background: "#fff", borderRadius: 12,
-              minWidth: 196, minHeight: 196,
+              minWidth: 168, minHeight: 168,
             }} />
             {phoneUrl && (
               <div style={{
-                marginTop: 12, fontSize: 10.5, color: PLX_SUBTLE, wordBreak: "break-all",
+                marginTop: 10, fontSize: 10, color: PLX_SUBTLE, wordBreak: "break-all",
                 fontFamily: "ui-monospace,SFMono-Regular,monospace",
               }}>{phoneUrl}</div>
             )}
-            {/^https?:\/\/(localhost|127\.|\[::1\])/.test(phoneUrl) && (
+            {localhostQr && (
               <div style={{
                 marginTop: 10, background: PLX_WARN_BG, borderRadius: 8,
                 padding: "8px 10px", fontSize: 10.5, color: PLX_WARN, lineHeight: 1.6,
               }}>
-                このQRはこのPC（localhost）を指しています。スマホからは
-                同じWi‑Fiで <b>http://（このPCのIP）:8000/app/</b> を開いてから
-                もう一度お試しください。
+                このQRはこのPC（localhost）を指しています。スマホからは同じWi‑Fiで
+                <b> http://（このPCのIP）:8000/app/</b> を開いてからお試しください。
               </div>
             )}
-            <div style={{ marginTop: 12, fontSize: 12, color: PLX_GREEN, fontWeight: 700 }}>
-              {status === "done" ? "✓ 読み取りました" : "スマホの読み取りを待っています…"}
+            {popupBlocked && (
+              <div style={{
+                marginTop: 10, background: PLX_WARN_BG, borderRadius: 8,
+                padding: "8px 10px", fontSize: 10.5, color: PLX_WARN, lineHeight: 1.6,
+              }}>
+                ポップアップがブロックされました。自動で開くには、このサイトの
+                ポップアップを許可してください。下の「開く」からも開けます。
+              </div>
+            )}
+            <div style={{
+              marginTop: 12, fontSize: 12, color: PLX_GREEN, fontWeight: 700,
+            }}>
+              スキャン待機中…（{products.length} 件受信）
             </div>
+
+            {/* received-products history with per-item status + open button */}
+            {products.length > 0 && (
+              <div style={{
+                marginTop: 12, border: `1px solid ${PLX_BORDER}`, borderRadius: 10,
+                overflow: "hidden", textAlign: "left",
+              }}>
+                {products.map((p, i) => (
+                  <div key={p.seq} style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    gap: 8, padding: "9px 12px", fontSize: 13,
+                    borderTop: i === 0 ? "none" : `1px solid ${PLX_BORDER}`,
+                  }}>
+                    <span style={{ fontFamily: "ui-monospace,monospace", color: PLX_TEXT }}>
+                      {p.jan}
+                    </span>
+                    {p.opened ? (
+                      <span style={{ fontSize: 11, color: PLX_GREEN, fontWeight: 700 }}>
+                        ✓ タブを開きました
+                      </span>
+                    ) : (
+                      <button onClick={() => {
+                        const ok = openTab(p.jan);
+                        if (ok) setProducts((arr) => arr.map((x) =>
+                          x.seq === p.seq ? { ...x, opened: true } : x));
+                      }} style={{
+                        height: 28, padding: "0 12px", borderRadius: 8, border: "none",
+                        background: PLX_GREEN, color: "#fff", fontWeight: 700, fontSize: 11,
+                        cursor: "pointer",
+                      }}>開く</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         )}
 
-        {status === "expired" && (
+        {phase === "expired" && (
           <div style={{ padding: "20px 0" }}>
             <div style={{ fontSize: 13, color: PLX_WARN, fontWeight: 700, marginBottom: 10 }}>
               ペアリングの有効期限が切れました
@@ -1473,7 +1535,7 @@ function PhonePairModal({ onClose, onJan }) {
           </div>
         )}
 
-        {(status === "error" || error) && status !== "expired" && (
+        {(phase === "error" || error) && phase !== "expired" && (
           <div style={{
             marginTop: 12, background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 10,
             padding: "10px 12px", fontSize: 11.5, color: "#991B1B", lineHeight: 1.6,
@@ -1491,7 +1553,7 @@ function PhonePairModal({ onClose, onJan }) {
 // Uses html5-qrcode from CDN (see index.html). Lazy: only this component
 // touches `Html5Qrcode`, so other pages never load the camera stack.
 // ─────────────────────────────────────────────────────────────────────────────
-function BarcodeScanner({ onDetected, onClose, validate, onReject }) {
+function BarcodeScanner({ onDetected, onClose, validate, onReject, continuous }) {
   const containerId = "plx-barcode-reader";
   const [error, setError] = React.useState(null);
   const [starting, setStarting] = React.useState(true);
@@ -1512,6 +1574,10 @@ function BarcodeScanner({ onDetected, onClose, validate, onReject }) {
   validateRef.current = validate;
   const onRejectRef = React.useRef(onReject);
   onRejectRef.current = onReject;
+  // Continuous mode (multi-scan): don't latch after the first hit — keep the
+  // camera running and emit each new code, with a cooldown + same-code debounce.
+  const continuousRef = React.useRef(continuous);
+  continuousRef.current = continuous;
 
   React.useEffect(() => {
     if (typeof window.Html5Qrcode === "undefined") {
@@ -1550,11 +1616,10 @@ function BarcodeScanner({ onDetected, onClose, validate, onReject }) {
       // after the first — but DO NOT await stop() before calling onDetected.
       // The parent's onScanDetected setState may unmount us, which then runs
       // cleanup() below; the cleanup is what actually stops the scanner.
-      if (stateRef.current.detected) return;
       const code = String(decoded);
       // Gate on the caller's validator. A non-JAN read (QR, Code-128, or a
       // mistracked EAN with a bad check digit) is ignored so the camera keeps
-      // scanning until a real JAN appears. Only a valid code latches + fires.
+      // scanning until a real JAN appears. Only a valid code fires.
       const ok = validateRef.current ? !!validateRef.current(code) : true;
       if (!ok) {
         setSawNonJan(true);
@@ -1563,14 +1628,29 @@ function BarcodeScanner({ onDetected, onClose, validate, onReject }) {
         }
         return;
       }
-      stateRef.current.detected = true;
-      // Hand the code to the parent in a microtask so React's batched
-      // setState in the parent doesn't race with whatever Html5Qrcode is
-      // doing internally on the current frame.
-      Promise.resolve().then(() => {
+      const st = stateRef.current;
+      const fire = () => Promise.resolve().then(() => {
         try { onDetectedRef.current(code); }
         catch (e) { console.error("onDetected threw:", e); }
       });
+      if (continuousRef.current) {
+        // Multi-scan: keep running. Global cooldown after each accepted hit +
+        // longer debounce on the identical code so one barcode isn't enqueued
+        // repeatedly while it stays in frame.
+        const now = Date.now();
+        if (st.cooldownUntil && now < st.cooldownUntil) return;
+        if (code === st.lastCode && now - (st.lastCodeAt || 0) < 2500) return;
+        st.lastCode = code; st.lastCodeAt = now; st.cooldownUntil = now + 1200;
+        fire();
+        return;
+      }
+      // Single mode (default): latch once; parent unmounts us to stop.
+      if (st.detected) return;
+      st.detected = true;
+      // Hand the code to the parent in a microtask so React's batched
+      // setState in the parent doesn't race with whatever Html5Qrcode is
+      // doing internally on the current frame.
+      fire();
     };
     const onErr = () => {/* per-frame decode misses are normal; ignore */};
 

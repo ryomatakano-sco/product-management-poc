@@ -86,7 +86,8 @@ const api = {
   // --- scan relay (desktop⟷phone companion scanner, Option 2) ---
   // Desktop opens a pairing session; phone POSTs the scanned code; desktop polls.
   createScanSession: () => request(`/scan-sessions`, { method: "POST" }),
-  getScanSession:    (token) => request(`/scan-sessions/${encodeURIComponent(token)}`),
+  getScanSession:    (token, since = 0) =>
+    request(`/scan-sessions/${encodeURIComponent(token)}?since=${encodeURIComponent(since)}`),
   submitScanSession: (token, code) =>
     request(`/scan-sessions/${encodeURIComponent(token)}/scan`, {
       method: "POST", body: JSON.stringify({ code }),
