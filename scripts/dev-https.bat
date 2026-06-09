@@ -25,8 +25,8 @@ echo     This PC:   https://127.0.0.1:8000/app/
 echo     Phone/LAN: https://^<this-PC-IP^>:8000/app/   (same Wi-Fi)
 echo.
 echo The cert is self-signed, so the browser shows a one-time warning:
-echo   - Chrome/Android: "Advanced" -> "Proceed to ... (unsafe)"
-echo   - Safari/iOS:     "Show Details" -> "visit this website"
+echo   - Chrome/Android: Advanced -^> Proceed to ... ^(unsafe^)
+echo   - Safari/iOS:     Show Details -^> visit this website
 echo After accepting, the page is a secure context and the camera works.
 echo If the phone can't connect, allow Python through Windows Firewall (Private).
 echo Press Ctrl+C to stop.
