@@ -1324,6 +1324,40 @@ function AiAssistModal({ onClose, onApply, seed }) {
 
           {phase === "results" && session && (
             <>
+              {/* Which query these results are for. Prefer what we actually
+                  searched (searchedQuery); fall back to the session's stored
+                  input so it's correct even for results opened from a scan. */}
+              {(() => {
+                const qMode = searchedQuery?.value ? searchedQuery.mode
+                            : session.input_jan ? "jan"
+                            : session.input_title ? "name" : null;
+                const qVal  = searchedQuery?.value || session.input_jan || session.input_title || "";
+                if (!qMode || !qVal) return null;
+                return (
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
+                    fontSize: 12, color: PLX_MUTED, flexWrap: "wrap",
+                  }}>
+                    <span>検索クエリ:</span>
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", gap: 8,
+                      background: PLX_GREEN_50, border: `1px solid ${PLX_GREEN_LIGHT}`,
+                      borderRadius: 9999, padding: "4px 12px", maxWidth: "100%",
+                    }}>
+                      <span style={{
+                        fontSize: 9.5, fontWeight: 700, color: PLX_GREEN, letterSpacing: ".04em",
+                        background: "#fff", borderRadius: 9999, padding: "2px 8px",
+                      }}>{qMode === "jan" ? "JAN" : "商品名"}</span>
+                      <span style={{
+                        fontSize: 13, fontWeight: 700, color: PLX_TEXT,
+                        fontFamily: qMode === "jan" ? "ui-monospace,SFMono-Regular,monospace" : "inherit",
+                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 380,
+                      }}>{qVal}</span>
+                    </span>
+                    <span>の結果</span>
+                  </div>
+                );
+              })()}
               <div style={{
                 background: PLX_GREEN_50, border: `1px solid ${PLX_GREEN_LIGHT}`,
                 borderRadius: 10, padding: "10px 14px", fontSize: 12, color: PLX_TEXT,
