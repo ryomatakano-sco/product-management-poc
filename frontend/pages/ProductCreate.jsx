@@ -934,6 +934,17 @@ const FIELD_DEFS = [
   { key: "description", label: "説明文" },
 ];
 
+// Perceived-progress captions for the AI search loading screen. The backend
+// doesn't stream stages, so these are a timed, reassuring narration of the
+// two-agent pipeline (web search → extraction). Order ≈ what actually happens.
+const AI_LOADING_STAGES = [
+  { icon: "🌐", ja: "ウェブを検索しています…",            en: "Searching the web" },
+  { icon: "🏭", ja: "メーカー公式サイトを確認中…",          en: "Checking manufacturer sites" },
+  { icon: "🛒", ja: "ECサイト・JANデータベースを照合中…",   en: "Cross-referencing retailers & JAN DB" },
+  { icon: "📑", ja: "商品情報を抽出しています…",            en: "Extracting product details" },
+  { icon: "✨", ja: "結果をまとめています…",                en: "Compiling the best matches" },
+];
+
 function AiAssistModal({ onClose, onApply, seed }) {
   const [phase, setPhase] = React.useState("input"); // input | loading | results | error
   // Yoshioka 2026-05-11: barcode-first UX. `mode` toggles between JAN and name.
@@ -948,6 +959,21 @@ function AiAssistModal({ onClose, onApply, seed }) {
   const [scanOpen, setScanOpen] = React.useState(false);
   // Option 2: desktop⟷phone pairing overlay (shows a QR the phone scans).
   const [pairOpen, setPairOpen] = React.useState(false);
+  // What we're currently searching ({mode,value}) — shown on the loading screen.
+  const [searchedQuery, setSearchedQuery] = React.useState(null);
+  // Perceived-progress step for the loading animation. NOTE: the backend runs
+  // the lookup in one blocking call and does NOT stream real stages — these
+  // captions are a timed, reassuring approximation of what it's doing, not live
+  // telemetry. They advance on a timer and hold on the last step until done.
+  const [loadStep, setLoadStep] = React.useState(0);
+  React.useEffect(() => {
+    if (phase !== "loading") { setLoadStep(0); return; }
+    const id = setInterval(
+      () => setLoadStep((s) => Math.min(s + 1, AI_LOADING_STAGES.length - 1)),
+      2200,
+    );
+    return () => clearInterval(id);
+  }, [phase]);
 
   // Seed-driven auto-lookup. Fires once on first mount if the modal was
   // opened with a seed value (from the "No results? Try AI" CTA or the
@@ -991,6 +1017,9 @@ function AiAssistModal({ onClose, onApply, seed }) {
     const effectiveMode = janOverride !== undefined ? "jan"
                         : nameOverride !== undefined ? "name"
                         : mode;
+    // Remember exactly what we're searching so the loading screen can show it
+    // back to the user ("いま何を検索しているか").
+    setSearchedQuery({ mode: effectiveMode, value: (effectiveMode === "jan" ? useJan : useName) || "" });
     setPhase("loading"); setError(null);
     try {
       // Mode toggle: route the user's input to the correct backend field.
@@ -1185,19 +1214,99 @@ function AiAssistModal({ onClose, onApply, seed }) {
           )}
 
           {phase === "loading" && (
-            <div style={{ padding: "50px 0", textAlign: "center" }}>
-              <div style={{
-                width: 50, height: 50, borderRadius: "50%",
-                border: `4px solid ${PLX_GREEN_LIGHT}`,
-                borderTop: `4px solid ${PLX_GREEN}`,
-                margin: "0 auto 18px",
-                animation: "plxspin 0.9s linear infinite",
-              }} />
-              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
-                AIが商品情報を検索中...
+            <div style={{ padding: "26px 0 30px", textAlign: "center" }}>
+              {/* scoped keyframes for this screen (no-build: inline <style>) */}
+              <style>{`
+                @keyframes plxOrbit { to { transform: rotate(360deg); } }
+                @keyframes plxPulse { 0%,100%{ transform:scale(1); opacity:.55 } 50%{ transform:scale(1.18); opacity:1 } }
+                @keyframes plxBob   { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-6px) } }
+                @keyframes plxBar   { 0%{ width:8% } 60%{ width:78% } 100%{ width:92% } }
+                @keyframes plxDots  { 0%,80%,100%{ opacity:.25 } 40%{ opacity:1 } }
+                @keyframes plxRing  { 0%{ transform:scale(.7); opacity:.5 } 100%{ transform:scale(1.7); opacity:0 } }
+              `}</style>
+
+              {/* what we're searching for */}
+              {searchedQuery && (searchedQuery.value || "").trim() && (
+                <div style={{
+                  display: "inline-flex", alignItems: "center", gap: 8, maxWidth: "100%",
+                  background: PLX_GREEN_50, border: `1px solid ${PLX_GREEN_LIGHT}`,
+                  borderRadius: 9999, padding: "6px 14px", marginBottom: 22,
+                }}>
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, color: PLX_GREEN, letterSpacing: ".04em",
+                    background: "#fff", borderRadius: 9999, padding: "2px 8px",
+                  }}>{searchedQuery.mode === "jan" ? "JAN" : "商品名"}</span>
+                  <span style={{
+                    fontSize: 14, fontWeight: 700, color: PLX_TEXT,
+                    fontFamily: searchedQuery.mode === "jan" ? "ui-monospace,SFMono-Regular,monospace" : "inherit",
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 360,
+                  }}>{searchedQuery.value}</span>
+                  <span style={{ fontSize: 12, color: PLX_MUTED }}>を検索中</span>
+                </div>
+              )}
+
+              {/* animated scanner: pulsing rings + orbiting dot + bobbing source icon */}
+              <div style={{ position: "relative", width: 96, height: 96, margin: "0 auto 8px" }}>
+                <div style={{
+                  position: "absolute", inset: 0, borderRadius: "50%",
+                  border: `2px solid ${PLX_GREEN}`, animation: "plxRing 1.8s ease-out infinite",
+                }} />
+                <div style={{
+                  position: "absolute", inset: 0, borderRadius: "50%",
+                  border: `2px solid ${PLX_GREEN}`, animation: "plxRing 1.8s ease-out infinite 0.9s",
+                }} />
+                <div style={{
+                  position: "absolute", inset: 14, borderRadius: "50%",
+                  background: PLX_GREEN_50, border: `1.5px solid ${PLX_GREEN_LIGHT}`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <div key={loadStep} style={{ fontSize: 30, animation: "plxBob 1.1s ease-in-out infinite" }}>
+                    {AI_LOADING_STAGES[loadStep].icon}
+                  </div>
+                </div>
+                {/* orbiting magnifier */}
+                <div style={{
+                  position: "absolute", inset: 0, animation: "plxOrbit 2.6s linear infinite",
+                }}>
+                  <div style={{
+                    position: "absolute", top: -4, left: "50%", marginLeft: -10,
+                    width: 22, height: 22, borderRadius: "50%", background: "#fff",
+                    border: `2px solid ${PLX_GREEN}`, display: "flex",
+                    alignItems: "center", justifyContent: "center", fontSize: 12,
+                    boxShadow: "0 2px 6px rgba(26,166,138,.3)",
+                  }}>🔍</div>
+                </div>
               </div>
-              <div style={{ fontSize: 12, color: PLX_MUTED }}>
-                公開情報・JANデータベース・メーカーサイトを照合しています
+
+              {/* current stage caption */}
+              <div key={"cap" + loadStep} style={{
+                fontSize: 14, fontWeight: 700, color: PLX_TEXT, marginTop: 10,
+                animation: "plxPulse 2.2s ease-in-out",
+              }}>
+                {AI_LOADING_STAGES[loadStep].ja}
+                <span style={{ display: "inline-block", width: 18, textAlign: "left" }}>
+                  <span style={{ animation: "plxDots 1.2s infinite" }}>·</span>
+                  <span style={{ animation: "plxDots 1.2s infinite .2s" }}>·</span>
+                  <span style={{ animation: "plxDots 1.2s infinite .4s" }}>·</span>
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: PLX_SUBTLE, marginTop: 3 }}>
+                {AI_LOADING_STAGES[loadStep].en}
+              </div>
+
+              {/* reassuring progress bar (eases toward ~92%, never 100% till done) */}
+              <div style={{
+                height: 6, background: PLX_GREEN_50, borderRadius: 9999,
+                margin: "18px auto 0", maxWidth: 320, overflow: "hidden",
+              }}>
+                <div style={{
+                  height: "100%", borderRadius: 9999,
+                  background: `linear-gradient(90deg, ${PLX_GREEN_LIGHT}, ${PLX_GREEN})`,
+                  animation: "plxBar 14s cubic-bezier(.2,.7,.2,1) forwards",
+                }} />
+              </div>
+              <div style={{ fontSize: 11, color: PLX_MUTED, marginTop: 12 }}>
+                通常 10〜20秒ほどで結果が出ます。少々お待ちください。
               </div>
             </div>
           )}
@@ -1215,6 +1324,40 @@ function AiAssistModal({ onClose, onApply, seed }) {
 
           {phase === "results" && session && (
             <>
+              {/* Which query these results are for. Prefer what we actually
+                  searched (searchedQuery); fall back to the session's stored
+                  input so it's correct even for results opened from a scan. */}
+              {(() => {
+                const qMode = searchedQuery?.value ? searchedQuery.mode
+                            : session.input_jan ? "jan"
+                            : session.input_title ? "name" : null;
+                const qVal  = searchedQuery?.value || session.input_jan || session.input_title || "";
+                if (!qMode || !qVal) return null;
+                return (
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
+                    fontSize: 12, color: PLX_MUTED, flexWrap: "wrap",
+                  }}>
+                    <span>検索クエリ:</span>
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", gap: 8,
+                      background: PLX_GREEN_50, border: `1px solid ${PLX_GREEN_LIGHT}`,
+                      borderRadius: 9999, padding: "4px 12px", maxWidth: "100%",
+                    }}>
+                      <span style={{
+                        fontSize: 9.5, fontWeight: 700, color: PLX_GREEN, letterSpacing: ".04em",
+                        background: "#fff", borderRadius: 9999, padding: "2px 8px",
+                      }}>{qMode === "jan" ? "JAN" : "商品名"}</span>
+                      <span style={{
+                        fontSize: 13, fontWeight: 700, color: PLX_TEXT,
+                        fontFamily: qMode === "jan" ? "ui-monospace,SFMono-Regular,monospace" : "inherit",
+                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 380,
+                      }}>{qVal}</span>
+                    </span>
+                    <span>の結果</span>
+                  </div>
+                );
+              })()}
               <div style={{
                 background: PLX_GREEN_50, border: `1px solid ${PLX_GREEN_LIGHT}`,
                 borderRadius: 10, padding: "10px 14px", fontSize: 12, color: PLX_TEXT,

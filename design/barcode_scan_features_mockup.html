@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SCO Product Management PoC — バーコードスキャン新機能デザイン</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;900&display=swap">
+<style>
+  /* paylight X design tokens (from mockup/colors_and_type.css) */
+  :root{
+    --color-primary:#1AA68A; --color-primary-dark:#0E8A72;
+    --color-primary-light:#E6F7F2; --color-primary-50:#F4FBF8;
+    --color-accent-blue:#2EA7E0;
+    --color-text:#1F2937; --color-text-muted:#6B7280; --color-text-subtle:#9CA3AF;
+    --color-bg:#FFFFFF; --color-surface:#F8FAF9; --color-border:#E5E7EB;
+    --color-warn:#D97706; --color-warn-bg:#FEF3C7;
+    --font-sans:"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+    --radius-sm:8px; --radius-md:16px; --radius-lg:24px; --radius-pill:9999px;
+    --shadow-card:0 4px 20px rgba(26,166,138,.08);
+    --shadow-cta:0 6px 16px rgba(26,166,138,.25);
+    --shadow-float:0 8px 28px rgba(17,24,39,.10);
+    /* phone dark surface */
+    --dark-bg:#0F1419; --dark-card:#161C24; --dark-line:#232B36; --dark-text:#ECEEF1; --dark-muted:#9CA3AF;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font-sans);color:var(--color-text);background:#ECEFF3;-webkit-font-smoothing:antialiased;line-height:1.6}
+  .wrap{max-width:1180px;margin:0 auto;padding:40px 28px 80px}
+  .pagehead{display:flex;align-items:center;gap:14px;margin-bottom:6px}
+  .logo{font-weight:900;font-size:20px;letter-spacing:.02em;color:var(--color-text)}
+  .logo b{color:var(--color-primary)}
+  .label-dot{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--color-primary);letter-spacing:.02em}
+  .label-dot::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--color-primary)}
+  h1{font-size:30px;font-weight:700;margin:4px 0 2px}
+  .lead{color:var(--color-text-muted);font-size:14px;max-width:760px}
+  .sectitle{font-size:13px;font-weight:700;color:var(--color-text);letter-spacing:.04em;margin:46px 0 16px;display:flex;align-items:center;gap:10px}
+  .sectitle::after{content:"";flex:1;height:1px;background:var(--color-border)}
+
+  /* flow strip */
+  .flow{display:flex;gap:10px;flex-wrap:wrap;align-items:stretch}
+  .step{flex:1;min-width:150px;background:var(--color-bg);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:14px 16px;box-shadow:var(--shadow-card);position:relative}
+  .step .n{width:24px;height:24px;border-radius:50%;background:var(--color-primary-light);color:var(--color-primary-dark);font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;margin-bottom:8px}
+  .step h4{margin:0 0 3px;font-size:13.5px}
+  .step p{margin:0;font-size:11.5px;color:var(--color-text-muted);line-height:1.55}
+  .step .en{color:var(--color-text-subtle);font-size:10.5px}
+
+  .board{display:flex;gap:30px;flex-wrap:wrap;align-items:flex-start}
+  .frame{display:flex;flex-direction:column;gap:10px}
+  .cap{font-size:12px;font-weight:700;color:var(--color-text)}
+  .cap span{display:block;font-weight:500;color:var(--color-text-subtle);font-size:10.5px}
+
+  /* phone device */
+  .phone{width:300px;background:#0a0d11;border-radius:38px;padding:12px;box-shadow:var(--shadow-float)}
+  .phone .screen{background:var(--dark-bg);border-radius:28px;overflow:hidden;height:600px;display:flex;flex-direction:column;color:var(--dark-text);position:relative}
+  .notch{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:96px;height:18px;background:#0a0d11;border-radius:0 0 12px 12px;z-index:5}
+  .ph-pad{padding:26px 16px 16px;display:flex;flex-direction:column;height:100%}
+  .ph-title{font-size:15px;font-weight:700;text-align:center}
+  .ph-sub{font-size:11px;color:var(--dark-muted);text-align:center;margin-top:2px}
+
+  /* camera viewport */
+  .camera{margin-top:12px;border-radius:14px;height:210px;background:
+      radial-gradient(120% 90% at 50% 30%, #2a3340 0%, #11161c 70%);
+      position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  .reticle{width:70%;height:96px;border-radius:10px;position:relative}
+  .reticle::before,.reticle::after,.c2::before,.c2::after{content:"";position:absolute;width:26px;height:26px;border:3px solid var(--color-primary)}
+  .reticle::before{left:0;top:0;border-right:0;border-bottom:0;border-radius:8px 0 0 0}
+  .reticle::after{right:0;top:0;border-left:0;border-bottom:0;border-radius:0 8px 0 0}
+  .c2::before{left:0;bottom:0;border-right:0;border-top:0;border-radius:0 0 0 8px}
+  .c2::after{right:0;bottom:0;border-left:0;border-top:0;border-radius:0 0 8px 0}
+  .scanline{position:absolute;left:16%;right:16%;height:2px;background:var(--color-primary);box-shadow:0 0 10px 1px rgba(26,166,138,.8);top:50%}
+  .barcode{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:54%;height:48px;background:
+     repeating-linear-gradient(90deg,#e9edf1 0 2px,transparent 2px 4px,#e9edf1 4px 7px,transparent 7px 9px,#e9edf1 9px 12px,transparent 12px 14px);
+     border-radius:3px;opacity:.9}
+  .hint{font-size:10.5px;color:var(--dark-muted);text-align:center;margin-top:10px}
+
+  .toast{margin-top:12px;border-radius:10px;padding:9px 12px;font-size:12px;font-weight:700;text-align:center;background:#11331f;border:1px solid var(--color-primary);color:#86efac}
+  .toast.warn{background:#3a2a12;border-color:#b45309;color:#FCD34D;font-weight:600;text-align:left;line-height:1.6}
+
+  .hist{margin-top:14px;border:1px solid var(--dark-line);border-radius:12px;overflow:hidden}
+  .hist .hh{font-size:10px;color:var(--dark-muted);padding:7px 12px;border-bottom:1px solid var(--dark-line)}
+  .hrow{display:flex;justify-content:space-between;align-items:center;padding:9px 12px;font-size:12.5px;border-top:1px solid var(--dark-line)}
+  .hrow:first-of-type{border-top:0}
+  .hrow .jan{font-family:ui-monospace,SFMono-Regular,monospace}
+  .hrow .t{font-size:10.5px;color:#86efac}
+  .manual{margin-top:auto;padding-top:14px}
+  .manual .ml{font-size:10px;color:var(--dark-muted);margin-bottom:6px}
+  .mfield{display:flex;gap:8px}
+  .mfield input{flex:1;height:40px;border-radius:10px;border:1px solid #374151;background:#1F2937;color:var(--dark-text);padding:0 12px;font-size:14px;font-family:ui-monospace,monospace}
+  .mbtn{height:40px;padding:0 16px;border:0;border-radius:10px;background:var(--color-primary);color:#fff;font-weight:700;font-size:12px}
+
+  /* desktop browser card */
+  .desktop{width:540px;background:var(--color-bg);border-radius:14px;box-shadow:var(--shadow-float);overflow:hidden;border:1px solid var(--color-border)}
+  .winbar{height:36px;background:#F2F3F5;display:flex;align-items:center;gap:6px;padding:0 12px;border-bottom:1px solid var(--color-border)}
+  .winbar i{width:11px;height:11px;border-radius:50%;display:inline-block}
+  .winbar .url{margin-left:12px;font-size:11px;color:var(--color-text-subtle);font-family:ui-monospace,monospace}
+  .dt-body{padding:22px}
+
+  /* AI assist modal-ish */
+  .modal-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+  .mh-ico{width:36px;height:36px;border-radius:10px;background:var(--color-primary-light);display:flex;align-items:center;justify-content:center;color:var(--color-primary-dark);font-size:18px}
+  .mh-t b{display:block;font-size:15px}
+  .mh-t span{font-size:11px;color:var(--color-text-muted)}
+  .seg{display:inline-flex;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-pill);padding:3px;margin:0 auto 14px;}
+  .seg b{font-size:12px;font-weight:700;padding:7px 18px;border-radius:var(--radius-pill);color:var(--color-text-muted)}
+  .seg b.on{background:#fff;color:var(--color-primary);box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .jan-input{display:flex;align-items:center;height:52px;border:1.5px solid var(--color-primary-light);border-radius:12px;padding:0 6px 0 16px;gap:8px}
+  .jan-input .ph{flex:1;color:var(--color-text-subtle);font-size:17px;font-family:ui-monospace,monospace;letter-spacing:.05em}
+  .pill-btn{height:40px;padding:0 14px;border:0;border-radius:9px;background:var(--color-primary);color:#fff;font-weight:700;font-size:12px;display:inline-flex;align-items:center;gap:6px}
+  .ghost-btn{width:100%;height:42px;border:1.5px solid var(--color-primary-light);background:transparent;color:var(--color-primary-dark);border-radius:10px;font-weight:700;font-size:13px;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:8px}
+  .or{display:flex;align-items:center;gap:10px;color:var(--color-text-subtle);font-size:11px;margin:12px 0}
+  .or::before,.or::after{content:"";flex:1;height:1px;background:var(--color-border)}
+
+  /* pairing */
+  .pair{display:flex;gap:20px}
+  .qr{width:168px;height:168px;border-radius:14px;background:#fff;border:1px solid var(--color-border);padding:10px;flex-shrink:0;box-shadow:var(--shadow-card)}
+  .pair-side{flex:1}
+  .badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--color-primary-dark);background:var(--color-primary-light);padding:4px 10px;border-radius:var(--radius-pill)}
+  .recv{margin-top:12px;border:1px solid var(--color-border);border-radius:12px;overflow:hidden}
+  .recv .rh{font-size:11px;font-weight:700;color:var(--color-text-muted);padding:9px 12px;background:var(--color-surface);border-bottom:1px solid var(--color-border)}
+  .rrow{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;font-size:13px;border-top:1px solid var(--color-border)}
+  .rrow:first-of-type{border-top:0}
+  .rrow .jan{font-family:ui-monospace,monospace;color:var(--color-text)}
+  .ok{font-size:11px;font-weight:700;color:var(--color-primary-dark)}
+  .openbtn{height:28px;padding:0 12px;border:0;border-radius:8px;background:var(--color-primary);color:#fff;font-weight:700;font-size:11px}
+  .note{margin-top:10px;background:var(--color-warn-bg);color:#92400e;border-radius:8px;padding:8px 10px;font-size:10.5px;line-height:1.6}
+  .urlnote{margin-top:10px;font-size:10px;color:var(--color-text-subtle);font-family:ui-monospace,monospace;word-break:break-all}
+
+  .legend{margin-top:40px;font-size:11.5px;color:var(--color-text-muted);line-height:1.8;border-top:1px solid var(--color-border);padding-top:16px}
+  .legend b{color:var(--color-text)}
+  .swatches{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px}
+  .sw{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--color-text-muted)}
+  .sw i{width:16px;height:16px;border-radius:4px;display:inline-block;border:1px solid rgba(0,0,0,.06)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="pagehead">
+    <div class="logo">paylight <b>X</b></div>
+  </div>
+  <div class="label-dot">新機能デザイン / NEW FEATURE</div>
+  <h1>スマホでバーコード連続スキャン</h1>
+  <p class="lead">商品登録画面から、スマホのカメラで商品のJANバーコードを<b>続けて</b>読み取り、PCの登録フォームへ自動連携する機能。1回ペアリングすれば複数商品を連続スキャンでき、新商品ごとに登録タブが開きます。Pair once, scan many — each new product opens its own registration tab.</p>
+
+  <!-- FLOW -->
+  <div class="sectitle">フロー / FLOW</div>
+  <div class="flow">
+    <div class="step"><div class="n">1</div><h4>QRを表示</h4><p>PCが「📱 スマホで連続スキャン」でペアリングQRを表示<span class="en">PC shows pairing QR</span></p></div>
+    <div class="step"><div class="n">2</div><h4>QRを読取</h4><p>スマホでQRを読み、スキャン画面を開く<span class="en">Phone scans QR → opens scan page</span></p></div>
+    <div class="step"><div class="n">3</div><h4>連続スキャン</h4><p>商品のJANを続けて読み取り（JAN以外は無視）<span class="en">Scan products continuously</span></p></div>
+    <div class="step"><div class="n">4</div><h4>自動連携</h4><p>新商品ごとにPCで登録タブが開き自動入力<span class="en">New tab + auto-fill per product</span></p></div>
+  </div>
+
+  <!-- PHONE SCREENS -->
+  <div class="sectitle">スマホ画面 / PHONE（ダーク・カメラ優先）</div>
+  <div class="board">
+
+    <!-- Phone A: continuous scanning -->
+    <div class="frame">
+      <div class="cap">① 連続スキャン<span>Continuous scanning</span></div>
+      <div class="phone"><div class="screen"><div class="notch"></div>
+        <div class="ph-pad">
+          <div class="ph-title">連続スキャン</div>
+          <div class="ph-sub">続けて商品のJANを読み取れます（0 件）</div>
+          <div class="camera">
+            <div class="reticle"><div class="c2"></div><div class="barcode"></div><div class="scanline"></div></div>
+          </div>
+          <div class="hint">バーコードを枠内に合わせると自動で読み取ります</div>
+          <div class="manual">
+            <div class="ml">読み取れない場合は手入力 / manual：</div>
+            <div class="mfield"><input value="" placeholder="例: 4901616009677"><button class="mbtn">送信</button></div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- Phone B: success + history -->
+    <div class="frame">
+      <div class="cap">② スキャン成功＋履歴<span>Confirm + scan history</span></div>
+      <div class="phone"><div class="screen"><div class="notch"></div>
+        <div class="ph-pad">
+          <div class="ph-title">連続スキャン</div>
+          <div class="ph-sub">続けて商品のJANを読み取れます（3 件）</div>
+          <div class="camera" style="height:150px">
+            <div class="reticle" style="height:74px"><div class="c2"></div><div class="barcode" style="height:38px"></div><div class="scanline"></div></div>
+          </div>
+          <div class="toast">✓ 送信しました / sent: 4901616009677</div>
+          <div class="hist">
+            <div class="hh">スキャン履歴 / history（新しい順）</div>
+            <div class="hrow"><span class="jan">4901616009677</span><span class="t">✓ 14:32:08</span></div>
+            <div class="hrow"><span class="jan">4548161168857</span><span class="t">✓ 14:31:50</span></div>
+            <div class="hrow"><span class="jan">4903301266631</span><span class="t">✓ 14:31:32</span></div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- Phone C: HTTPS required / manual -->
+    <div class="frame">
+      <div class="cap">③ HTTPS未対応時<span>http → manual entry</span></div>
+      <div class="phone"><div class="screen"><div class="notch"></div>
+        <div class="ph-pad">
+          <div class="ph-title">連続スキャン</div>
+          <div class="ph-sub">続けて商品のJANを読み取れます（0 件）</div>
+          <div class="toast warn" style="margin-top:14px">📷 カメラを使うには <b>HTTPS</b> 接続が必要です（スマホのブラウザ仕様）。いまは <b>http</b> のためカメラは起動できません。下の「手入力」をご利用ください。</div>
+          <div class="manual" style="margin-top:18px">
+            <div class="ml">手入力 / manual：</div>
+            <div class="mfield"><input value="4901616009677" placeholder="例: 4901616009677"><button class="mbtn">送信</button></div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+
+  <!-- DESKTOP SCREENS -->
+  <div class="sectitle">PC画面 / DESKTOP（ライト・paylight X）</div>
+  <div class="board">
+
+    <!-- Desktop A: AI assist with scan options -->
+    <div class="frame">
+      <div class="cap">④ AIアシスト：スキャン方法<span>AI assist — entry to scanning</span></div>
+      <div class="desktop">
+        <div class="winbar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span class="url">localhost:8000/app/#/products/new</span></div>
+        <div class="dt-body">
+          <div class="modal-head">
+            <div class="mh-ico">✓</div>
+            <div class="mh-t"><b>AI で商品情報を自動入力</b><span>AI 商品アシスト</span></div>
+          </div>
+          <div style="text-align:center"><div class="seg"><b class="on">JANコード</b><b>商品名</b></div></div>
+          <div class="jan-input"><span class="ph">例: 4901301234567</span><button class="pill-btn">📷 カメラで読み取る</button></div>
+          <button class="ghost-btn">📱 スマホで連続スキャン</button>
+          <div class="or">または</div>
+          <button class="pill-btn" style="width:100%;height:44px;justify-content:center;font-size:14px">🔍 AI で検索</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Desktop B: pairing + received list -->
+    <div class="frame">
+      <div class="cap">⑤ ペアリング＆受信リスト<span>Pairing QR + received products</span></div>
+      <div class="desktop">
+        <div class="winbar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span class="url">localhost:8000/app/#/products/new</span></div>
+        <div class="dt-body">
+          <div class="modal-head">
+            <div class="mh-ico">📱</div>
+            <div class="mh-t"><b>スマホで連続スキャン</b><span>QRを読み取り、商品を続けてスキャン</span></div>
+          </div>
+          <div class="pair">
+            <div class="qr">
+              <svg viewBox="0 0 168 168" width="148" height="148" xmlns="http://www.w3.org/2000/svg" aria-label="pairing QR (mock)">
+                <rect width="168" height="168" fill="#fff"/>
+                <g fill="#0F1419">
+                  <!-- finder patterns -->
+                  <path d="M8 8h44v44H8z"/><rect x="16" y="16" width="28" height="28" fill="#fff"/><rect x="22" y="22" width="16" height="16" fill="#0F1419"/>
+                  <path d="M116 8h44v44h-44z"/><rect x="124" y="16" width="28" height="28" fill="#fff"/><rect x="130" y="22" width="16" height="16" fill="#0F1419"/>
+                  <path d="M8 116h44v44H8z"/><rect x="16" y="124" width="28" height="28" fill="#fff"/><rect x="22" y="130" width="16" height="16" fill="#0F1419"/>
+                  <!-- scattered modules -->
+                  <g>
+                    <rect x="60" y="12" width="8" height="8"/><rect x="76" y="12" width="8" height="8"/><rect x="92" y="20" width="8" height="8"/>
+                    <rect x="60" y="28" width="8" height="8"/><rect x="84" y="36" width="8" height="8"/><rect x="100" y="36" width="8" height="8"/>
+                    <rect x="12" y="60" width="8" height="8"/><rect x="28" y="60" width="8" height="8"/><rect x="44" y="68" width="8" height="8"/>
+                    <rect x="60" y="60" width="8" height="8"/><rect x="76" y="68" width="8" height="8"/><rect x="92" y="60" width="8" height="8"/><rect x="108" y="68" width="8" height="8"/><rect x="132" y="60" width="8" height="8"/><rect x="148" y="68" width="8" height="8"/>
+                    <rect x="60" y="84" width="8" height="8"/><rect x="84" y="84" width="8" height="8"/><rect x="100" y="92" width="8" height="8"/><rect x="124" y="84" width="8" height="8"/><rect x="148" y="92" width="8" height="8"/>
+                    <rect x="12" y="100" width="8" height="8"/><rect x="36" y="100" width="8" height="8"/>
+                    <rect x="60" y="108" width="8" height="8"/><rect x="76" y="116" width="8" height="8"/><rect x="92" y="124" width="8" height="8"/><rect x="108" y="116" width="8" height="8"/><rect x="124" y="124" width="8" height="8"/><rect x="148" y="116" width="8" height="8"/>
+                    <rect x="68" y="140" width="8" height="8"/><rect x="92" y="148" width="8" height="8"/><rect x="116" y="140" width="8" height="8"/><rect x="140" y="148" width="8" height="8"/>
+                  </g>
+                </g>
+              </svg>
+            </div>
+            <div class="pair-side">
+              <span class="badge">● スキャン待機中（3 件受信）</span>
+              <div class="recv">
+                <div class="rh">受信した商品 / received</div>
+                <div class="rrow"><span class="jan">4901616009677</span><span class="ok">✓ タブを開きました</span></div>
+                <div class="rrow"><span class="jan">4548161168857</span><span class="ok">✓ タブを開きました</span></div>
+                <div class="rrow"><span class="jan">4903301266631</span><button class="openbtn">開く</button></div>
+              </div>
+              <div class="note">ポップアップがブロックされた商品は「開く」から開けます。サイトのポップアップを許可すると全自動になります。</div>
+            </div>
+          </div>
+          <div class="urlnote">https://192.168.0.164:8000/app/#/scan?token=JY6FOTlWQxb6</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- legend -->
+  <div class="legend">
+    <b>デザイン仕様 / Design spec.</b> paylight X トークン準拠：プライマリ #1AA68A、フォント Noto Sans JP、角丸 8/16/24、ピル型ボタン、カード影 rgba(26,166,138,.08)。スマホ画面はカメラ精度のためダーク背景＋テールのアクセント。PC画面は既存アプリと同じライトテーマ。
+    <div class="swatches">
+      <span class="sw"><i style="background:#1AA68A"></i>Primary #1AA68A</span>
+      <span class="sw"><i style="background:#0E8A72"></i>Primary dark #0E8A72</span>
+      <span class="sw"><i style="background:#E6F7F2"></i>Primary light #E6F7F2</span>
+      <span class="sw"><i style="background:#2EA7E0"></i>Accent #2EA7E0</span>
+      <span class="sw"><i style="background:#0F1419"></i>Phone bg #0F1419</span>
+      <span class="sw"><i style="background:#1F2937"></i>Ink #1F2937</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
