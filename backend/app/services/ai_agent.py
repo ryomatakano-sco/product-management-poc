@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from pydantic import BaseModel
 
@@ -279,6 +279,10 @@ class FieldCandidate(BaseModel):
     source_url: str | None = None
     source_title: str | None = None
     confidence: float | None = None
+    # Set True when a refresh (re-search) surfaces a candidate that wasn't in
+    # the prior cached result. Lets the UI label what's newly found after a
+    # merge. Default False; the extraction agent never sets it.
+    is_new: bool = False
 
 
 class ExtractionResult(BaseModel):
@@ -308,6 +312,10 @@ class ProductLookupOutcome:
     total_cost_usd: float = 0.0
     total_cost_jpy: float = 0.0
     cost_breakdown: list[LookupStepUsage] = field(default_factory=list)
+    # True when this outcome was returned from the per-process cache without a
+    # fresh web search. Set at the call site (the cached object itself stays
+    # from_cache=False so it can be reused).
+    from_cache: bool = False
 
 
 def _usage_from_run(run_result, model: str, step: str) -> LookupStepUsage:
@@ -346,6 +354,40 @@ def _outcome_from_steps(
         total_cost_usd=total_usd,
         total_cost_jpy=round(total_usd * usd_jpy_rate(), 2),
         cost_breakdown=steps,
+    )
+
+
+def _cand_key(c: "FieldCandidate") -> tuple[str, str]:
+    return (c.field_name, (c.value or "").strip())
+
+
+def _merge_outcomes(
+    prev: ProductLookupOutcome, fresh: ProductLookupOutcome
+) -> ProductLookupOutcome:
+    """Merge a refresh result into the previous cached one.
+
+    Keeps every prior candidate (so a re-search never loses what was found
+    before) and appends candidates that are new this time, flagged ``is_new``.
+    The merged result carries the FRESH search's cost (that's what we paid now).
+    """
+    old = [c.model_copy(update={"is_new": False}) for c in prev.result.candidates]
+    old_keys = {_cand_key(c) for c in old}
+    additions = [
+        c.model_copy(update={"is_new": True})
+        for c in fresh.result.candidates
+        if _cand_key(c) not in old_keys
+    ]
+    merged = ExtractionResult(
+        found=bool(fresh.result.found or prev.result.found),
+        candidates=old + additions,
+        raw_search_notes=fresh.result.raw_search_notes or prev.result.raw_search_notes,
+    )
+    return ProductLookupOutcome(
+        result=merged,
+        is_mock=False,
+        total_cost_usd=fresh.total_cost_usd,
+        total_cost_jpy=fresh.total_cost_jpy,
+        cost_breakdown=fresh.cost_breakdown,
     )
 
 
@@ -516,6 +558,7 @@ async def run_product_lookup(
     allow_fallback: bool = False,
     categories: list[str] | None = None,
     vendors: list[str] | None = None,
+    refresh: bool = False,
 ) -> ProductLookupOutcome:
     """Run the two-agent pipeline for product data extraction.
 
@@ -543,6 +586,13 @@ async def run_product_lookup(
 
     Identical-input lookups are served from a per-process cache
     (``_LOOKUP_CACHE``); real results are cached, mock results are not.
+
+    ``refresh`` forces a fresh web search, bypassing the cache read (used by the
+    "再検索する" button so a stale cached result — including a cached "not found"
+    — can be re-run). On refresh, candidates that are NEW relative to the prior
+    cached result are merged in and flagged ``is_new``; the merged result becomes
+    the new cache baseline. Cache hits set ``from_cache=True`` on the returned
+    outcome (the cached object itself stays ``from_cache=False`` for reuse).
     """
     if not _ai_enabled():
         logger.info("AI lookup running in MOCK mode (no OPENAI_API_KEY)")
@@ -552,16 +602,23 @@ async def run_product_lookup(
     # different store's lists don't collide with another store's cached result.
     master_block = _master_list_block(categories, vendors)
     cache_key = _cache_key(jan, title, model, extraction_model, allow_fallback) + (master_block,)
-    cached = _LOOKUP_CACHE.get(cache_key)
-    if cached is not None:
+    prev = _LOOKUP_CACHE.get(cache_key)
+    if prev is not None and not refresh:
         logger.info("AI lookup cache HIT for jan=%s title=%s", jan, title)
-        return cached
+        return replace(prev, from_cache=True)
+    if refresh:
+        logger.info("AI lookup REFRESH (bypassing cache) for jan=%s title=%s", jan, title)
 
     def _store(outcome: ProductLookupOutcome) -> ProductLookupOutcome:
+        # On refresh, merge any newly-found candidates into the previous result
+        # so we never lose what was found before, and flag the additions.
+        if refresh and prev is not None:
+            outcome = _merge_outcomes(prev, outcome)
         if len(_LOOKUP_CACHE) >= _LOOKUP_CACHE_MAX:
             # FIFO evict the oldest entry (dicts preserve insertion order).
             _LOOKUP_CACHE.pop(next(iter(_LOOKUP_CACHE)))
-        _LOOKUP_CACHE[cache_key] = outcome
+        # Store a clean copy (from_cache False) so future hits flag themselves.
+        _LOOKUP_CACHE[cache_key] = replace(outcome, from_cache=False)
         return outcome
 
     from agents import Runner  # lazy
