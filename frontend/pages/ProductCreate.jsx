@@ -1570,17 +1570,44 @@ function PhoneScanSession({ onClose }) {
   const [phoneUrl, setPhoneUrl] = React.useState("");
   const [phase, setPhase] = React.useState("creating"); // creating | ready | expired | error
   const [error, setError] = React.useState(null);
-  const [products, setProducts] = React.useState([]);   // [{jan, seq, at, opened}]
-  const [popupBlocked, setPopupBlocked] = React.useState(false);
+  // [{jan, seq, at, status:'searching'|'done'|'notfound'|'error', title, brand, price, from_cache, error}]
+  const [products, setProducts] = React.useState([]);
   const qrBoxRef = React.useRef(null);
   const cursorRef = React.useRef(0);
   const seenRef = React.useRef(new Set());
 
-  const openTab = (jan) => {
-    const url = `${window.location.origin}/app/#/products/new?jan=${encodeURIComponent(jan)}&autoscan=1`;
-    const w = window.open(url, "_blank");
-    if (!w) { setPopupBlocked(true); return false; }
-    return true;
+  // Open the full registration form for a product, in a new tab. Called from a
+  // button CLICK (a user gesture) so it is NOT blocked by the pop-up blocker.
+  const openForm = (jan) => {
+    window.open(
+      `${window.location.origin}/app/#/products/new?jan=${encodeURIComponent(jan)}&autoscan=1`,
+      "_blank",
+    );
+  };
+
+  // Run the existing JAN lookup for a scanned product and show the result
+  // INLINE in this panel (no pop-up tabs — reliable). One lookup per product.
+  const runLookup = async (jan, seq) => {
+    const patch = (p) => setProducts((arr) => arr.map((x) => (x.seq === seq ? { ...x, ...p } : x)));
+    try {
+      let s = await api.createAiSuggestion({ jan });
+      let attempts = 0;
+      while (s.status === "pending" && attempts < 20) {
+        await new Promise((r) => setTimeout(r, 800));
+        s = await api.getAiSuggestion(s.id);
+        attempts += 1;
+      }
+      if (s.status === "failed") { patch({ status: "error", error: s.error_message || "検索に失敗" }); return; }
+      const first = (k) => (s.options && s.options[k] && s.options[k][0] && s.options[k][0].value) || null;
+      const found = Object.values(s.options || {}).some((a) => a && a.length);
+      patch({
+        status: found ? "done" : "notfound",
+        sessionId: s.id, from_cache: !!s.from_cache,
+        title: first("title"), brand: first("brand"), price: first("price"),
+      });
+    } catch (e) {
+      patch({ status: "error", error: e.body?.detail || e.message });
+    }
   };
 
   // 1) Create the pairing session on mount.
@@ -1616,7 +1643,8 @@ function PhoneScanSession({ onClose }) {
     }
   }, [token, phoneUrl]);
 
-  // 3) Poll with a cursor; open a new tab per NEW product (deduped by JAN).
+  // 3) Poll with a cursor; for each NEW product (deduped by JAN) add a card and
+  //    run its lookup inline.
   React.useEffect(() => {
     if (phase !== "ready" || !token) return;
     let alive = true;
@@ -1629,8 +1657,8 @@ function PhoneScanSession({ onClose }) {
           if (it.seq > cursorRef.current) cursorRef.current = it.seq;
           if (seenRef.current.has(it.jan)) continue;   // dedupe same product
           seenRef.current.add(it.jan);
-          const opened = openTab(it.jan);
-          setProducts((p) => [{ jan: it.jan, seq: it.seq, at: Date.now(), opened }, ...p]);
+          setProducts((p) => [{ jan: it.jan, seq: it.seq, at: Date.now(), status: "searching" }, ...p]);
+          runLookup(it.jan, it.seq);
         }
       } catch (e) { /* transient poll error — keep trying */ }
     }, 1500);
@@ -1667,7 +1695,7 @@ function PhoneScanSession({ onClose }) {
           <>
             <div style={{ fontSize: 12, color: PLX_MUTED, marginBottom: 10, lineHeight: 1.6 }}>
               QRをスマホで読み取り、商品のバーコードを<b>続けて</b>スキャンしてください。
-              新しい商品ごとに登録タブが開きます。
+              スキャンした商品の結果がここに表示されます。
             </div>
             <div ref={qrBoxRef} style={{
               display: "inline-block", padding: 10, background: "#fff", borderRadius: 12,
@@ -1688,50 +1716,65 @@ function PhoneScanSession({ onClose }) {
                 <b> http://（このPCのIP）:8000/app/</b> を開いてからお試しください。
               </div>
             )}
-            {popupBlocked && (
-              <div style={{
-                marginTop: 10, background: PLX_WARN_BG, borderRadius: 8,
-                padding: "8px 10px", fontSize: 10.5, color: PLX_WARN, lineHeight: 1.6,
-              }}>
-                ポップアップがブロックされました。自動で開くには、このサイトの
-                ポップアップを許可してください。下の「開く」からも開けます。
-              </div>
-            )}
             <div style={{
               marginTop: 12, fontSize: 12, color: PLX_GREEN, fontWeight: 700,
             }}>
-              スキャン待機中…（{products.length} 件受信）
+              スキャン待機中…（{products.length} 件）
             </div>
 
-            {/* received-products history with per-item status + open button */}
+            {/* received products — lookup result shown inline per product */}
             {products.length > 0 && (
-              <div style={{
-                marginTop: 12, border: `1px solid ${PLX_BORDER}`, borderRadius: 10,
-                overflow: "hidden", textAlign: "left",
-              }}>
-                {products.map((p, i) => (
+              <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8, textAlign: "left" }}>
+                {products.map((p) => (
                   <div key={p.seq} style={{
-                    display: "flex", justifyContent: "space-between", alignItems: "center",
-                    gap: 8, padding: "9px 12px", fontSize: 13,
-                    borderTop: i === 0 ? "none" : `1px solid ${PLX_BORDER}`,
+                    border: `1px solid ${PLX_BORDER}`, borderRadius: 10, padding: "10px 12px",
                   }}>
-                    <span style={{ fontFamily: "ui-monospace,monospace", color: PLX_TEXT }}>
-                      {p.jan}
-                    </span>
-                    {p.opened ? (
-                      <span style={{ fontSize: 11, color: PLX_GREEN, fontWeight: 700 }}>
-                        ✓ タブを開きました
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontFamily: "ui-monospace,monospace", fontSize: 12, color: PLX_MUTED }}>
+                        {p.jan}
                       </span>
-                    ) : (
-                      <button onClick={() => {
-                        const ok = openTab(p.jan);
-                        if (ok) setProducts((arr) => arr.map((x) =>
-                          x.seq === p.seq ? { ...x, opened: true } : x));
-                      }} style={{
-                        height: 28, padding: "0 12px", borderRadius: 8, border: "none",
-                        background: PLX_GREEN, color: "#fff", fontWeight: 700, fontSize: 11,
-                        cursor: "pointer",
-                      }}>開く</button>
+                      {p.status === "searching" && (
+                        <span style={{
+                          width: 16, height: 16, borderRadius: "50%",
+                          border: `2px solid ${PLX_GREEN_LIGHT}`, borderTop: `2px solid ${PLX_GREEN}`,
+                          animation: "plxspin 0.9s linear infinite", display: "inline-block",
+                        }} />
+                      )}
+                      {(p.status === "done" || p.status === "notfound" || p.status === "error") && (
+                        <button onClick={() => openForm(p.jan)} style={{
+                          height: 28, padding: "0 12px", borderRadius: 8, border: "none",
+                          background: PLX_GREEN, color: "#fff", fontWeight: 700, fontSize: 11, cursor: "pointer",
+                        }}>登録フォームを開く</button>
+                      )}
+                    </div>
+                    {p.status === "searching" && (
+                      <div style={{ fontSize: 11, color: PLX_MUTED, marginTop: 4 }}>AIで検索中…</div>
+                    )}
+                    {p.status === "done" && (
+                      <div style={{ marginTop: 6 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: PLX_TEXT }}>
+                          {p.title || "（商品名は候補から選択）"}
+                          {p.from_cache && (
+                            <span style={{
+                              fontSize: 9, fontWeight: 700, color: "#92400e", background: PLX_WARN_BG,
+                              padding: "1px 6px", borderRadius: 9999, marginLeft: 6,
+                            }}>🗄️ キャッシュ</span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 11, color: PLX_MUTED, marginTop: 2 }}>
+                          {[p.brand, p.price].filter(Boolean).join(" ・ ") || "詳細はフォームで確認"}
+                        </div>
+                      </div>
+                    )}
+                    {p.status === "notfound" && (
+                      <div style={{ fontSize: 11.5, color: PLX_WARN, marginTop: 5 }}>
+                        該当する商品が見つかりませんでした。フォームで手入力・再検索できます。
+                      </div>
+                    )}
+                    {p.status === "error" && (
+                      <div style={{ fontSize: 11.5, color: "#991B1B", marginTop: 5 }}>
+                        エラー: {p.error || "検索に失敗しました"}
+                      </div>
                     )}
                   </div>
                 ))}
@@ -1813,15 +1856,24 @@ function BarcodeScanner({ onDetected, onClose, validate, onReject, continuous })
     stateRef.current.scanner = scanner;
 
     const config = {
-      fps: 10,
-      qrbox: { width: 260, height: 140 },   // wide rectangle suits 1D barcodes
+      fps: 15,
+      qrbox: { width: 280, height: 170 },   // wide rectangle suits 1D barcodes
       aspectRatio: 1.7,
+      // CRITICAL for reliable 1D (EAN/JAN) reads on phones: use the browser's
+      // native BarcodeDetector when available (Android Chrome, desktop
+      // Chrome/Edge). html5-qrcode's built-in ZXing decoder is much weaker on
+      // 1D barcodes and often shows the camera but never decodes — which looked
+      // like "the scanner does nothing". Native detector fixes that; the ZXing
+      // path (formatsToSupport below) remains the fallback (e.g. iOS Safari).
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true },
       // EAN-13 covers JAN-13 (Japan); keep QR enabled too in case a vendor
       // ships their products with a QR-coded SKU.
       formatsToSupport: window.Html5QrcodeSupportedFormats
         ? [
           window.Html5QrcodeSupportedFormats.EAN_13,
           window.Html5QrcodeSupportedFormats.EAN_8,
+          window.Html5QrcodeSupportedFormats.UPC_A,
+          window.Html5QrcodeSupportedFormats.UPC_E,
           window.Html5QrcodeSupportedFormats.CODE_128,
           window.Html5QrcodeSupportedFormats.QR_CODE,
         ]
