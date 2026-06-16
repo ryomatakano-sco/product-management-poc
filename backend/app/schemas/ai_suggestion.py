@@ -15,6 +15,11 @@ class AiSuggestionRequest(BaseModel):
     # whole search and added ~2min to every weak lookup. Callers that want the
     # long-tail recall (and accept the latency) can set this True.
     allow_fallback: bool = False
+    # Force a fresh lookup, bypassing the per-process cache. Used by the
+    # "再検索する" (search again) button so a previously cached result — including
+    # a cached "not found" — can be re-run. New candidates are merged into the
+    # prior ones and flagged is_new in the response.
+    refresh: bool = False
 
 
 class AiFieldOptionRead(BaseModel):
@@ -27,6 +32,10 @@ class AiFieldOptionRead(BaseModel):
     confidence: float | None
     position: int
     was_applied: bool
+    # True when this candidate first appeared in a refresh (re-search) and was
+    # NOT present in the prior cached result. Transient (not stored in the DB) —
+    # set only on the create response.
+    is_new: bool = False
 
 
 class AiSuggestionRead(BaseModel):
@@ -44,6 +53,10 @@ class AiSuggestionRead(BaseModel):
     created_at: datetime
     completed_at: datetime | None
     applied_to_product_id: int | None
+    # True when this result was served from the per-process cache without a
+    # fresh web search (so the UI can show a "previously searched" label + a
+    # 再検索 button). Transient — set on the create response only.
+    from_cache: bool = False
 
 
 class AiOptionApply(BaseModel):

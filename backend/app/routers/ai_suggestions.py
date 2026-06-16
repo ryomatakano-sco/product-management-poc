@@ -126,8 +126,20 @@ async def _load_master_lists(db, store_id: int) -> tuple[list[str], list[str]]:
     return categories, vendors
 
 
-def _session_to_read(session: AiSuggestionSession) -> AiSuggestionRead:
-    """Convert a session ORM object to the API response shape."""
+def _session_to_read(
+    session: AiSuggestionSession,
+    *,
+    from_cache: bool = False,
+    new_pairs: set | None = None,
+) -> AiSuggestionRead:
+    """Convert a session ORM object to the API response shape.
+
+    ``from_cache`` / ``new_pairs`` are transient (not stored in the DB) and only
+    passed by the create endpoint: ``from_cache`` flags a cache-served result,
+    and ``new_pairs`` is the set of (field_name, value) newly found in a refresh
+    — used to mark each option ``is_new``.
+    """
+    new_pairs = new_pairs or set()
     options: dict[str, list[AiFieldOptionRead]] = defaultdict(list)
     for opt in sorted(session.field_options, key=lambda o: (o.field_name, o.position)):
         options[opt.field_name].append(
@@ -139,6 +151,7 @@ def _session_to_read(session: AiSuggestionSession) -> AiSuggestionRead:
                 confidence=opt.confidence,
                 position=opt.position,
                 was_applied=opt.was_applied,
+                is_new=(opt.field_name, (opt.value_text or "").strip()) in new_pairs,
             )
         )
     return AiSuggestionRead(
@@ -154,6 +167,7 @@ def _session_to_read(session: AiSuggestionSession) -> AiSuggestionRead:
         created_at=session.created_at,
         completed_at=session.completed_at,
         applied_to_product_id=session.applied_to_product_id,
+        from_cache=from_cache,
     )
 
 
@@ -182,12 +196,21 @@ async def create_ai_suggestion(body: AiSuggestionRequest, db: DB, store_id: Stor
     # category/vendor spellings (server-side half of the mapping fix).
     categories, vendors = await _load_master_lists(db, store_id)
 
+    from_cache = False
+    new_pairs: set = set()
     try:
         outcome = await run_product_lookup(
             jan=jan, title=title, allow_fallback=body.allow_fallback,
-            categories=categories, vendors=vendors,
+            categories=categories, vendors=vendors, refresh=body.refresh,
         )
         result = outcome.result
+        from_cache = outcome.from_cache
+        # (field_name, value) of candidates newly found by a refresh — so the
+        # response can flag the corresponding persisted options is_new.
+        new_pairs = {
+            (c.field_name, (c.value or "").strip())
+            for c in result.candidates if getattr(c, "is_new", False)
+        }
 
         # Wrong-product guard: on a JAN search where at least one candidate's
         # URL contains the queried JAN, the unverified candidates are likely a
@@ -235,7 +258,7 @@ async def create_ai_suggestion(body: AiSuggestionRequest, db: DB, store_id: Stor
             .options(selectinload(AiSuggestionSession.field_options))
         )
     ).scalar_one()
-    return _session_to_read(loaded)
+    return _session_to_read(loaded, from_cache=from_cache, new_pairs=new_pairs)
 
 
 @router.get("/{session_id}", response_model=AiSuggestionRead)

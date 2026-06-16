@@ -1020,12 +1020,15 @@ function AiAssistModal({ onClose, onApply, seed }) {
     // Remember exactly what we're searching so the loading screen can show it
     // back to the user ("いま何を検索しているか").
     setSearchedQuery({ mode: effectiveMode, value: (effectiveMode === "jan" ? useJan : useName) || "" });
+    const refresh = !!(opts && opts.refresh);
     setPhase("loading"); setError(null);
     try {
       // Mode toggle: route the user's input to the correct backend field.
+      // refresh=true bypasses the server cache (再検索) and merges new candidates.
       let s = await api.createAiSuggestion({
         jan:   effectiveMode === "jan"  ? (useJan  || undefined) : undefined,
         title: effectiveMode === "name" ? (useName || undefined) : undefined,
+        refresh: refresh || undefined,
       });
       let attempts = 0;
       while (s.status === "pending" && attempts < 20) {
@@ -1053,6 +1056,21 @@ function AiAssistModal({ onClose, onApply, seed }) {
     ? FIELD_DEFS.filter((f) => (session.options[f.key]?.length ?? 0) > 0)
     : FIELD_DEFS;
   const selectedCount = Object.values(picks).filter(Boolean).length;
+
+  // Re-run the same query, bypassing the cache (the 再検索 button).
+  const reSearch = () => {
+    const q = searchedQuery;
+    if (!q || !(q.value || "").trim()) { setPhase("input"); return; }
+    if (q.mode === "jan") lookup({ janOverride: q.value, refresh: true });
+    else                  lookup({ nameOverride: q.value, refresh: true });
+  };
+  // Did this (cached) result come back empty / not-found?
+  const noResults = !!session && visibleFields.length === 0;
+  // How many options the last refresh newly surfaced (merged in).
+  const newCount = session
+    ? Object.values(session.options || {}).reduce(
+        (n, arr) => n + (arr || []).filter((o) => o.is_new).length, 0)
+    : 0;
 
   return (
     <div onClick={onClose} style={{
@@ -1358,18 +1376,73 @@ function AiAssistModal({ onClose, onApply, seed }) {
                   </div>
                 );
               })()}
-              <div style={{
-                background: PLX_GREEN_50, border: `1px solid ${PLX_GREEN_LIGHT}`,
-                borderRadius: 10, padding: "10px 14px", fontSize: 12, color: PLX_TEXT,
-                marginBottom: 16, display: "flex", alignItems: "center", gap: 10,
-              }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: PLX_GREEN }} />
-                <b>{visibleFields.length} 項目で候補が見つかりました。</b>
-                <span style={{ color: PLX_MUTED }}>
-                  各項目で 1 つ選んで「適用」を押してください。
-                </span>
-              </div>
-              {visibleFields.map((f) => (
+              {/* Cache label + 再検索 (search again). Shown when the result was
+                  served from the cache rather than a fresh web search. */}
+              {session.from_cache && (
+                <div style={{
+                  background: PLX_WARN_BG, border: `1px solid #FCD34D`, borderRadius: 10,
+                  padding: "10px 14px", fontSize: 12, color: "#92400e",
+                  marginBottom: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+                }}>
+                  <span style={{ fontSize: 15 }}>🗄️</span>
+                  <span style={{ flex: 1, minWidth: 160, lineHeight: 1.5 }}>
+                    これは<b>以前の検索結果（キャッシュ）</b>です。最新ではない可能性があります。
+                  </span>
+                  <button onClick={reSearch} style={{
+                    height: 32, padding: "0 14px", borderRadius: 9999, border: "none",
+                    background: PLX_GREEN, color: "#fff", fontWeight: 700, fontSize: 12,
+                    cursor: "pointer", whiteSpace: "nowrap",
+                  }}>🔄 再検索する</button>
+                </div>
+              )}
+
+              {/* Merge result: how many candidates a refresh newly surfaced. */}
+              {newCount > 0 && (
+                <div style={{
+                  background: PLX_GREEN_50, border: `1px solid ${PLX_GREEN_LIGHT}`,
+                  borderRadius: 10, padding: "9px 14px", fontSize: 12, color: PLX_GREEN,
+                  fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 8,
+                }}>
+                  🆕 再検索で <b style={{ margin: "0 2px" }}>{newCount}</b> 件の新しい候補が見つかりました（下に「新規」表示）。
+                </div>
+              )}
+
+              {noResults ? (
+                /* Not found. Offer a confirm + re-search (the cache may hold a
+                   stale "not found"; a fresh search might now find it). */
+                <div style={{
+                  border: `1px dashed ${PLX_BORDER}`, borderRadius: 12,
+                  padding: "22px 18px", textAlign: "center", marginBottom: 12,
+                }}>
+                  <div style={{ fontSize: 26, marginBottom: 8 }}>🔍</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
+                    商品が見つかりませんでした
+                  </div>
+                  <div style={{ fontSize: 12, color: PLX_MUTED, lineHeight: 1.7, marginBottom: 14 }}>
+                    {session.from_cache
+                      ? "前回の検索でも見つかりませんでした（キャッシュ）。もう一度、最新の情報で検索しますか？"
+                      : "別の表記やJANコードでお試しいただくか、もう一度検索できます。"}
+                  </div>
+                  <button onClick={reSearch} style={{
+                    height: 40, padding: "0 20px", borderRadius: 9999, border: "none",
+                    background: PLX_GREEN, color: "#fff", fontWeight: 700, fontSize: 13,
+                    cursor: "pointer", boxShadow: "0 6px 16px rgba(26,166,138,.25)",
+                  }}>🔄 もう一度検索する</button>
+                </div>
+              ) : (
+                <div style={{
+                  background: PLX_GREEN_50, border: `1px solid ${PLX_GREEN_LIGHT}`,
+                  borderRadius: 10, padding: "10px 14px", fontSize: 12, color: PLX_TEXT,
+                  marginBottom: 16, display: "flex", alignItems: "center", gap: 10,
+                }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: PLX_GREEN }} />
+                  <b>{visibleFields.length} 項目で候補が見つかりました。</b>
+                  <span style={{ color: PLX_MUTED }}>
+                    各項目で 1 つ選んで「適用」を押してください。
+                  </span>
+                </div>
+              )}
+              {!noResults && visibleFields.map((f) => (
                 <div key={f.key} style={{ marginBottom: 14 }}>
                   <div style={{
                     fontSize: 12, fontWeight: 700, marginBottom: 6,
@@ -1410,8 +1483,14 @@ function AiAssistModal({ onClose, onApply, seed }) {
                             )}
                           </span>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: PLX_TEXT }}>
-                              {opt.value}
+                            <div style={{ fontSize: 13, fontWeight: 600, color: PLX_TEXT, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                              {opt.is_new && (
+                                <span style={{
+                                  fontSize: 9, fontWeight: 700, color: "#fff", background: PLX_GREEN,
+                                  padding: "1px 7px", borderRadius: 9999, flexShrink: 0,
+                                }}>🆕 新規</span>
+                              )}
+                              <span>{opt.value}</span>
                             </div>
                             <div style={{ fontSize: 10, color: PLX_MUTED, marginTop: 3 }}>
                               出典: {opt.source_title || opt.source_url || "—"}
@@ -1424,11 +1503,6 @@ function AiAssistModal({ onClose, onApply, seed }) {
                   </div>
                 </div>
               ))}
-              {visibleFields.length === 0 && (
-                <div style={{ padding: 20, textAlign: "center", color: PLX_MUTED, fontSize: 13 }}>
-                  候補が見つかりませんでした。
-                </div>
-              )}
             </>
           )}
         </div>
