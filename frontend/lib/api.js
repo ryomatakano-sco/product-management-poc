@@ -117,11 +117,15 @@ const api = {
   listPurchaseOrders: (params) => request(`/purchase-orders${qs(params)}`),
   getPurchaseOrder:   (id) => request(`/purchase-orders/${id}`),
 
-  // Sales — backend currently only has POST /sales; list/refund/summary are
-  // brief-04 features that prompt 03 deferred. The pages call these and
-  // fall back to empty state if they 404.
+  // Sales
   listSales: (params) => request(`/sales${qs(params)}`).catch((e) => {
     if (e.status === 405 || e.status === 404) return { items: [], total: 0 };
+    throw e;
+  }),
+  createSale: (body) => request(`/sales`, { method: "POST", body: JSON.stringify(body) }),
+  getSalesSummary: () => request(`/sales/summary`).catch((e) => {
+    if (e.status === 405 || e.status === 404)
+      return { today_count: 0, today_revenue: "0", month_count: 0, month_revenue: "0" };
     throw e;
   }),
 

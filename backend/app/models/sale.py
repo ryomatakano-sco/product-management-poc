@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+import enum
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, func
+from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
+
+
+class PaymentMethod(str, enum.Enum):
+    cash = "cash"
+    card = "card"
+    paypay = "paypay"
+    bank_transfer = "bank_transfer"
 
 
 class SalesRecord(Base):
@@ -18,6 +26,7 @@ class SalesRecord(Base):
     __tablename__ = "sales_records"
     __table_args__ = (
         Index("ix_sales_store_variant_date", "store_id", "variant_id", "sold_at"),
+        Index("ix_sales_store_payment_date", "store_id", "payment_method", "sold_at"),
         Base.__table_args__,
     )
 
@@ -29,6 +38,9 @@ class SalesRecord(Base):
     )
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     unit_price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    payment_method: Mapped[PaymentMethod] = mapped_column(
+        Enum(PaymentMethod), nullable=False, server_default="cash"
+    )
     sold_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     patient_ref: Mapped[str | None] = mapped_column(
         String(255), nullable=True, comment="Placeholder for future patient linking"
