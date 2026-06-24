@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from app.deps import DB, StoreId
 from app.models.inventory import AdjustmentReason, InventoryAdjustment, InventoryField
-from app.models.product import Product, ProductVariant
+from app.models.product import Product, ProductStatus, ProductVariant
 from app.models.sale import PaymentMethod, SalesRecord
 from app.schemas.sale import SaleCreate, SaleListResponse, SaleRead, SalesSummary
 
@@ -109,13 +109,33 @@ async def create_sale(body: SaleCreate, db: DB, store_id: StoreId):
     """Record a sale and decrement on_hand inventory."""
     variant = (
         await db.execute(
-            select(ProductVariant).where(
+            select(ProductVariant)
+            .where(
                 ProductVariant.id == body.variant_id, ProductVariant.store_id == store_id
             )
+            .options(selectinload(ProductVariant.product))
         )
     ).scalar_one_or_none()
     if not variant:
         raise HTTPException(404, detail="Variant not found")
+
+    # Only active products are sellable. Draft items are still being onboarded
+    # (invisible on the inventory page); archived items are out of catalog.
+    if variant.product and variant.product.status != ProductStatus.active:
+        raise HTTPException(
+            status_code=400,
+            detail="この商品はまだ販売可能ではありません（商品ステータスが「公開中」ではありません）",
+        )
+
+    if body.quantity > variant.on_hand:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"在庫が不足しています（残り {variant.on_hand}個）"
+                if variant.on_hand > 0
+                else "在庫切れのため販売できません"
+            ),
+        )
 
     sold_at = body.sold_at or datetime.now(timezone.utc)
 

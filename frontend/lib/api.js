@@ -50,6 +50,7 @@ function qs(params) {
 const api = {
   // --- products ---
   listProducts: (params) => request(`/products${qs(params)}`),
+  searchProducts: (q, opts) => request(`/products/search${qs({ q, ...opts })}`),
   getProduct:   (id)     => request(`/products/${id}`),
   createProduct: (body)  => request(`/products`, { method: "POST", body: JSON.stringify(body) }),
   updateProduct: (id, body) => request(`/products/${id}`, { method: "PATCH", body: JSON.stringify(body) }),

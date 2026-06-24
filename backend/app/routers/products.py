@@ -210,19 +210,31 @@ async def search_products(
     db: DB,
     store_id: StoreId,
     q: str = Query(..., min_length=1, description="Search query"),
+    status: ProductStatus | None = Query(
+        None,
+        description="Restrict to a specific status (pass 'active' to hide drafts)",
+    ),
 ):
-    """Lightweight AJAX search for the PO page. Max 20 results.
+    """Lightweight AJAX search. Max 20 results.
 
-    Uses the same search helper as the list endpoint so SKU and barcode
-    hits work here too — important because the PO modal is where staff
-    scan a JAN to add a line item.
+    Default (no `status` param): returns active + draft (excludes archived).
+    Used by the PO page where staff scan a JAN that might still be a draft
+    being onboarded.
+
+    Sales / manual sale entry should pass `status=active` so draft products
+    (which don't appear on the inventory page) can't be sold.
     """
     filter_clause, _reasons = _build_product_search(q.strip())
+    status_clause = (
+        Product.status == status
+        if status is not None
+        else Product.status != ProductStatus.archived
+    )
     stmt = (
         select(Product)
         .where(
             Product.store_id == store_id,
-            Product.status != ProductStatus.archived,
+            status_clause,
             filter_clause,
         )
         .options(selectinload(Product.variants))

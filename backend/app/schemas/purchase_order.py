@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 from app.models.purchase_order import POStatus
 
@@ -12,8 +12,8 @@ from app.models.purchase_order import POStatus
 
 class POItemCreate(BaseModel):
     variant_id: int
-    quantity_ordered: int
-    unit_cost: Decimal
+    quantity_ordered: int = Field(gt=0, description="Must be at least 1")
+    unit_cost: Decimal = Field(ge=0)
 
 
 class POItemRead(BaseModel):
@@ -36,7 +36,7 @@ class POItemRead(BaseModel):
 
 class POItemReceive(BaseModel):
     item_id: int
-    quantity_received: int
+    quantity_received: int = Field(gt=0, description="Must be at least 1")
 
 
 # --- PO schemas ---

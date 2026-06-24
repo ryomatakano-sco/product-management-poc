@@ -117,9 +117,15 @@ async def adjust_inventory(variant_id: int, body: InventoryAdjustRequest, db: DB
     if not variant:
         raise HTTPException(404, detail="Variant not found")
 
-    # Update counter
+    # Update counter — reject if the result would go negative.
     current = getattr(variant, body.field.value)
-    setattr(variant, body.field.value, current + body.delta)
+    new_value = current + body.delta
+    if new_value < 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"在庫が不足しています（現在: {current}, 調整後: {new_value}）",
+        )
+    setattr(variant, body.field.value, new_value)
 
     # Log adjustment
     adj = InventoryAdjustment(
