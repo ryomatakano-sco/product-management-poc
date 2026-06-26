@@ -117,6 +117,10 @@ const api = {
   // Purchase orders (existing backend at /purchase-orders)
   listPurchaseOrders: (params) => request(`/purchase-orders${qs(params)}`),
   getPurchaseOrder:   (id) => request(`/purchase-orders/${id}`),
+  submitPurchaseOrder: (id) => request(`/purchase-orders/${id}/submit`, { method: "POST" }),
+  receivePurchaseOrder: (id, items) => request(`/purchase-orders/${id}/receive`, { method: "POST", body: JSON.stringify({ items }) }),
+  cancelPurchaseOrder: (id) => request(`/purchase-orders/${id}/cancel`, { method: "POST" }),
+  updatePurchaseOrder: (id, body) => request(`/purchase-orders/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
 
   // Sales
   listSales: (params) => request(`/sales${qs(params)}`).catch((e) => {

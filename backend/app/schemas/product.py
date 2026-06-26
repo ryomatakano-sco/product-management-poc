@@ -180,6 +180,8 @@ class ProductListItem(BaseModel):
     total_available: int = 0          # sum(on_hand - committed - unavailable) across variants
     default_sku: str | None = None    # SKU of the default variant (or first if none flagged)
     default_price: Decimal | None = None  # price of the default variant
+    default_variant_id: int | None = None   # id of the default variant (needed for PO line items)
+    default_cost: Decimal | None = None     # cost of the default variant
     default_low_stock_threshold: int = 10   # threshold for the row's "low stock" pill
     thumbnail_url: str | None = None
     status: ProductStatus

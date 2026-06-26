@@ -218,8 +218,9 @@ function expiryTone(days) {
 // Reads window.PLX_I18N if available; else defaults to JA format.
 function formatJpDate(dateStr) {
   if (!dateStr) return "—";
-  const parts = String(dateStr).split(/[-\/]/);
-  if (parts.length !== 3) return dateStr;
+  const datePart = String(dateStr).split("T")[0];
+  const parts = datePart.split(/[-\/]/);
+  if (parts.length !== 3) return datePart;
   const locale = window.PLX_I18N?.get?.() || "ja";
   if (locale === "en") return `${parts[0]}-${parts[1]}-${parts[2]}`;
   return `${parts[0]}年${parts[1]}月${parts[2]}日`;

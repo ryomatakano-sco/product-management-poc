@@ -27,6 +27,23 @@ from app.schemas.purchase_order import (
 router = APIRouter(prefix="/purchase-orders", tags=["purchase-orders"])
 
 
+def _item_to_read(item: PurchaseOrderItem) -> POItemRead:
+    variant = item.variant
+    product = variant.product if variant else None
+    return POItemRead(
+        id=item.id,
+        purchase_order_id=item.purchase_order_id,
+        store_id=item.store_id,
+        variant_id=item.variant_id,
+        quantity_ordered=item.quantity_ordered,
+        quantity_received=item.quantity_received,
+        unit_cost=item.unit_cost,
+        line_total=item.line_total,
+        product_name=product.name if product else None,
+        sku=variant.sku if variant else None,
+    )
+
+
 def _po_to_read(po: PurchaseOrder) -> PurchaseOrderRead:
     return PurchaseOrderRead(
         id=po.id,
@@ -45,7 +62,7 @@ def _po_to_read(po: PurchaseOrder) -> PurchaseOrderRead:
         total=po.total,
         ordered_at=po.ordered_at,
         received_at=po.received_at,
-        items=[POItemRead.model_validate(i) for i in po.items],
+        items=[_item_to_read(i) for i in po.items],
         tags=[t.name for t in po.tags],
         supplier_name=po.supplier.company_name if po.supplier else None,
         branch_name=po.destination_branch.name if po.destination_branch else None,
@@ -56,7 +73,9 @@ def _po_to_read(po: PurchaseOrder) -> PurchaseOrderRead:
 
 def _po_load_options():
     return [
-        selectinload(PurchaseOrder.items),
+        selectinload(PurchaseOrder.items)
+            .selectinload(PurchaseOrderItem.variant)
+            .selectinload(ProductVariant.product),
         selectinload(PurchaseOrder.tags),
         selectinload(PurchaseOrder.supplier),
         selectinload(PurchaseOrder.destination_branch),
@@ -197,11 +216,8 @@ async def update_purchase_order(po_id: int, body: PurchaseOrderUpdate, db: DB, s
         setattr(po, key, val)
 
     if items_data is not None:
-        # Delete old items
-        from app.models.purchase_order import PurchaseOrderItem as POI
-        await db.execute(
-            select(POI).where(POI.purchase_order_id == po.id)
-        )
+        # Preserve quantity_received from existing items by variant_id before wiping.
+        received_by_variant = {it.variant_id: it.quantity_received for it in po.items}
         for old_item in list(po.items):
             await db.delete(old_item)
         await db.flush()
@@ -209,11 +225,16 @@ async def update_purchase_order(po_id: int, body: PurchaseOrderUpdate, db: DB, s
         new_items = []
         for item_data in body.items:
             line_total = item_data.unit_cost * item_data.quantity_ordered
+            preserved_received = min(
+                received_by_variant.get(item_data.variant_id, 0),
+                item_data.quantity_ordered,
+            )
             item = PurchaseOrderItem(
                 purchase_order_id=po.id,
                 store_id=store_id,
                 variant_id=item_data.variant_id,
                 quantity_ordered=item_data.quantity_ordered,
+                quantity_received=preserved_received,
                 unit_cost=item_data.unit_cost,
                 line_total=line_total,
             )

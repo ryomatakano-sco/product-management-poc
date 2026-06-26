@@ -27,6 +27,8 @@ class POItemRead(BaseModel):
     quantity_received: int
     unit_cost: Decimal
     line_total: Decimal
+    product_name: str | None = None
+    sku: str | None = None
 
     @field_serializer("unit_cost", "line_total")
     @classmethod

@@ -117,6 +117,8 @@ def _build_list_item(p: Product, match_reasons: list[str] | None = None) -> Prod
         total_available=total_available,
         default_sku=default_variant.sku if default_variant else None,
         default_price=default_variant.price if default_variant else None,
+        default_variant_id=default_variant.id if default_variant else None,
+        default_cost=default_variant.cost if default_variant else None,
         default_low_stock_threshold=(default_variant.low_stock_threshold
                                      if default_variant and default_variant.low_stock_threshold is not None
                                      else 10),
