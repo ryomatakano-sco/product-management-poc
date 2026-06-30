@@ -131,6 +131,45 @@
   .swatches{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px}
   .sw{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--color-text-muted)}
   .sw i{width:16px;height:16px;border-radius:4px;display:inline-block;border:1px solid rgba(0,0,0,.06)}
+
+  /* AI search loading + results + inline scan cards (current UI) */
+  @keyframes mOrbit{to{transform:rotate(360deg)}}
+  @keyframes mRing{0%{transform:scale(.7);opacity:.5}100%{transform:scale(1.7);opacity:0}}
+  @keyframes mBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+  @keyframes mBar{0%{width:8%}100%{width:88%}}
+  @keyframes mSpin{to{transform:rotate(360deg)}}
+  .qchip{display:inline-flex;align-items:center;gap:8px;background:var(--color-primary-50);border:1px solid var(--color-primary-light);border-radius:9999px;padding:5px 12px;font-size:13px;color:var(--color-text)}
+  .qchip .tag{font-size:9.5px;font-weight:700;color:var(--color-primary);background:#fff;border-radius:9999px;padding:2px 8px;letter-spacing:.04em}
+  .qchip .val{font-weight:700;font-family:ui-monospace,SFMono-Regular,monospace}
+  .ai-scan{position:relative;width:88px;height:88px;margin:6px auto 2px}
+  .ai-scan .ring{position:absolute;inset:0;border-radius:50%;border:2px solid var(--color-primary);animation:mRing 1.8s ease-out infinite}
+  .ai-scan .ring2{animation-delay:.9s}
+  .ai-scan .core{position:absolute;inset:13px;border-radius:50%;background:var(--color-primary-50);border:1.5px solid var(--color-primary-light);display:flex;align-items:center;justify-content:center;font-size:26px}
+  .ai-scan .core span{animation:mBob 1.1s ease-in-out infinite;display:inline-block}
+  .ai-scan .orbit{position:absolute;inset:0;animation:mOrbit 2.6s linear infinite}
+  .ai-scan .orbit b{position:absolute;top:-3px;left:50%;margin-left:-10px;width:20px;height:20px;border-radius:50%;background:#fff;border:2px solid var(--color-primary);display:flex;align-items:center;justify-content:center;font-size:11px;box-shadow:0 2px 6px rgba(26,166,138,.3)}
+  .bar{height:6px;background:var(--color-primary-50);border-radius:9999px;max-width:300px;margin:16px auto 0;overflow:hidden}
+  .bar i{display:block;height:100%;border-radius:9999px;background:linear-gradient(90deg,var(--color-primary-light),var(--color-primary));animation:mBar 12s cubic-bezier(.2,.7,.2,1) forwards}
+  .cachebar{display:flex;align-items:center;gap:10px;background:var(--color-warn-bg);border:1px solid #FCD34D;border-radius:10px;padding:9px 12px;font-size:11.5px;color:#92400e;margin-bottom:10px;line-height:1.5}
+  .cachebar button{margin-left:auto;height:30px;padding:0 13px;border:0;border-radius:9999px;background:var(--color-primary);color:#fff;font-weight:700;font-size:11px;white-space:nowrap;cursor:pointer}
+  .newnote{background:var(--color-primary-50);border:1px solid var(--color-primary-light);border-radius:10px;padding:8px 12px;font-size:11.5px;color:var(--color-primary-dark);font-weight:700;margin-bottom:10px}
+  .foundbar{display:flex;align-items:center;gap:8px;background:var(--color-primary-50);border:1px solid var(--color-primary-light);border-radius:10px;padding:9px 12px;font-size:11.5px;margin-bottom:12px}
+  .foundbar .dot{width:8px;height:8px;border-radius:50%;background:var(--color-primary)}
+  .flabel{font-size:11.5px;font-weight:700;margin:10px 0 5px}
+  .opt{display:flex;align-items:center;gap:10px;border:1px solid var(--color-border);border-radius:10px;padding:9px 12px;margin-bottom:6px}
+  .opt .box{width:14px;height:14px;border-radius:4px;border:2px solid var(--color-border);flex-shrink:0}
+  .opt.on{border-color:var(--color-primary);background:var(--color-primary-50)}
+  .opt.on .box{background:var(--color-primary);border-color:var(--color-primary)}
+  .opt .ov{font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:6px}
+  .newbadge{font-size:9px;font-weight:700;color:#fff;background:var(--color-primary);padding:1px 7px;border-radius:9999px}
+  .rescard{border:1px solid var(--color-border);border-radius:10px;padding:10px 12px;margin-bottom:8px;text-align:left}
+  .rescard .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .rescard .jan{font-family:ui-monospace,SFMono-Regular,monospace;font-size:12px;color:var(--color-text-muted)}
+  .rescard .ttl{font-size:13px;font-weight:700;margin-top:6px}
+  .rescard .sub{font-size:11px;color:var(--color-text-muted);margin-top:2px}
+  .rescard .openbtn{height:28px;padding:0 12px;border:0;border-radius:8px;background:var(--color-primary);color:#fff;font-weight:700;font-size:11px;white-space:nowrap}
+  .spin{width:16px;height:16px;border-radius:50%;border:2px solid var(--color-primary-light);border-top:2px solid var(--color-primary);animation:mSpin .9s linear infinite}
+  .cachetag{font-size:9px;font-weight:700;color:#92400e;background:var(--color-warn-bg);padding:1px 6px;border-radius:9999px;margin-left:6px}
 </style>
 </head>
 <body>
@@ -141,7 +180,7 @@
   </div>
   <div class="label-dot">新機能デザイン / NEW FEATURE</div>
   <h1>スマホでバーコード連続スキャン</h1>
-  <p class="lead">商品登録画面から、スマホのカメラで商品のJANバーコードを<b>続けて</b>読み取り、PCの登録フォームへ自動連携する機能。1回ペアリングすれば複数商品を連続スキャンでき、新商品ごとに登録タブが開きます。Pair once, scan many — each new product opens its own registration tab.</p>
+  <p class="lead">商品登録画面から、スマホのカメラで商品のJANバーコードを<b>続けて</b>読み取り、PC側でAI検索・自動入力する機能。1回ペアリングすれば複数商品を連続スキャンでき、各商品の結果がPCのパネルに表示されます。Pair once, scan many — each product's lookup result appears inline in the desktop panel.</p>
 
   <!-- FLOW -->
   <div class="sectitle">フロー / FLOW</div>
@@ -149,7 +188,7 @@
     <div class="step"><div class="n">1</div><h4>QRを表示</h4><p>PCが「📱 スマホで連続スキャン」でペアリングQRを表示<span class="en">PC shows pairing QR</span></p></div>
     <div class="step"><div class="n">2</div><h4>QRを読取</h4><p>スマホでQRを読み、スキャン画面を開く<span class="en">Phone scans QR → opens scan page</span></p></div>
     <div class="step"><div class="n">3</div><h4>連続スキャン</h4><p>商品のJANを続けて読み取り（JAN以外は無視）<span class="en">Scan products continuously</span></p></div>
-    <div class="step"><div class="n">4</div><h4>自動連携</h4><p>新商品ごとにPCで登録タブが開き自動入力<span class="en">New tab + auto-fill per product</span></p></div>
+    <div class="step"><div class="n">4</div><h4>結果表示</h4><p>新商品ごとにPCパネルへ結果を表示・自動入力<span class="en">Inline result per product</span></p></div>
   </div>
 
   <!-- PHONE SCREENS -->
@@ -239,7 +278,7 @@
 
     <!-- Desktop B: pairing + received list -->
     <div class="frame">
-      <div class="cap">⑤ ペアリング＆受信リスト<span>Pairing QR + received products</span></div>
+      <div class="cap">⑤ スキャンセッション（結果インライン）<span>Pairing QR + inline result cards</span></div>
       <div class="desktop">
         <div class="winbar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span class="url">localhost:8000/app/#/products/new</span></div>
         <div class="dt-body">
@@ -271,17 +310,75 @@
               </svg>
             </div>
             <div class="pair-side">
-              <span class="badge">● スキャン待機中（3 件受信）</span>
-              <div class="recv">
-                <div class="rh">受信した商品 / received</div>
-                <div class="rrow"><span class="jan">4901616009677</span><span class="ok">✓ タブを開きました</span></div>
-                <div class="rrow"><span class="jan">4548161168857</span><span class="ok">✓ タブを開きました</span></div>
-                <div class="rrow"><span class="jan">4903301266631</span><button class="openbtn">開く</button></div>
+              <span class="badge">● スキャン待機中（3 件）</span>
+              <!-- inline per-product result cards (no pop-up tabs) -->
+              <div style="margin-top:10px">
+                <div class="rescard">
+                  <div class="top"><span class="jan">4901616009677</span><button class="openbtn">登録フォームを開く</button></div>
+                  <div class="ttl">ガム デンタルペースト 35g<span class="cachetag">🗄️ キャッシュ</span></div>
+                  <div class="sub">サンスター ・ ¥187</div>
+                </div>
+                <div class="rescard">
+                  <div class="top"><span class="jan">4548161168857</span><button class="openbtn">登録フォームを開く</button></div>
+                  <div class="ttl">ルシェロ B-20M ピセラ</div>
+                  <div class="sub">ジーシー（GC）</div>
+                </div>
+                <div class="rescard">
+                  <div class="top"><span class="jan">4903301266631</span><span class="spin"></span></div>
+                  <div class="sub" style="margin-top:6px">AIで検索中…</div>
+                </div>
               </div>
-              <div class="note">ポップアップがブロックされた商品は「開く」から開けます。サイトのポップアップを許可すると全自動になります。</div>
             </div>
           </div>
           <div class="urlnote">https://192.168.0.164:8000/app/#/scan?token=JY6FOTlWQxb6</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- AI SEARCH UX -->
+  <div class="sectitle">AI検索のUX / AI SEARCH（ローディング・キャッシュ・結果）</div>
+  <div class="board">
+
+    <!-- F: loading animation + query chip -->
+    <div class="frame">
+      <div class="cap">⑥ 検索中アニメーション<span>Live loading + 検索クエリ</span></div>
+      <div class="desktop">
+        <div class="winbar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span class="url">localhost:8000/app/#/products/new</span></div>
+        <div class="dt-body" style="text-align:center">
+          <div class="qchip" style="margin-bottom:20px"><span class="tag">JAN</span><span class="val">4901616009677</span><span style="color:var(--color-text-muted);font-size:12px">を検索中</span></div>
+          <div class="ai-scan">
+            <div class="ring"></div><div class="ring ring2"></div>
+            <div class="core"><span>🌐</span></div>
+            <div class="orbit"><b>🔍</b></div>
+          </div>
+          <div style="font-size:14px;font-weight:700;margin-top:8px">ECサイト・JANデータベースを照合中…</div>
+          <div style="font-size:11px;color:var(--color-text-subtle);margin-top:3px">Cross-referencing retailers &amp; JAN DB</div>
+          <div class="bar"><i></i></div>
+          <div style="font-size:11px;color:var(--color-text-muted);margin-top:12px">通常 10〜20秒ほどで結果が出ます。少々お待ちください。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- G: results with cache label + re-search + new badges -->
+    <div class="frame">
+      <div class="cap">⑦ 結果（キャッシュ・再検索・新規）<span>Results: cache label, 再検索, 🆕</span></div>
+      <div class="desktop">
+        <div class="winbar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span class="url">localhost:8000/app/#/products/new</span></div>
+        <div class="dt-body">
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--color-text-muted);margin-bottom:12px;flex-wrap:wrap">
+            検索クエリ: <span class="qchip"><span class="tag">JAN</span><span class="val">4901616009677</span></span> の結果
+          </div>
+          <div class="cachebar">🗄️ これは<b>以前の検索結果（キャッシュ）</b>です。最新ではない可能性があります。<button>🔄 再検索する</button></div>
+          <div class="newnote">🆕 再検索で <b>2</b> 件の新しい候補が見つかりました（下に「新規」表示）。</div>
+          <div class="foundbar"><span class="dot"></span><b>5 項目で候補が見つかりました。</b><span style="color:var(--color-text-muted)">各項目で1つ選んで「適用」</span></div>
+          <div class="flabel">商品名 (title)</div>
+          <div class="opt on"><span class="box"></span><span class="ov">ガム デンタルペースト 35g</span></div>
+          <div class="flabel">参考価格</div>
+          <div class="opt"><span class="box"></span><span class="ov"><span class="newbadge">🆕 新規</span>¥187（税込）</span></div>
+          <div class="flabel">JAN / バーコード</div>
+          <div class="opt"><span class="box"></span><span class="ov"><span class="newbadge">🆕 新規</span>4901616009677</span></div>
         </div>
       </div>
     </div>
