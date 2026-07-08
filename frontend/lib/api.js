@@ -131,6 +131,7 @@ const api = {
   listSalesStaff: () => request(`/sales/staff`).catch(() => []),
   createSale: (body) => request(`/sales`, { method: "POST", body: JSON.stringify(body) }),
   refundSale: (id) => request(`/sales/${id}/refund`, { method: "POST" }),
+  getReceiptData: (id) => request(`/sales/${id}/receipt-data`),
   getSalesSummary: () => request(`/sales/summary`).catch((e) => {
     if (e.status === 405 || e.status === 404)
       return {

@@ -886,7 +886,7 @@ function SaleDetailModal({ saleId, onClose, onRefunded }) {
             gap: 10, marginTop: 16, paddingTop: 14,
             borderTop: `1px solid ${T.PLX_LINE_200}`,
           }}>
-            <div>
+            <div style={{ display: "inline-flex", gap: 8 }}>
               {canRefund && (
                 <button
                   type="button" onClick={doRefund} disabled={refunding}
@@ -897,6 +897,13 @@ function SaleDetailModal({ saleId, onClose, onRefunded }) {
                     cursor: refunding ? "not-allowed" : "pointer",
                   }}
                 >{refunding ? "処理中…" : "この販売を返品"}</button>
+              )}
+              {!isRefund && (
+                <a
+                  href={`#/sales/${s.id}/receipt`} onClick={onClose}
+                  style={{ ...btnSecondary, textDecoration: "none",
+                    display: "inline-flex", alignItems: "center", gap: 6 }}
+                >🧾 レシート発行</a>
               )}
             </div>
             <button type="button" onClick={onClose} style={btnSecondary}>閉じる</button>

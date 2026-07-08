@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -11,9 +12,13 @@ from sqlalchemy.orm import selectinload
 
 from app.deps import DB, StoreId
 from app.models.inventory import AdjustmentReason, InventoryAdjustment, InventoryField
-from app.models.product import Product, ProductStatus, ProductVariant
+from app.models.product import Product, ProductStatus, ProductVariant, TaxRate
 from app.models.sale import PaymentMethod, SalesRecord
-from app.schemas.sale import SaleCreate, SaleListResponse, SaleRead, SalesSummary
+from app.models.settings_kv import SettingsKV
+from app.schemas.sale import (
+    ReceiptData, ReceiptLine, ReceiptStore,
+    SaleCreate, SaleListResponse, SaleRead, SalesSummary,
+)
 
 router = APIRouter(prefix="/sales", tags=["sales"])
 
@@ -252,6 +257,99 @@ async def export_sales_csv(
         iter([buf.getvalue()]),
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+PM_LABEL_JA = {
+    PaymentMethod.cash:          "現金",
+    PaymentMethod.card:          "カード",
+    PaymentMethod.paypay:        "PayPay",
+    PaymentMethod.bank_transfer: "銀行振込",
+}
+
+
+@router.get("/{sale_id}/receipt-data", response_model=ReceiptData)
+async def get_receipt_data(sale_id: int, db: DB, store_id: StoreId):
+    """Aggregated data used by the receipt-issue page.
+
+    Combines the sale, its variant + product (for the product name and tax
+    rate), and the store's general settings (company name, address, phone,
+    qualified-invoice registration number). Computes the 8% / 10% tax
+    breakdown so the frontend doesn't have to.
+
+    unit_price is stored 税込 in this PoC. Tax-excl subtotal is derived by
+    dividing by (1 + rate); the small rounding gap goes into the tax line
+    so 内税 always sums to 税込 subtotal.
+    """
+    sale = (await db.execute(
+        select(SalesRecord)
+        .where(SalesRecord.id == sale_id, SalesRecord.store_id == store_id)
+        .options(selectinload(SalesRecord.variant).selectinload(ProductVariant.product))
+    )).scalar_one_or_none()
+    if not sale:
+        raise HTTPException(404, detail="Sale not found")
+
+    variant = sale.variant
+    product = variant.product if variant else None
+    if not product:
+        raise HTTPException(400, detail="商品情報が取得できません")
+
+    is_reduced = product.tax_rate == TaxRate.reduced
+    rate_pct = 8 if is_reduced else 10
+    rate = Decimal("0.08") if is_reduced else Decimal("0.10")
+
+    unit_price = Decimal(str(sale.unit_price))
+    qty = int(sale.quantity)
+    line_total = unit_price * qty
+
+    subtotal_excl = (line_total / (Decimal("1") + rate)).quantize(Decimal("1"))
+    tax = line_total - subtotal_excl
+
+    def yen(d: Decimal) -> str:
+        return str(int(d))
+
+    line = ReceiptLine(
+        name=product.name,
+        quantity=qty,
+        unit_price=yen(unit_price),
+        line_total=yen(line_total),
+        tax_rate=product.tax_rate.value,
+        tax_rate_pct=rate_pct,
+        is_reduced=is_reduced,
+    )
+
+    kv = (await db.execute(
+        select(SettingsKV).where(
+            SettingsKV.store_id == store_id, SettingsKV.namespace == "general"
+        )
+    )).scalar_one_or_none()
+    general = (kv.data_json if kv and kv.data_json else {})
+
+    store_info = ReceiptStore(
+        company_name=general.get("company_name") or "ペイライト歯科クリニック",
+        address=general.get("address"),
+        phone=general.get("phone"),
+        registration_no=general.get("company_registration_no"),
+    )
+
+    sold_at_iso = (
+        sale.sold_at.replace(tzinfo=timezone.utc) if sale.sold_at.tzinfo is None else sale.sold_at
+    ).astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    return ReceiptData(
+        transaction_id=sale.transaction_id,
+        sold_at=sold_at_iso,
+        payment_method=sale.payment_method.value,
+        payment_method_label=PM_LABEL_JA.get(sale.payment_method, sale.payment_method.value),
+        lines=[line],
+        subtotal_10_tax_excl=yen(subtotal_excl if not is_reduced else Decimal(0)),
+        tax_10=yen(tax if not is_reduced else Decimal(0)),
+        subtotal_10_tax_incl=yen(line_total if not is_reduced else Decimal(0)),
+        subtotal_8_tax_excl=yen(subtotal_excl if is_reduced else Decimal(0)),
+        tax_8=yen(tax if is_reduced else Decimal(0)),
+        subtotal_8_tax_incl=yen(line_total if is_reduced else Decimal(0)),
+        total=yen(line_total),
+        store=store_info,
     )
 
 

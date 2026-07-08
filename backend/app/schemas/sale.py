@@ -80,3 +80,38 @@ class SalesSummary(BaseModel):
     month_revenue: str
     last_month_count: int = 0
     last_month_revenue: str = "0"
+
+
+class ReceiptLine(BaseModel):
+    """One line item in the receipt breakdown."""
+    name: str
+    quantity: int
+    unit_price: str
+    line_total: str
+    tax_rate: str          # 'standard' | 'reduced'
+    tax_rate_pct: int      # 10 or 8
+    is_reduced: bool
+
+
+class ReceiptStore(BaseModel):
+    company_name: str
+    address: str | None = None
+    phone: str | None = None
+    registration_no: str | None = None  # 適格請求書 登録番号 (T-13-digit)
+
+
+class ReceiptData(BaseModel):
+    """Everything the receipt page needs to render one transaction."""
+    transaction_id: str
+    sold_at: str            # ISO 8601 UTC (Z-suffixed)
+    payment_method: str
+    payment_method_label: str
+    lines: list[ReceiptLine]
+    subtotal_10_tax_excl: str
+    tax_10: str
+    subtotal_10_tax_incl: str
+    subtotal_8_tax_excl: str
+    tax_8: str
+    subtotal_8_tax_incl: str
+    total: str
+    store: ReceiptStore

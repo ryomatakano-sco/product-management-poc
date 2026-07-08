@@ -43,6 +43,20 @@ class WeightUnit(str, enum.Enum):
     kg = "kg"
 
 
+class TaxRate(str, enum.Enum):
+    """Japanese consumption tax bracket for the product.
+
+    * ``standard`` = 10% (default; adult retail, most consumables)
+    * ``reduced``  = 8%  (軽減税率 — food-adjacent items like children's
+                          fluoride gel or edible dental candies)
+
+    Used by the receipt-issue page to compute the tax-breakdown block on
+    qualified invoices (適格請求書).
+    """
+    standard = "standard"
+    reduced = "reduced"
+
+
 class Product(Base, TimestampMixin):
     """Product table — superset of the client's existing `goods` table.
 
@@ -74,6 +88,9 @@ class Product(Base, TimestampMixin):
     )
     is_insurable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_pinned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    tax_rate: Mapped[TaxRate] = mapped_column(
+        Enum(TaxRate), nullable=False, server_default="standard",
+    )
     default_insurance_point_at_payment: Mapped[float | None] = mapped_column(
         Numeric(10, 2), nullable=True, comment="Legacy: insurance point value"
     )
