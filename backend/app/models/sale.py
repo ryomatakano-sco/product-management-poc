@@ -36,16 +36,31 @@ class SalesRecord(Base):
     variant_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("product_variants.id"), nullable=False
     )
+    transaction_id: Mapped[str] = mapped_column(
+        String(32), nullable=False, unique=True,
+        comment="Human-readable ID, format SL-YYYYMMDD-####",
+    )
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     unit_price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     payment_method: Mapped[PaymentMethod] = mapped_column(
         Enum(PaymentMethod), nullable=False, server_default="cash"
     )
     sold_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    sold_by: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="Free-text staff name (no user model yet)",
+    )
     patient_ref: Mapped[str | None] = mapped_column(
-        String(255), nullable=True, comment="Placeholder for future patient linking"
+        String(255), nullable=True, comment="Free-text patient name/reference",
     )
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    refunded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        comment="Set on the original sale when it has been refunded",
+    )
+    refund_of_sale_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("sales_records.id", ondelete="SET NULL"), nullable=True,
+        comment="On a refund row, points to the original sale being reversed",
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

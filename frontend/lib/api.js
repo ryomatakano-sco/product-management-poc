@@ -127,12 +127,34 @@ const api = {
     if (e.status === 405 || e.status === 404) return { items: [], total: 0 };
     throw e;
   }),
+  getSale: (id) => request(`/sales/${id}`),
+  listSalesStaff: () => request(`/sales/staff`).catch(() => []),
   createSale: (body) => request(`/sales`, { method: "POST", body: JSON.stringify(body) }),
+  refundSale: (id) => request(`/sales/${id}/refund`, { method: "POST" }),
   getSalesSummary: () => request(`/sales/summary`).catch((e) => {
     if (e.status === 405 || e.status === 404)
-      return { today_count: 0, today_revenue: "0", month_count: 0, month_revenue: "0" };
+      return {
+        today_count: 0, today_revenue: "0", yesterday_count: 0, yesterday_revenue: "0",
+        month_count: 0, month_revenue: "0", last_month_count: 0, last_month_revenue: "0",
+      };
     throw e;
   }),
+  downloadSalesCsv: async (params) => {
+    // Direct anchor download can't send X-Store-Id header, so fetch + blob-trigger.
+    const res = await fetch(`/sales/export.csv${qs(params)}`, {
+      headers: { "X-Store-Id": String(getStoreId()) },
+    });
+    if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
+    const cd = res.headers.get("Content-Disposition") || "";
+    const m = cd.match(/filename="?([^"]+)"?/);
+    const filename = m ? m[1] : "sales.csv";
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  },
 
   // Vendors detail (already there) + sub-resources (graceful fallback)
   getVendor: (id) => request(`/vendors/${id}`),

@@ -175,7 +175,7 @@ function StatusBadge({ status }) {
   return <Pill color={T.PLX_GREEN_700} bg={T.PLX_GREEN_100}>通常</Pill>;
 }
 
-function KpiTile({ label, value, unit, tone, onClick, clickable }) {
+function KpiTile({ label, value, unit, tone, onClick, clickable, extra }) {
   const color = tone === "red" ? T.PLX_RED_600 :
                 tone === "amber" ? T.PLX_AMBER_600 :
                 tone === "muted" ? T.PLX_INK_500 :
@@ -194,6 +194,7 @@ function KpiTile({ label, value, unit, tone, onClick, clickable }) {
         <div style={{ fontSize: 28, fontWeight: 900, color, letterSpacing: "-0.02em" }}>{value}</div>
         {unit && <div style={{ fontSize: 13, color: T.PLX_INK_700, fontWeight: 600 }}>{unit}</div>}
       </div>
+      {extra && <div style={{ marginTop: 8 }}>{extra}</div>}
     </div>
   );
 }
