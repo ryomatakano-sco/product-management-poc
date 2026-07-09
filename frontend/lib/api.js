@@ -185,6 +185,24 @@ const api = {
   getSettings:    (ns) => request(`/settings/${ns}`),
   updateSettings: (ns, body) => request(`/settings/${ns}`, { method: "PUT", body: JSON.stringify(body) }),
   testAiConnection: () => request(`/settings/ai/test`, { method: "POST" }),
+  // Logo upload — multipart, so bypass the JSON `request` wrapper (the
+  // browser must set the multipart boundary Content-Type itself).
+  uploadLogo: async (file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`/settings/logo`, {
+      method: "POST",
+      headers: { "X-Store-Id": String(getStoreId()) },
+      body: fd,
+    });
+    if (!res.ok) {
+      let body = null;
+      try { body = await res.json(); } catch (_) {}
+      throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status, body });
+    }
+    return res.json();
+  },
+  deleteLogo: () => request(`/settings/logo`, { method: "DELETE" }),
 
   // Support
   getFaq:              () => request(`/support/faq`),

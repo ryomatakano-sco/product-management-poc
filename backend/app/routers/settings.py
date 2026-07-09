@@ -13,9 +13,11 @@ store; this is the PoC version.)
 
 from __future__ import annotations
 
+import secrets
 from datetime import datetime, timezone
+from pathlib import Path as FsPath
 
-from fastapi import APIRouter, HTTPException, Path
+from fastapi import APIRouter, HTTPException, Path, UploadFile
 from sqlalchemy import select
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 
@@ -159,6 +161,90 @@ async def put_settings(
         data=_scrub_secrets(namespace, row.data_json),
         updated_at=row.updated_at,
     )
+
+
+# ── 表示ロゴ upload ──────────────────────────────────────────────────
+# Files land in backend/media/ (gitignored), served at /media/ by main.py.
+# The public URL is stored in the `general` namespace's `logo_url` field so
+# the existing settings GET/PUT flow keeps working unchanged.
+
+MEDIA_DIR = FsPath(__file__).resolve().parent.parent.parent / "media"
+_LOGO_TYPES = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/webp": ".webp",
+    # SVG deliberately excluded — it can embed scripts (stored-XSS vector).
+}
+_LOGO_MAX_BYTES = 2 * 1024 * 1024  # 2MB
+
+
+async def _load_general_row(db, store_id: int):
+    return (await db.execute(
+        select(SettingsKV).where(
+            SettingsKV.store_id == store_id,
+            SettingsKV.namespace == "general",
+        )
+    )).scalar_one_or_none()
+
+
+def _delete_old_logo_file(old_url: str | None) -> None:
+    """Best-effort removal of a previously uploaded logo file."""
+    if not old_url or not old_url.startswith("/media/"):
+        return
+    old_path = MEDIA_DIR / FsPath(old_url).name
+    try:
+        if old_path.is_file():
+            old_path.unlink()
+    except OSError:
+        pass  # stale file left behind is harmless in the PoC
+
+
+async def _save_general_logo_url(db, store_id: int, logo_url: str | None) -> None:
+    row = await _load_general_row(db, store_id)
+    data = dict(row.data_json) if row else _default_for_namespace("general")
+    data["logo_url"] = logo_url
+    stmt = mysql_insert(SettingsKV).values(
+        store_id=store_id, namespace="general", data_json=data,
+    )
+    stmt = stmt.on_duplicate_key_update(data_json=data)
+    await db.execute(stmt)
+    await db.commit()
+
+
+@router.post("/logo", summary="表示ロゴをアップロード")
+async def upload_logo(file: UploadFile, db: DB, store_id: StoreId):
+    ext = _LOGO_TYPES.get((file.content_type or "").lower())
+    if ext is None:
+        raise HTTPException(
+            422,
+            detail={"detail": "PNG / JPEG / WebP のみアップロードできます", "code": "VALIDATION_ERROR"},
+        )
+    contents = await file.read()
+    if len(contents) > _LOGO_MAX_BYTES:
+        raise HTTPException(
+            422,
+            detail={"detail": "ファイルサイズは 2MB 以下にしてください", "code": "VALIDATION_ERROR"},
+        )
+
+    row = await _load_general_row(db, store_id)
+    old_url = (row.data_json or {}).get("logo_url") if row else None
+
+    MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+    fname = f"logo_{store_id}_{secrets.token_hex(8)}{ext}"
+    (MEDIA_DIR / fname).write_bytes(contents)
+
+    logo_url = f"/media/{fname}"
+    await _save_general_logo_url(db, store_id, logo_url)
+    _delete_old_logo_file(old_url)
+    return {"logo_url": logo_url}
+
+
+@router.delete("/logo", status_code=204, summary="表示ロゴを削除")
+async def delete_logo(db: DB, store_id: StoreId):
+    row = await _load_general_row(db, store_id)
+    old_url = (row.data_json or {}).get("logo_url") if row else None
+    await _save_general_logo_url(db, store_id, None)
+    _delete_old_logo_file(old_url)
 
 
 @router.post("/ai/test", summary="OpenAI 接続テスト")

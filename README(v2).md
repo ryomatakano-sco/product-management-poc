@@ -319,3 +319,28 @@ The last two items from the medium list that don't require file-upload infrastru
 2. 商品一覧 → 再発注済 chip shows a count; clicking filters to just the stamped products.
 3. 発注書 → KPI tiles show 先月比 delta chips; 期間 select narrows the table (and the CSV export follows it).
 4. Receive a PO for a stamped product → its 再発注済 badge/chip entry disappears.
+
+---
+
+## 表示ロゴのアップロード (Logo upload)
+
+Branch: `feature/sales-records`
+
+The last medium item — and the app's **first real file-upload plumbing** (everything before this was URL-input only).
+
+### What's where
+
+| Piece | Where |
+|---|---|
+| Upload / delete endpoints | `backend/app/routers/settings.py` — `POST /settings/logo` (multipart) + `DELETE /settings/logo`. PNG/JPEG/WebP only, 2MB cap. **SVG deliberately rejected** (can embed scripts — stored-XSS vector). Replacing or deleting removes the old file from disk. |
+| Storage & serving | Files land in `backend/media/` (gitignored, auto-created) with random names (`logo_{store}_{token}.png`), served at `/media/` by a new StaticFiles mount in `main.py`. |
+| Settings blob | The public URL is written into the `general` namespace's existing `logo_url` field — the schema had the field since prompt 03; it was just never populated. Normal GET/PUT round-trips preserve it. |
+| UI | 設定 › 一般 → 表示ロゴ: dashed **click-or-drag drop zone** (mockup's ブランディング design). Once uploaded: preview thumbnail + 変更 / 削除 buttons. `useSettingsForm` gained a `reload` so the pane refreshes after upload. |
+
+### How to test
+
+1. 設定 › 一般 → 表示ロゴ → click the dashed zone (or drag an image onto it) → preview appears, toast confirms.
+2. 変更 swaps the file (old one is deleted from `backend/media/`); 削除 clears it back to the drop zone.
+3. Try a non-image or >2MB file → Japanese validation error toast.
+
+The logo is stored and served; wiring it into the receipt/PO print headers is a natural follow-up.

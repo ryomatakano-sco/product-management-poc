@@ -107,7 +107,7 @@ function useSettingsForm(namespace) {
       setSaving(false);
     }
   };
-  return { form, update, save, saving, loading: q.loading, error: q.error };
+  return { form, update, save, saving, loading: q.loading, error: q.error, reload: q.refetch };
 }
 
 function GeneralSettings() {
@@ -143,7 +143,80 @@ function GeneralSettings() {
           </div>
         </FormRow>
       </div>
+
+      {/* 表示ロゴ — mockup's dashed drop zone (ブランディング section) */}
+      <LogoUploader logoUrl={f.form.logo_url} onChanged={f.reload} />
     </SettingsCard>
+  );
+}
+
+// Dashed drop-zone for the company logo. Click or drag & drop a PNG/JPEG/WebP
+// (≤2MB) → POST /settings/logo stores the file and writes `logo_url` into the
+// general settings blob; 削除 clears both.
+function LogoUploader({ logoUrl, onChanged }) {
+  const inputRef = React.useRef(null);
+  const [busy, setBusy] = React.useState(false);
+  const [dragOver, setDragOver] = React.useState(false);
+
+  const doUpload = async (file) => {
+    if (!file || busy) return;
+    setBusy(true);
+    try {
+      await api.uploadLogo(file);
+      window.PLX_TOAST.success("ロゴをアップロードしました");
+      onChanged();
+    } catch (e) {
+      window.PLX_TOAST.error(e?.body?.detail?.detail || "アップロードに失敗しました");
+    } finally { setBusy(false); }
+  };
+
+  const doDelete = async () => {
+    if (busy) return;
+    if (!window.confirm("ロゴを削除しますか？")) return;
+    setBusy(true);
+    try {
+      await api.deleteLogo();
+      window.PLX_TOAST.success("ロゴを削除しました");
+      onChanged();
+    } catch (e) {
+      window.PLX_TOAST.error("削除に失敗しました");
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <FormRow label="表示ロゴ" hint="PNG / JPEG / WebP、2MB まで。レシートや帳票のヘッダーに使用予定です。">
+      <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp"
+        style={{ display: "none" }}
+        onChange={(e) => { doUpload(e.target.files?.[0]); e.target.value = ""; }} />
+      {logoUrl ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <img src={logoUrl} alt="ロゴ" style={{
+            height: 64, maxWidth: 220, objectFit: "contain",
+            border: `1px solid ${T.PLX_LINE_200}`, borderRadius: T.RADIUS_MD,
+            background: "#fff", padding: 6,
+          }} />
+          <button onClick={() => inputRef.current?.click()} disabled={busy}
+            style={{ ...btnSecondary, opacity: busy ? 0.6 : 1 }}>変更</button>
+          <button onClick={doDelete} disabled={busy} style={{
+            ...btnSecondary, color: T.PLX_RED_600, opacity: busy ? 0.6 : 1,
+          }}>削除</button>
+        </div>
+      ) : (
+        <div
+          onClick={() => inputRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); doUpload(e.dataTransfer.files?.[0]); }}
+          style={{
+            border: `2px dashed ${dragOver ? T.PLX_GREEN_600 : T.PLX_LINE_200}`,
+            borderRadius: T.RADIUS_MD, padding: "26px 20px", textAlign: "center",
+            cursor: "pointer", background: dragOver ? T.PLX_GREEN_100 : T.PLX_SURFACE_50,
+            color: T.PLX_INK_500, fontSize: 12, transition: "all .12s",
+          }}>
+          {busy ? "アップロード中…" : <>🖼 クリックして画像を選択、またはここにドラッグ&ドロップ</>}
+        </div>
+      )}
+    </FormRow>
   );
 }
 
