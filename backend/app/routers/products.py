@@ -129,6 +129,7 @@ def _build_list_item(p: Product, match_reasons: list[str] | None = None) -> Prod
         item_type=p.item_type,
         expiry_date=p.expiry_date,
         has_reorder_url=bool(p.reorder_url),
+        reorder_requested_at=p.reorder_requested_at,
         match_reasons=match_reasons or [],
     )
 
@@ -149,6 +150,10 @@ async def list_products(
         None,
         ge=0,
         description="Only return products with expiry_date within N days (consumables only)",
+    ),
+    reorder_requested: bool | None = Query(
+        None,
+        description="true = only products whose 再発注する was clicked and not yet received",
     ),
 ):
     # Reasons column is only attached when a `q` is provided. Selecting
@@ -185,6 +190,11 @@ async def list_products(
     if expiring_within_days is not None:
         cutoff = date.today() + timedelta(days=expiring_within_days)
         stmt = stmt.where(Product.expiry_date.is_not(None), Product.expiry_date <= cutoff)
+    if reorder_requested is not None:
+        stmt = stmt.where(
+            Product.reorder_requested_at.is_not(None)
+            if reorder_requested else Product.reorder_requested_at.is_(None)
+        )
 
     # Exclude archived by default
     if status is None:
@@ -384,6 +394,7 @@ async def get_product(product_id: int, db: DB, store_id: StoreId):
         lot_number=product.lot_number,
         unit=product.unit,
         reorder_url=product.reorder_url,
+        reorder_requested_at=product.reorder_requested_at,
         ai_session_id=product.ai_session_id,
         variants=[VariantRead.model_validate(v) for v in product.variants],
         images=[ImageRead.model_validate(i) for i in images_sorted],

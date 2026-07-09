@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import enum
-from datetime import date
+from datetime import date, datetime
 
 from sqlalchemy import (
     BigInteger,
@@ -129,6 +129,10 @@ class Product(Base, TimestampMixin):
     reorder_url: Mapped[str | None] = mapped_column(
         String(2000), nullable=True,
         comment="Supplier URL for one-click reordering (Yoshioka 2026-05-11)",
+    )
+    reorder_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True,
+        comment="Stamped when 再発注する is clicked; cleared on PO receive",
     )
 
     ai_session_id: Mapped[int | None] = mapped_column(

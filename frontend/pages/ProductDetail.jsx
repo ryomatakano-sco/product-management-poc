@@ -179,13 +179,29 @@ function ProductDetail({ productId }) {
                 k="発注先 URL"
                 v={<UrlLink url={p.reorder_url} />}
                 right={
-                  <a href={p.reorder_url} target="_blank" rel="noopener noreferrer" style={{
-                    height: 30, padding: "0 12px", borderRadius: 9999,
-                    background: PLX_GREEN, color: "#fff", border: "none",
-                    fontWeight: 700, fontSize: 11, cursor: "pointer",
-                    display: "inline-flex", alignItems: "center", gap: 5, textDecoration: "none",
-                    boxShadow: "0 4px 10px rgba(26,166,138,.22)",
-                  }}>🔗 再発注する</a>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    {p.reorder_requested_at && (
+                      <span title={`再発注済 ${formatJpDate(p.reorder_requested_at)}`} style={{
+                        fontSize: 10, fontWeight: 700, color: PLX_GREEN,
+                        background: PLX_GREEN_LIGHT, padding: "3px 9px", borderRadius: 9999,
+                      }}>✓ 再発注済</span>
+                    )}
+                    <a href={p.reorder_url} target="_blank" rel="noopener noreferrer"
+                      onClick={() => {
+                        // Stamp 再発注済 (fire-and-forget) — powers the 商品一覧
+                        // chip; cleared automatically when a PO is received.
+                        api.updateProduct(p.id, { reorder_requested_at: new Date().toISOString() })
+                          .then(() => { window.PLX_TOAST?.success?.("再発注済としてマークしました"); productQ.refetch(); })
+                          .catch(() => {});
+                      }}
+                      style={{
+                        height: 30, padding: "0 12px", borderRadius: 9999,
+                        background: PLX_GREEN, color: "#fff", border: "none",
+                        fontWeight: 700, fontSize: 11, cursor: "pointer",
+                        display: "inline-flex", alignItems: "center", gap: 5, textDecoration: "none",
+                        boxShadow: "0 4px 10px rgba(26,166,138,.22)",
+                      }}>🔗 再発注する</a>
+                  </span>
                 }
               />
             )}

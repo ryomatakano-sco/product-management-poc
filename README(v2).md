@@ -293,3 +293,29 @@ Branch: `feature/sales-records`
 1. 商品一覧 → tick the header checkbox → green bar shows 12件選択中 → pick a category → 一括カテゴリ変更 (or 一括アーカイブ with confirm).
 2. ダッシュボード → カテゴリ別在庫状況 shows real counts/values; click a bar to open that category's product list.
 3. 商品登録 → type an existing JAN (e.g. `4901616213241`) in JAN/バーコード → red duplicate banner; type an existing product name → amber similar-name note.
+
+---
+
+## クイック改善バッチ 5 (Quick wins batch 5)
+
+Branch: `feature/sales-records`
+
+The last two items from the medium list that don't require file-upload infrastructure.
+
+| Feature | Where |
+|---|---|
+| 再発注済トラッキング | Migration `010_product_reorder_requested.py` adds `products.reorder_requested_at`. Clicking 🔗 再発注する on product detail now **stamps the product** (fire-and-forget PATCH) and shows a ✓ 再発注済 badge with the date. The 商品一覧「再発注済」chip — a `console.log` TODO since May — is now a real backend filter (`?reorder_requested=true`) with a live count. **Receiving a PO automatically clears the flag** on the affected products (reorder fulfilled). |
+| 発注書 期間フィルタ + 実データKPIデルタ | New `GET /purchase-orders/summary` (今月 vs 先月 count/amount — cancelled excluded — plus current 入荷待ち/一部入荷 counts). KPI tiles now show **↑ +N件 先月比 / ↑ +¥X 先月比** delta chips and no longer depend on the visible page's rows. New 期間 select (過去7日/今月/先月/全期間) filters the list and the CSV export via `date_from`/`date_to`. |
+
+### Notes / gotchas
+
+- **Run `alembic upgrade head`** after pulling — this batch adds migration 010.
+- `purchase_orders.created_at` comes from MySQL `NOW()` (server-local = **JST-naive** on the dev box), unlike `sales_records.sold_at` which is Python-set UTC-naive. The PO date filters and summary boundaries therefore compare in JST-naive space (`_to_naive_jst` in the router). Worth remembering if timestamps ever look 9 hours off.
+- GUM デンタルブラシ #211 is currently stamped 再発注済 as a demo — receive a PO containing it (or PATCH `reorder_requested_at: null`) to clear.
+
+### How to test
+
+1. 商品詳細 (a product with 発注先 URL) → 🔗 再発注する → toast + ✓ 再発注済 badge appears.
+2. 商品一覧 → 再発注済 chip shows a count; clicking filters to just the stamped products.
+3. 発注書 → KPI tiles show 先月比 delta chips; 期間 select narrows the table (and the CSV export follows it).
+4. Receive a PO for a stamped product → its 再発注済 badge/chip entry disappears.

@@ -1,7 +1,23 @@
+// 期間 presets — JST calendar boundaries converted to UTC ISO strings for the
+// backend's created_at comparison (same convention as the sales page).
+function poPeriodRange(period) {
+  const JST_OFFSET = 9 * 60 * 60 * 1000;
+  const nowJst = new Date(Date.now() + JST_OFFSET);
+  const jstMidnightUtc = (y, m, d) => new Date(Date.UTC(y, m, d) - JST_OFFSET);
+  const y = nowJst.getUTCFullYear(), m = nowJst.getUTCMonth(), d = nowJst.getUTCDate();
+  switch (period) {
+    case "last7":      return { from: jstMidnightUtc(y, m, d - 6), to: null };
+    case "this_month": return { from: jstMidnightUtc(y, m, 1), to: null };
+    case "last_month": return { from: jstMidnightUtc(y, m - 1, 1), to: jstMidnightUtc(y, m, 1) };
+    default:           return { from: null, to: null };
+  }
+}
+
 function PurchaseOrders() {
   const [statusFilter, setStatusFilter] = React.useState("");
   const [vendorFilter, setVendorFilter] = React.useState("");
   const [branchFilter, setBranchFilter] = React.useState("");
+  const [period, setPeriod] = React.useState(""); // "" | last7 | this_month | last_month
   const [search, setSearch] = React.useState("");
   const [searchInput, setSearchInput] = React.useState("");
   const [showCreateModal, setShowCreateModal] = React.useState(false);
@@ -10,20 +26,29 @@ function PurchaseOrders() {
   // pager just slices the loaded rows (same pattern for Inventory/Products).
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(25);
-  React.useEffect(() => { setPage(1); }, [statusFilter, vendorFilter, branchFilter, search, pageSize]);
+  React.useEffect(() => { setPage(1); }, [statusFilter, vendorFilter, branchFilter, period, search, pageSize]);
 
   const posQ = useFetch(
-    () => api.listPurchaseOrders({
-      status: statusFilter || undefined,
-      supplier_vendor_id: vendorFilter || undefined,
-      destination_branch_id: branchFilter || undefined,
-      q: search || undefined,
-      limit: 100,
-    }),
-    [statusFilter, vendorFilter, branchFilter, search],
+    () => {
+      const range = poPeriodRange(period);
+      return api.listPurchaseOrders({
+        status: statusFilter || undefined,
+        supplier_vendor_id: vendorFilter || undefined,
+        destination_branch_id: branchFilter || undefined,
+        date_from: range.from ? range.from.toISOString() : undefined,
+        date_to: range.to ? range.to.toISOString() : undefined,
+        q: search || undefined,
+        limit: 100,
+      });
+    },
+    [statusFilter, vendorFilter, branchFilter, period, search],
   );
   const vendorsQ = useFetch(() => api.listVendors(), []);
   const branchesQ = useFetch(() => api.listBranches(), []);
+  // Whole-store KPI summary — independent of the list filters so the tiles
+  // stay stable while the user narrows the table.
+  const summaryQ = useFetch(() => api.getPurchaseOrdersSummary().catch(() => null), []);
+  const poSummary = summaryQ.data;
 
   const allRows = posQ.data?.items ?? [];
   const rows = allRows.slice((page - 1) * pageSize, page * pageSize);
@@ -58,10 +83,13 @@ function PurchaseOrders() {
     if (exporting) return;
     setExporting(true);
     try {
+      const range = poPeriodRange(period);
       await api.downloadPurchaseOrdersCsv({
         status: statusFilter || undefined,
         supplier_vendor_id: vendorFilter || undefined,
         destination_branch_id: branchFilter || undefined,
+        date_from: range.from ? range.from.toISOString() : undefined,
+        date_to: range.to ? range.to.toISOString() : undefined,
       });
     } catch (e) {
       window.PLX_TOAST.error("CSVエクスポートに失敗しました");
@@ -84,12 +112,26 @@ function PurchaseOrders() {
     <AdminShell currentNav="po" breadcrumbs={["ホーム", "発注書"]}>
       <PlxPageHead title="発注書" subtitle={`全 ${posQ.data?.total ?? rows.length} 件の発注書`} right={headerRight} />
 
-      {/* KPI strip */}
+      {/* KPI strip — real month figures + 先月比 deltas from /purchase-orders/summary */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 20 }}>
-        <POKpiCard label="今月の発注件数" value={`${kpis.total}件`} badge="今月" badgeTone="green" />
-        <POKpiCard label="今月の発注金額" value={`¥${formatYen(kpis.sumTotal)}`} badge="今月" badgeTone="green" />
-        <POKpiCard label="入荷待ち" value={`${kpis.sent}件`} badge="送信済み" badgeTone="blue" tone={kpis.sent > 0 ? "amber" : "muted"} />
-        <POKpiCard label="一部入荷" value={`${kpis.partial}件`} badge="確認推奨" badgeTone="amber" tone={kpis.partial > 0 ? "amber" : "muted"} />
+        <POKpiCard label="今月の発注件数"
+          value={`${poSummary ? poSummary.month_count : kpis.total}件`}
+          badge="今月" badgeTone="green"
+          delta={poSummary ? poSummary.month_count - poSummary.last_month_count : null}
+          deltaUnit="件" />
+        <POKpiCard label="今月の発注金額"
+          value={`¥${formatYen(poSummary ? poSummary.month_total : kpis.sumTotal)}`}
+          badge="今月" badgeTone="green"
+          delta={poSummary ? Number(poSummary.month_total) - Number(poSummary.last_month_total) : null}
+          deltaUnit="¥" />
+        <POKpiCard label="入荷待ち"
+          value={`${poSummary ? poSummary.ordered_count : kpis.sent}件`}
+          badge="送信済み" badgeTone="blue"
+          tone={(poSummary ? poSummary.ordered_count : kpis.sent) > 0 ? "amber" : "muted"} />
+        <POKpiCard label="一部入荷"
+          value={`${poSummary ? poSummary.partially_received_count : kpis.partial}件`}
+          badge="確認推奨" badgeTone="amber"
+          tone={(poSummary ? poSummary.partially_received_count : kpis.partial) > 0 ? "amber" : "muted"} />
       </div>
 
       {/* Search + filters */}
@@ -113,6 +155,12 @@ function PurchaseOrders() {
             }}
           />
         </div>
+        <select value={period} onChange={(e) => setPeriod(e.target.value)} style={selectStyle}>
+          <option value="">期間: 全期間</option>
+          <option value="last7">過去7日</option>
+          <option value="this_month">今月</option>
+          <option value="last_month">先月</option>
+        </select>
         <select value={vendorFilter} onChange={(e) => setVendorFilter(e.target.value)} style={selectStyle}>
           <option value="">仕入先: すべて</option>
           {vendors.map((v) => <option key={v.id} value={v.id}>{v.company_name}</option>)}
@@ -245,7 +293,7 @@ function PurchaseOrders() {
   );
 }
 
-function POKpiCard({ label, value, badge, badgeTone, tone }) {
+function POKpiCard({ label, value, badge, badgeTone, tone, delta, deltaUnit }) {
   const badgeColors = {
     green: { bg: T.PLX_GREEN_100, color: T.PLX_GREEN_700 },
     blue:  { bg: T.PLX_BLUE_100,  color: T.PLX_BLUE_600  },
@@ -253,6 +301,10 @@ function POKpiCard({ label, value, badge, badgeTone, tone }) {
   };
   const bc = badgeColors[badgeTone] || badgeColors.green;
   const valueColor = tone === "amber" ? T.PLX_AMBER_600 : tone === "muted" ? T.PLX_INK_500 : T.PLX_INK_900;
+  const deltaText = delta == null ? null
+    : deltaUnit === "¥"
+      ? `${delta >= 0 ? "+" : "−"}¥${formatYen(Math.abs(delta))}`
+      : `${delta >= 0 ? "+" : "−"}${Math.abs(delta)}${deltaUnit || ""}`;
   return (
     <div style={{
       background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
@@ -260,12 +312,22 @@ function POKpiCard({ label, value, badge, badgeTone, tone }) {
     }}>
       <div style={{ fontSize: 12, color: T.PLX_INK_500, fontWeight: 600, marginBottom: 8 }}>{label}</div>
       <div style={{ fontSize: 26, fontWeight: 700, color: valueColor, marginBottom: 8 }}>{value}</div>
-      {badge && (
-        <span style={{
-          display: "inline-block", fontSize: 11, fontWeight: 600, padding: "2px 8px",
-          borderRadius: 99, background: bc.bg, color: bc.color,
-        }}>{badge}</span>
-      )}
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        {badge && (
+          <span style={{
+            display: "inline-block", fontSize: 11, fontWeight: 600, padding: "2px 8px",
+            borderRadius: 99, background: bc.bg, color: bc.color,
+          }}>{badge}</span>
+        )}
+        {deltaText != null && (
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 3,
+            fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 99,
+            background: delta >= 0 ? T.PLX_GREEN_100 : T.PLX_RED_100,
+            color: delta >= 0 ? T.PLX_GREEN_700 : T.PLX_RED_600,
+          }}>{delta >= 0 ? "↑" : "↓"} {deltaText} 先月比</span>
+        )}
+      </div>
     </div>
   );
 }

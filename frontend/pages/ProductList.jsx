@@ -42,6 +42,8 @@ function ProductList({ initialQuery }) {
       tag: activeTags.length ? activeTags : undefined,
       // "期限間近" chip = backend filter by expiry within 30 days.
       expiring_within_days: quickFilters.includes("expire") ? 30 : undefined,
+      // "再発注済" chip = products whose 再発注する was clicked (migration 010).
+      reorder_requested: quickFilters.includes("reorder") ? true : undefined,
       limit: 100,
     }),
     [searchQ, categoryFilter, vendorFilter, statusFilter, kindFilter, activeTags.join(","), quickFilters.join(",")],
@@ -67,7 +69,8 @@ function ProductList({ initialQuery }) {
       const d = daysUntil(p.expiry_date);
       return p.item_type === "consumable" && d != null && d <= 30;
     }).length;
-    return { low, expire };
+    const reorder = list.filter((p) => p.reorder_requested_at).length;
+    return { low, expire, reorder };
   }, [productsQ.data]);
 
   // Client-side pagination over the filtered rows (PoC scale — one fetch).
@@ -229,12 +232,8 @@ function ProductList({ initialQuery }) {
           <span style={{ fontSize: 11, color: PLX_MUTED, fontWeight: 600 }}>クイックフィルタ</span>
           <QuickChip on={quickFilters.includes("low")}    onClick={() => toggleQuick("low")}    dot={PLX_RED}  label="在庫低下"   color={PLX_RED}   bg={PLX_RED_LIGHT} count={chipCounts.low}/>
           <QuickChip on={quickFilters.includes("expire")} onClick={() => toggleQuick("expire")} dot={PLX_WARN} label="期限間近"   color={PLX_WARN}  bg={PLX_WARN_BG} count={chipCounts.expire}/>
-          <QuickChip on={quickFilters.includes("reorder")} onClick={() => {
-            // TODO: wire up after demo — needs `reorder_requested_at` column.
-            // eslint-disable-next-line no-console
-            console.log("[TODO] '再発注済' filter not yet wired to backend.");
-            toggleQuick("reorder");
-          }} check label="再発注済" color={PLX_MUTED} bg="#F3F4F6"/>
+          <QuickChip on={quickFilters.includes("reorder")} onClick={() => toggleQuick("reorder")}
+            check label="再発注済" color={PLX_GREEN} bg={PLX_GREEN_LIGHT} count={chipCounts.reorder}/>
           <div style={{ width: 1, height: 20, background: PLX_BORDER, margin: "0 4px" }} />
           <span style={{ fontSize: 11, color: PLX_MUTED, fontWeight: 600 }}>タグ</span>
           {(tagsQ.data?.items ?? []).slice(0, 6).map((t) => {

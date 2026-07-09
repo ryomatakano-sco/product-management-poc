@@ -136,6 +136,7 @@ class ProductCreate(BaseModel):
     lot_number: str | None = None
     unit: str | None = None
     reorder_url: str | None = None
+    reorder_requested_at: datetime | None = None
     ai_session_id: int | None = None
     variants: list[VariantCreate] = []
     images: list[ImageCreate] = []
@@ -159,6 +160,7 @@ class ProductUpdate(BaseModel):
     lot_number: str | None = None
     unit: str | None = None
     reorder_url: str | None = None
+    reorder_requested_at: datetime | None = None
 
 
 class ProductListItem(BaseModel):
@@ -191,6 +193,7 @@ class ProductListItem(BaseModel):
     item_type: ItemType = ItemType.product
     expiry_date: date | None = None
     has_reorder_url: bool = False     # cheap signal for the quick-filter chip
+    reorder_requested_at: datetime | None = None  # 再発注済 chip / badge
 
     # Search match reasons — only populated when `q` is set on the list call.
     # Tells the frontend which field caused the row to match, so it can
@@ -229,6 +232,7 @@ class ProductDetail(BaseModel):
     lot_number: str | None = None
     unit: str | None = None
     reorder_url: str | None = None
+    reorder_requested_at: datetime | None = None
     ai_session_id: int | None
     variants: list[VariantRead] = []
     images: list[ImageRead] = []
