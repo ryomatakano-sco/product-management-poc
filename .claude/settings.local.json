@@ -40,7 +40,10 @@
       "Bash(git --no-pager diff --stat fix/description-generation -- backend/app/services/ai_agent.py backend/app/routers/ai_suggestions.py frontend/pages/ProductCreate.jsx)",
       "Bash(git --no-pager log --oneline main..HEAD)",
       "Bash(git commit *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(git fetch *)",
+      "Bash(git stash *)",
+      "Bash(git merge *)"
     ]
   }
 }
