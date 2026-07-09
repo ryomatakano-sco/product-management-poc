@@ -79,6 +79,14 @@ async def health() -> dict:
     return {"status": "ok"}
 
 
+# --- Uploaded media mount ------------------------------------------------------
+# Files uploaded through the app (currently: the 表示ロゴ from 設定 › 一般)
+# land in backend/media/ (gitignored) and are served here.
+_media_dir = Path(__file__).resolve().parent.parent / "media"
+_media_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/media", StaticFiles(directory=str(_media_dir)), name="media")
+
+
 # --- Static frontend mount ----------------------------------------------------
 # The root docker-compose mounts the host's ./frontend at /frontend inside the
 # container. If that directory exists, serve it at /app/. Outside docker the

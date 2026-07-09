@@ -22,6 +22,7 @@ class AdjustmentReason(str, enum.Enum):
     correction = "correction"
     damage = "damage"
     other = "other"
+    refund = "refund"
 
 
 class InventoryAdjustment(Base):

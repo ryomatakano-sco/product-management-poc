@@ -11,9 +11,13 @@ Delete is FK-safe: if any product still references the category we return
 
 from __future__ import annotations
 
+import csv
+import io
 from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
@@ -117,6 +121,43 @@ async def list_categories_tree(db: DB, store_id: StoreId):
         return result
 
     return build(None)
+
+
+# NOTE: declared before /{category_id} — "export.csv" must not be parsed as an id.
+@router.get("/export.csv", summary="カテゴリ一覧をCSVでダウンロード")
+async def export_categories_csv(db: DB, store_id: StoreId):
+    rows = (await db.execute(
+        select(Category)
+        .where(Category.store_id == store_id)
+        .order_by(Category.parent_id.is_not(None), Category.sort_order, Category.id)
+    )).scalars().all()
+    counts = await _category_product_counts(db, store_id)
+    name_by_id = {c.id: c.name for c in rows}
+    applies_ja = {"retail": "物販品", "consumable": "消耗品", "both": "両方"}
+
+    buf = io.StringIO()
+    buf.write("﻿")  # UTF-8 BOM so Excel opens Japanese correctly
+    writer = csv.writer(buf)
+    writer.writerow(["ID", "カテゴリ名", "親カテゴリ", "種別", "税率(%)", "商品数", "並び順", "説明"])
+    for c in rows:
+        applies = c.applies_to.value if hasattr(c.applies_to, "value") else str(c.applies_to or "")
+        writer.writerow([
+            c.id,
+            c.name,
+            name_by_id.get(c.parent_id, "") if c.parent_id else "",
+            applies_ja.get(applies, applies),
+            f"{float(c.default_tax_rate):.0f}" if c.default_tax_rate is not None else "",
+            counts.get(c.id, 0),
+            c.sort_order or 0,
+            c.description or "",
+        ])
+
+    filename = f"categories_{datetime.now(timezone(timedelta(hours=9))).strftime('%Y%m%d_%H%M')}.csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{category_id}", response_model=CategoryRead, summary="カテゴリ詳細を取得")

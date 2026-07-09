@@ -129,6 +129,7 @@ def _build_list_item(p: Product, match_reasons: list[str] | None = None) -> Prod
         item_type=p.item_type,
         expiry_date=p.expiry_date,
         has_reorder_url=bool(p.reorder_url),
+        reorder_requested_at=p.reorder_requested_at,
         match_reasons=match_reasons or [],
     )
 
@@ -149,6 +150,10 @@ async def list_products(
         None,
         ge=0,
         description="Only return products with expiry_date within N days (consumables only)",
+    ),
+    reorder_requested: bool | None = Query(
+        None,
+        description="true = only products whose 再発注する was clicked and not yet received",
     ),
 ):
     # Reasons column is only attached when a `q` is provided. Selecting
@@ -185,6 +190,11 @@ async def list_products(
     if expiring_within_days is not None:
         cutoff = date.today() + timedelta(days=expiring_within_days)
         stmt = stmt.where(Product.expiry_date.is_not(None), Product.expiry_date <= cutoff)
+    if reorder_requested is not None:
+        stmt = stmt.where(
+            Product.reorder_requested_at.is_not(None)
+            if reorder_requested else Product.reorder_requested_at.is_(None)
+        )
 
     # Exclude archived by default
     if status is None:
@@ -256,6 +266,55 @@ async def search_products(
             )
         results.append(ProductSearchResult(id=p.id, name=p.name, default_variant=dv))
     return results
+
+
+@router.get("/{product_id}/sales-weekly", summary="過去N週の週次販売実績")
+async def product_sales_weekly(
+    product_id: int,
+    db: DB,
+    store_id: StoreId,
+    weeks: int = Query(12, ge=1, le=52),
+):
+    """Real weekly sales buckets for the detail-page chart (JST weeks, Monday
+    start, oldest first, refunds included as negative quantities).
+    """
+    jst = timezone(timedelta(hours=9))
+    now_jst = datetime.now(jst)
+    this_monday = (now_jst - timedelta(days=now_jst.weekday())).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    start_jst = this_monday - timedelta(weeks=weeks - 1)
+    # sold_at is stored as naive UTC — compare in that space.
+    start_utc_naive = start_jst.astimezone(timezone.utc).replace(tzinfo=None)
+
+    rows = (await db.execute(
+        select(SalesRecord.sold_at, SalesRecord.quantity, SalesRecord.unit_price)
+        .join(ProductVariant, ProductVariant.id == SalesRecord.variant_id)
+        .where(
+            SalesRecord.store_id == store_id,
+            ProductVariant.product_id == product_id,
+            SalesRecord.sold_at >= start_utc_naive,
+        )
+    )).all()
+
+    buckets = [{"units": 0, "revenue": Decimal("0")} for _ in range(weeks)]
+    for sold_at, quantity, unit_price in rows:
+        sold_jst = sold_at.replace(tzinfo=timezone.utc).astimezone(jst)
+        idx = (sold_jst.date() - start_jst.date()).days // 7
+        if 0 <= idx < weeks:
+            buckets[idx]["units"] += quantity
+            buckets[idx]["revenue"] += (unit_price or 0) * quantity
+
+    return {
+        "weeks": [
+            {
+                "week_start": (start_jst + timedelta(weeks=i)).date().isoformat(),
+                "units": b["units"],
+                "revenue": str(b["revenue"]),
+            }
+            for i, b in enumerate(buckets)
+        ]
+    }
 
 
 @router.get("/{product_id}", response_model=ProductDetail)
@@ -335,6 +394,7 @@ async def get_product(product_id: int, db: DB, store_id: StoreId):
         lot_number=product.lot_number,
         unit=product.unit,
         reorder_url=product.reorder_url,
+        reorder_requested_at=product.reorder_requested_at,
         ai_session_id=product.ai_session_id,
         variants=[VariantRead.model_validate(v) for v in product.variants],
         images=[ImageRead.model_validate(i) for i in images_sorted],

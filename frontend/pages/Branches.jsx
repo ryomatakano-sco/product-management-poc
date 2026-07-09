@@ -5,12 +5,13 @@
 function Branches() {
   const branchesQ = useFetch(() => api.listBranches(), []);
   const rows = branchesQ.data?.items ?? [];
+  const [modal, setModal] = React.useState(null); // null | {editing: branch|null}
 
   return (
     <AdminShell currentNav="branches" breadcrumbs={["ホーム", "院・店舗"]}>
       <PlxPageHead title="院・店舗" subtitle={`全 ${rows.length} 拠点`}
         right={
-          <button onClick={() => window.PLX_TOAST.warn("拠点の追加機能は近日対応予定です")} style={btnPrimary}>
+          <button onClick={() => setModal({ editing: null })} style={btnPrimary}>
             ＋ 店舗を追加
           </button>
         }/>
@@ -19,13 +20,28 @@ function Branches() {
       {branchesQ.loading && <div style={{ padding: 40, textAlign: "center", color: T.PLX_INK_500 }}>読み込み中…</div>}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 18 }}>
-        {rows.map((b) => <BranchCard key={b.id} branch={b} />)}
+        {rows.map((b) => (
+          <BranchCard key={b.id} branch={b} onEdit={() => setModal({ editing: b })} />
+        ))}
       </div>
+
+      {modal && (
+        <BranchFormModal
+          editing={modal.editing}
+          onClose={() => setModal(null)}
+          onSaved={(b) => {
+            setModal(null);
+            window.PLX_TOAST.success(
+              modal.editing ? `「${b.name}」を更新しました` : `拠点「${b.name}」を追加しました`);
+            branchesQ.refetch();
+          }}
+        />
+      )}
     </AdminShell>
   );
 }
 
-function BranchCard({ branch }) {
+function BranchCard({ branch, onEdit }) {
   const snapQ = useFetch(() => api.getBranchInventorySnapshot(branch.id), [branch.id]);
   const snap = snapQ.data;
   return (
@@ -89,7 +105,110 @@ function BranchCard({ branch }) {
           </div>
         )}
       </div>
+
+      {/* Card actions — 詳細 / 編集 (mockup shows both buttons on each card) */}
+      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+        <button onClick={(e) => { e.stopPropagation(); navigate(`/branches/${branch.id}`); }}
+          style={{ ...btnSecondary, flex: 1, height: 34, fontSize: 12 }}>詳細</button>
+        <button onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          style={{ ...btnSecondary, flex: 1, height: 34, fontSize: 12 }}>✎ 編集</button>
+      </div>
     </div>
+  );
+}
+
+// Create / edit form. POST /branches on create, PATCH /branches/:id on edit.
+function BranchFormModal({ editing, onClose, onSaved }) {
+  const [form, setForm] = React.useState({
+    name: editing?.name || "",
+    branch_type: editing?.branch_type || "sub",
+    postal_code: editing?.postal_code || "",
+    address: editing?.address || "",
+    phone: editing?.phone || "",
+    manager_name: editing?.manager_name || "",
+    low_stock_threshold: editing?.low_stock_threshold ?? 10,
+    default_tax_rate: parseFloat(editing?.default_tax_rate ?? 10),
+    status: editing?.status || "active",
+  });
+  const [saving, setSaving] = React.useState(false);
+  const update = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+
+  const submit = async () => {
+    if (!form.name.trim()) { window.PLX_TOAST.warn("拠点名を入力してください"); return; }
+    setSaving(true);
+    try {
+      const body = {
+        name: form.name.trim(),
+        branch_type: form.branch_type,
+        postal_code: form.postal_code.trim() || null,
+        address: form.address.trim() || null,
+        phone: form.phone.trim() || null,
+        manager_name: form.manager_name.trim() || null,
+        low_stock_threshold: Number(form.low_stock_threshold) || 10,
+        default_tax_rate: Number(form.default_tax_rate) || 10,
+        status: form.status,
+      };
+      const b = editing
+        ? await api.updateBranch(editing.id, body)
+        : await api.createBranch(body);
+      onSaved(b);
+    } catch (e) {
+      window.PLX_TOAST.error(e?.body?.detail ?? "保存に失敗しました");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <PlxModal title={editing ? "拠点を編集" : "店舗を追加"} onClose={onClose}>
+      <FormRow label="拠点名 *">
+        <input value={form.name} onChange={(e) => update("name", e.target.value)}
+          style={formInput} placeholder="例：ペイライト歯科 梅田分院" />
+      </FormRow>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <FormRow label="種別">
+          <SegmentedControl value={form.branch_type} onChange={(v) => update("branch_type", v)} options={[
+            { value: "main", label: "本院" },
+            { value: "sub", label: "分院" },
+          ]}/>
+        </FormRow>
+        <FormRow label="状態">
+          <SegmentedControl value={form.status} onChange={(v) => update("status", v)} options={[
+            { value: "active", label: "営業中" },
+            { value: "inactive", label: "休業中" },
+          ]}/>
+        </FormRow>
+        <FormRow label="郵便番号">
+          <input value={form.postal_code} onChange={(e) => update("postal_code", e.target.value)}
+            style={formInput} placeholder="530-0001" />
+        </FormRow>
+        <FormRow label="電話">
+          <input value={form.phone} onChange={(e) => update("phone", e.target.value)}
+            style={formInput} placeholder="06-1234-5678" />
+        </FormRow>
+      </div>
+      <FormRow label="住所">
+        <input value={form.address} onChange={(e) => update("address", e.target.value)} style={formInput} />
+      </FormRow>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+        <FormRow label="院長/管理者">
+          <input value={form.manager_name} onChange={(e) => update("manager_name", e.target.value)} style={formInput} />
+        </FormRow>
+        <FormRow label="在庫低下しきい値">
+          <input type="number" min={0} value={form.low_stock_threshold}
+            onChange={(e) => update("low_stock_threshold", e.target.value)} style={formInput} />
+        </FormRow>
+        <FormRow label="デフォルト税率(%)">
+          <input type="number" min={0} step="0.01" value={form.default_tax_rate}
+            onChange={(e) => update("default_tax_rate", e.target.value)} style={formInput} />
+        </FormRow>
+      </div>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16 }}>
+        <button onClick={onClose} style={btnSecondary}>キャンセル</button>
+        <button onClick={submit} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.5 : 1 }}>
+          {saving ? "保存中…" : editing ? "変更を保存" : "追加する"}
+        </button>
+      </div>
+    </PlxModal>
   );
 }
 
@@ -97,6 +216,7 @@ function BranchDetail({ id }) {
   const branchQ = useFetch(() => api.getBranch(Number(id)), [id]);
   const snapQ = useFetch(() => api.getBranchInventorySnapshot(Number(id)), [id]);
   const b = branchQ.data;
+  const snap = snapQ.data;
 
   return (
     <AdminShell currentNav="branches"

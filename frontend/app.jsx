@@ -33,6 +33,9 @@ function App() {
   else if (route.name === "purchase_orders") page = <PurchaseOrders />;
   else if (route.name === "po_detail") page = <PurchaseOrderDetail id={route.id} />;
   else if (route.name === "sales") page = <SalesRecords query={route.query} />;
+  // Deep link `#/sales/12` — the sales list with that sale's detail modal open.
+  else if (route.name === "sale_detail") page = <SalesRecords query={route.query} initialSaleId={Number(route.id)} />;
+  else if (route.name === "sale_receipt") page = <ReceiptIssue saleId={Number(route.id)} />;
   else if (route.name === "vendors") page = <Vendors />;
   else if (route.name === "vendor_detail") page = <VendorDetail id={route.id} />;
   else if (route.name === "branches") page = <Branches />;

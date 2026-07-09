@@ -179,13 +179,29 @@ function ProductDetail({ productId }) {
                 k="発注先 URL"
                 v={<UrlLink url={p.reorder_url} />}
                 right={
-                  <a href={p.reorder_url} target="_blank" rel="noopener noreferrer" style={{
-                    height: 30, padding: "0 12px", borderRadius: 9999,
-                    background: PLX_GREEN, color: "#fff", border: "none",
-                    fontWeight: 700, fontSize: 11, cursor: "pointer",
-                    display: "inline-flex", alignItems: "center", gap: 5, textDecoration: "none",
-                    boxShadow: "0 4px 10px rgba(26,166,138,.22)",
-                  }}>🔗 再発注する</a>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    {p.reorder_requested_at && (
+                      <span title={`再発注済 ${formatJpDate(p.reorder_requested_at)}`} style={{
+                        fontSize: 10, fontWeight: 700, color: PLX_GREEN,
+                        background: PLX_GREEN_LIGHT, padding: "3px 9px", borderRadius: 9999,
+                      }}>✓ 再発注済</span>
+                    )}
+                    <a href={p.reorder_url} target="_blank" rel="noopener noreferrer"
+                      onClick={() => {
+                        // Stamp 再発注済 (fire-and-forget) — powers the 商品一覧
+                        // chip; cleared automatically when a PO is received.
+                        api.updateProduct(p.id, { reorder_requested_at: new Date().toISOString() })
+                          .then(() => { window.PLX_TOAST?.success?.("再発注済としてマークしました"); productQ.refetch(); })
+                          .catch(() => {});
+                      }}
+                      style={{
+                        height: 30, padding: "0 12px", borderRadius: 9999,
+                        background: PLX_GREEN, color: "#fff", border: "none",
+                        fontWeight: 700, fontSize: 11, cursor: "pointer",
+                        display: "inline-flex", alignItems: "center", gap: 5, textDecoration: "none",
+                        boxShadow: "0 4px 10px rgba(26,166,138,.22)",
+                      }}>🔗 再発注する</a>
+                  </span>
                 }
               />
             )}
@@ -274,7 +290,7 @@ function ProductDetail({ productId }) {
         {tab === "history" && variants[0] && <InventoryHistory variantId={variants[0].id} />}
         {tab === "lots" && p.item_type === "consumable" && <LotHistory product={p} />}
         {tab === "sales" && sales && (
-          <SalesChart quantity={sales.last_90_days_quantity} revenue={sales.last_90_days_revenue} />
+          <SalesChart productId={p.id} quantity={sales.last_90_days_quantity} revenue={sales.last_90_days_revenue} />
         )}
       </div>
 
@@ -537,10 +553,18 @@ function InventoryHistory({ variantId }) {
   );
 }
 
-function SalesChart({ quantity, revenue }) {
-  // Simple mocked 12-week shape since backend only returns 90-day totals.
-  const weeks = [6, 8, 4, 12, 9, 11, 7, 14, 10, 18, 15, Math.max(1, quantity % 20)];
-  const max = Math.max(...weeks);
+function SalesChart({ productId, quantity, revenue }) {
+  // Real weekly buckets from GET /products/:id/sales-weekly (JST weeks,
+  // Monday start, refunds count negative). Replaced the fabricated shape
+  // once sales history landed on this branch.
+  const weeklyQ = useFetch(() => api.getProductSalesWeekly(productId), [productId]);
+  const weeks = weeklyQ.data?.weeks ?? [];
+  const values = weeks.map((w) => w.units);
+  const max = Math.max(1, ...values);
+  const fmtWeek = (iso) => {
+    const d = new Date(`${iso}T00:00:00`);
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  };
   return (
     <div style={{ padding: "22px 26px" }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 18, marginBottom: 18 }}>
@@ -557,28 +581,48 @@ function SalesChart({ quantity, revenue }) {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <div style={{ fontSize: 11, color: PLX_MUTED }}>過去 12 週間 (週次)</div>
+        <div style={{ fontSize: 11, color: PLX_MUTED }}>過去 12 週間 (週次・実売データ)</div>
       </div>
-      <div style={{
-        display: "flex", alignItems: "flex-end", gap: 8, height: 140,
-        padding: "0 4px", borderBottom: `1px solid ${PLX_BORDER}`,
-      }}>
-        {weeks.map((v, i) => (
-          <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-            <div style={{
-              width: "100%", height: `${(v / max) * 120}px`,
-              background: i === weeks.length - 1 ? PLX_GREEN : PLX_GREEN_LIGHT,
-              borderRadius: "6px 6px 0 0", position: "relative",
-            }}>
-              <span style={{
-                position: "absolute", top: -18, left: "50%", transform: "translateX(-50%)",
-                fontSize: 10, fontWeight: 700,
-                color: i === weeks.length - 1 ? PLX_GREEN : PLX_MUTED,
-              }}>{v}</span>
-            </div>
+      {weeklyQ.loading && (
+        <div style={{ height: 140, display: "flex", alignItems: "center", justifyContent: "center", color: PLX_MUTED, fontSize: 12 }}>
+          読み込み中…
+        </div>
+      )}
+      {!weeklyQ.loading && (
+        <>
+          <div style={{
+            display: "flex", alignItems: "flex-end", gap: 8, height: 150,
+            padding: "0 4px", borderBottom: `1px solid ${PLX_BORDER}`,
+          }}>
+            {weeks.map((w, i) => {
+              const v = w.units;
+              const isCurrent = i === weeks.length - 1;
+              return (
+                <div key={w.week_start} title={`${fmtWeek(w.week_start)} 週: ${v} 個 / ¥${formatYen(w.revenue)}`}
+                  style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
+                  <div style={{
+                    width: "100%", height: `${(Math.max(0, v) / max) * 110}px`, minHeight: 2,
+                    background: v <= 0 ? PLX_BORDER : isCurrent ? PLX_GREEN : PLX_GREEN_LIGHT,
+                    borderRadius: "6px 6px 0 0", position: "relative",
+                  }}>
+                    <span style={{
+                      position: "absolute", top: -18, left: "50%", transform: "translateX(-50%)",
+                      fontSize: 10, fontWeight: 700,
+                      color: isCurrent ? PLX_GREEN : PLX_MUTED,
+                    }}>{v}</span>
+                  </div>
+                  <span style={{ fontSize: 9, color: PLX_SUBTLE, whiteSpace: "nowrap" }}>{fmtWeek(w.week_start)}</span>
+                </div>
+              );
+            })}
           </div>
-        ))}
-      </div>
+          {values.every((v) => v === 0) && (
+            <div style={{ marginTop: 10, fontSize: 11, color: PLX_MUTED, textAlign: "center" }}>
+              この12週間の販売実績はまだありません。
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -734,3 +778,4 @@ function LotHistory({ product }) {
 }
 
 window.ProductDetail = ProductDetail;
+window.PlxInventoryAdjustModal = InventoryAdjustModal;  // reused by the 在庫 page's adjust flow

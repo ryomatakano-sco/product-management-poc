@@ -7,33 +7,65 @@ function Inventory({ query }) {
   const [statusFilter, setStatusFilter] = React.useState(query?.status || "");
   const [itemTypeFilter, setItemTypeFilter] = React.useState("");
   const [q, setQ] = React.useState("");
+  const [exporting, setExporting] = React.useState(false);
+  // Client-side pagination — the fetch grabs up to 200 rows (PoC scale) and
+  // the pager slices locally so the KPI strip stays whole-dataset accurate.
+  const [page, setPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(25);
+  React.useEffect(() => { setPage(1); }, [statusFilter, itemTypeFilter, q, pageSize]);
 
   const inventoryQ = useFetch(
     () => api.listInventory({
       status: statusFilter || undefined,
       item_type: itemTypeFilter || undefined,
       q: q || undefined,
-      limit: 100,
+      limit: 200,
     }),
     [statusFilter, itemTypeFilter, q],
   );
 
-  const items = inventoryQ.data?.items ?? [];
+  const allItems = inventoryQ.data?.items ?? [];
+  const items = allItems.slice((page - 1) * pageSize, page * pageSize);
 
   // KPI strip — compute from the loaded rows (acceptable for PoC scale).
   const kpis = React.useMemo(() => {
-    const total = items.length;
-    const lowStock = items.filter((r) => r.status === "low_stock").length;
-    const expiring = items.filter((r) => r.status === "expiring_soon").length;
-    const outOfStock = items.filter((r) => r.status === "out_of_stock").length;
+    const total = allItems.length;
+    const lowStock = allItems.filter((r) => r.status === "low_stock").length;
+    const expiring = allItems.filter((r) => r.status === "expiring_soon").length;
+    const outOfStock = allItems.filter((r) => r.status === "out_of_stock").length;
     return { total, lowStock, expiring, outOfStock };
-  }, [items]);
+  }, [allItems]);
+
+  async function handleStocktakeCsv() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      await api.downloadInventoryCsv({
+        status: statusFilter || undefined,
+        item_type: itemTypeFilter || undefined,
+        q: q || undefined,
+      });
+    } catch (e) {
+      window.PLX_TOAST.error("棚卸しCSVのダウンロードに失敗しました");
+    } finally { setExporting(false); }
+  }
+
+  // 在庫調整 flow: pick product/variant → reuse ProductDetail's adjust modal.
+  // (The old button linked to /products/new — a product-create page, not an
+  // adjustment — so this also fixes a broken affordance.)
+  const [adjustFlow, setAdjustFlow] = React.useState(null); // null | {stage:"pick"} | {stage:"adjust", variant}
+  const [histKey, setHistKey] = React.useState(0);
 
   const headerRight = (
-    <a href="#/products/new" style={{
-      ...btnPrimary, textDecoration: "none",
-      display: "inline-flex", alignItems: "center", gap: 6,
-    }}>＋ 在庫調整</a>
+    <div style={{ display: "inline-flex", gap: 8 }}>
+      <button onClick={handleStocktakeCsv} disabled={exporting} style={{
+        ...btnSecondary, display: "inline-flex", alignItems: "center", gap: 6,
+        opacity: exporting ? 0.6 : 1,
+      }}>⬇ 棚卸しCSVダウンロード</button>
+      <button onClick={() => setAdjustFlow({ stage: "pick" })} style={{
+        ...btnPrimary, display: "inline-flex", alignItems: "center", gap: 6,
+      }}>＋ 在庫調整</button>
+    </div>
   );
 
   return (
@@ -41,8 +73,9 @@ function Inventory({ query }) {
       <PlxPageHead title="在庫" subtitle={`全 ${kpis.total} 件の在庫状況`} right={headerRight} />
 
       {/* KPI strip */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 16 }}>
-        <KpiTile label="総在庫点数" value={items.reduce((s, r) => s + (r.on_hand || 0), 0)} unit="点" tone="green"/>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 14, marginBottom: 16 }}>
+        <KpiTile label="総在庫点数" value={allItems.reduce((s, r) => s + (r.on_hand || 0), 0)} unit="点" tone="green"/>
+        <KpiTile label="在庫金額 (税抜)" value={`¥${formatYen(allItems.reduce((s, r) => s + (r.value_jpy || 0), 0))}`} unit="" tone="green"/>
         <KpiTile label="在庫低下" value={kpis.lowStock} unit="件"
           tone={kpis.lowStock > 0 ? "amber" : "muted"}
           onClick={() => setStatusFilter("low_stock")} clickable/>
@@ -119,7 +152,7 @@ function Inventory({ query }) {
         {inventoryQ.loading && (
           <div style={{ padding: 40, textAlign: "center", color: T.PLX_INK_500 }}>読み込み中…</div>
         )}
-        {!inventoryQ.loading && items.length === 0 && (
+        {!inventoryQ.loading && allItems.length === 0 && (
           <PlxEmptyState
             title="該当する在庫がありません"
             message="フィルタ条件を変更してお試しください。"
@@ -163,8 +196,199 @@ function Inventory({ query }) {
             </span>
           </div>
         ))}
+
+        {/* Pagination footer */}
+        {!inventoryQ.loading && allItems.length > 0 && (
+          <div style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            padding: "10px 14px", borderTop: `1px solid ${T.PLX_LINE_100}`,
+            fontSize: 11, color: T.PLX_INK_700,
+          }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, color: T.PLX_INK_500 }}>
+              <span>表示件数</span>
+              <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} style={{
+                height: 30, padding: "0 8px", fontSize: 12,
+                border: `1px solid ${T.PLX_LINE_200}`, borderRadius: T.RADIUS_MD, background: T.PLX_CARD_BG,
+              }}>
+                {[25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+              <span>{(page - 1) * pageSize + 1} - {Math.min(page * pageSize, allItems.length)} 件 / 全 {allItems.length} 件</span>
+              <button
+                type="button" onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                style={{ ...btnSecondary, height: 30, padding: "0 12px", opacity: page <= 1 ? 0.5 : 1 }}
+              >← 前へ</button>
+              <span style={{
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                minWidth: 30, height: 30, padding: "0 10px", borderRadius: T.RADIUS_MD,
+                background: T.PLX_GREEN_100, color: T.PLX_GREEN_700, fontWeight: 700,
+              }}>{page}</span>
+              <button
+                type="button" onClick={() => setPage((p) => p + 1)}
+                disabled={page * pageSize >= allItems.length}
+                style={{ ...btnSecondary, height: 30, padding: "0 12px",
+                  opacity: page * pageSize >= allItems.length ? 0.5 : 1 }}
+              >次へ →</button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* 最近の調整履歴 — cross-variant audit trail (mockup bottom section) */}
+      <RecentAdjustments refreshKey={histKey} />
+
+      {adjustFlow?.stage === "pick" && (
+        <AdjustProductPicker
+          onClose={() => setAdjustFlow(null)}
+          onPicked={(variant) => setAdjustFlow({ stage: "adjust", variant })}
+        />
+      )}
+      {adjustFlow?.stage === "adjust" && (
+        <PlxInventoryAdjustModal
+          variant={adjustFlow.variant}
+          onClose={() => setAdjustFlow(null)}
+          onApplied={() => {
+            setAdjustFlow(null);
+            window.PLX_TOAST.success("在庫を調整しました");
+            inventoryQ.refetch();
+            setHistKey((k) => k + 1);
+          }}
+        />
+      )}
     </AdminShell>
+  );
+}
+
+// Step 1 of the 在庫調整 flow: choose product (and variant when several),
+// then hand the full variant object to the shared adjust modal.
+function AdjustProductPicker({ onClose, onPicked }) {
+  const productsQ = useFetch(() => api.listProducts({ status: "active", limit: 100 }), []);
+  const products = (productsQ.data?.items || []).filter((p) => p.default_variant_id);
+  const [productId, setProductId] = React.useState("");
+  const detailQ = useFetch(
+    () => productId ? api.getProduct(Number(productId)) : Promise.resolve(null),
+    [productId],
+  );
+  const variants = detailQ.data?.variants || [];
+  const [variantId, setVariantId] = React.useState("");
+  React.useEffect(() => {
+    if (variants.length > 0) {
+      const def = variants.find((v) => v.is_default) || variants[0];
+      setVariantId(String(def.id));
+    } else setVariantId("");
+  }, [detailQ.data]);
+  const variant = variants.find((v) => String(v.id) === variantId);
+
+  return (
+    <PlxModal title="在庫調整 — 商品を選択" onClose={onClose}>
+      <FormRow label="商品">
+        <select value={productId} onChange={(e) => setProductId(e.target.value)} style={formInput}>
+          <option value="" disabled>選択してください…</option>
+          {products.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name} {p.default_sku ? `（${p.default_sku}）` : ""}
+            </option>
+          ))}
+        </select>
+      </FormRow>
+      {variants.length > 1 && (
+        <FormRow label="バリアント">
+          <select value={variantId} onChange={(e) => setVariantId(e.target.value)} style={formInput}>
+            {variants.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.sku || `#${v.id}`}{v.option1_value ? ` — ${v.option1_value}` : ""}（在庫 {v.on_hand}）
+              </option>
+            ))}
+          </select>
+        </FormRow>
+      )}
+      {variant && (
+        <div style={{
+          padding: 10, background: T.PLX_SURFACE_50, borderRadius: T.RADIUS_MD,
+          fontSize: 12, color: T.PLX_INK_700, marginBottom: 8,
+        }}>
+          現在の在庫: <b>{variant.on_hand}</b>　引当: {variant.committed}　使用不可: {variant.unavailable}
+        </div>
+      )}
+      {productId && detailQ.loading && (
+        <div style={{ fontSize: 12, color: T.PLX_INK_500, marginBottom: 8 }}>読み込み中…</div>
+      )}
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 12 }}>
+        <button onClick={onClose} style={btnSecondary}>キャンセル</button>
+        <button onClick={() => variant && onPicked(variant)} disabled={!variant}
+          style={{ ...btnPrimary, opacity: variant ? 1 : 0.5 }}>次へ →</button>
+      </div>
+    </PlxModal>
+  );
+}
+
+const ADJ_REASON_JA = {
+  manual: "手動調整",
+  sale: "販売",
+  purchase_order_received: "入荷",
+  correction: "棚卸修正",
+  damage: "破損",
+  refund: "返品",
+  other: "その他",
+};
+
+function RecentAdjustments({ refreshKey }) {
+  const q = useFetch(() => api.listRecentAdjustments({ limit: 10 }), [refreshKey]);
+  const rows = q.data?.items ?? [];
+  return (
+    <div style={{
+      background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+      boxShadow: T.SHADOW_SM, overflow: "hidden", marginTop: 18,
+    }}>
+      <div style={{
+        padding: "12px 18px", fontSize: 13, fontWeight: 700,
+        borderBottom: `1px solid ${T.PLX_LINE_200}`,
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+      }}>
+        <span>最近の調整履歴</span>
+        <span style={{ fontSize: 11, color: T.PLX_INK_500, fontWeight: 500 }}>
+          直近 {rows.length} 件 / 全 {q.data?.total ?? 0} 件
+        </span>
+      </div>
+      <div style={{
+        display: "grid", gridTemplateColumns: "1.1fr 2fr 0.9fr 0.6fr 2fr",
+        padding: "10px 18px", fontSize: 11, fontWeight: 700, color: T.PLX_INK_500,
+        background: T.PLX_SURFACE_50, borderBottom: `1px solid ${T.PLX_LINE_200}`, columnGap: 14,
+      }}>
+        <span>日時</span><span>商品</span><span>タイプ</span>
+        <span style={{ textAlign: "right" }}>数量</span><span>メモ</span>
+      </div>
+      {q.loading && <div style={{ padding: 24, textAlign: "center", color: T.PLX_INK_500, fontSize: 12 }}>読み込み中…</div>}
+      {!q.loading && rows.length === 0 && (
+        <div style={{ padding: 24, textAlign: "center", color: T.PLX_INK_400, fontSize: 12 }}>調整履歴はまだありません。</div>
+      )}
+      {rows.map((a, i) => (
+        <div key={a.id} onClick={() => a.product_id && navigate(`/products/${a.product_id}`)} style={{
+          display: "grid", gridTemplateColumns: "1.1fr 2fr 0.9fr 0.6fr 2fr",
+          padding: "11px 18px", alignItems: "center", fontSize: 12, columnGap: 14,
+          borderBottom: i < rows.length - 1 ? `1px solid ${T.PLX_LINE_100}` : "none",
+          cursor: a.product_id ? "pointer" : "default",
+        }}
+          onMouseEnter={(e) => e.currentTarget.style.background = T.PLX_SURFACE_50}
+          onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+          <span style={{ fontSize: 11, color: T.PLX_INK_500 }}>{formatJpDateTime(a.created_at)}</span>
+          <div>
+            <div style={{ fontWeight: 600, color: T.PLX_INK_900 }}>{a.product_name}</div>
+            {a.sku && <div style={{ fontSize: 10, color: T.PLX_INK_500, fontFamily: T.FONT_MONO }}>{a.sku}</div>}
+          </div>
+          <span style={{ fontSize: 11, color: T.PLX_INK_700 }}>{ADJ_REASON_JA[a.reason] || a.reason}</span>
+          <span style={{
+            textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700,
+            color: a.delta > 0 ? T.PLX_GREEN_700 : a.delta < 0 ? T.PLX_RED_600 : T.PLX_INK_500,
+          }}>{a.delta > 0 ? `+${a.delta}` : a.delta}</span>
+          <span style={{ fontSize: 11, color: T.PLX_INK_500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {a.note || "—"}
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -175,7 +399,7 @@ function StatusBadge({ status }) {
   return <Pill color={T.PLX_GREEN_700} bg={T.PLX_GREEN_100}>通常</Pill>;
 }
 
-function KpiTile({ label, value, unit, tone, onClick, clickable }) {
+function KpiTile({ label, value, unit, tone, onClick, clickable, extra }) {
   const color = tone === "red" ? T.PLX_RED_600 :
                 tone === "amber" ? T.PLX_AMBER_600 :
                 tone === "muted" ? T.PLX_INK_500 :
@@ -194,6 +418,7 @@ function KpiTile({ label, value, unit, tone, onClick, clickable }) {
         <div style={{ fontSize: 28, fontWeight: 900, color, letterSpacing: "-0.02em" }}>{value}</div>
         {unit && <div style={{ fontSize: 13, color: T.PLX_INK_700, fontWeight: 600 }}>{unit}</div>}
       </div>
+      {extra && <div style={{ marginTop: 8 }}>{extra}</div>}
     </div>
   );
 }

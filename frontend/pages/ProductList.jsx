@@ -11,7 +11,8 @@ function ProductList({ initialQuery }) {
   const initial = initialQuery || {};
   const [searchQ, setSearchQ] = React.useState("");
   const [kindFilter, setKindFilter] = React.useState(initial.kind || "all"); // all | product | consumable
-  const [categoryFilter, setCategoryFilter] = React.useState("");
+  // ?category_id= deep link — dashboard's カテゴリ別在庫 bars land here.
+  const [categoryFilter, setCategoryFilter] = React.useState(initial.category_id || "");
   const [vendorFilter, setVendorFilter] = React.useState("");
   // ProductCreate.save("draft") navigates to /products?status=draft so the
   // user lands on the drafts list and can see what they just saved.
@@ -41,7 +42,9 @@ function ProductList({ initialQuery }) {
       tag: activeTags.length ? activeTags : undefined,
       // "期限間近" chip = backend filter by expiry within 30 days.
       expiring_within_days: quickFilters.includes("expire") ? 30 : undefined,
-      limit: 50,
+      // "再発注済" chip = products whose 再発注する was clicked (migration 010).
+      reorder_requested: quickFilters.includes("reorder") ? true : undefined,
+      limit: 100,
     }),
     [searchQ, categoryFilter, vendorFilter, statusFilter, kindFilter, activeTags.join(","), quickFilters.join(",")],
   );
@@ -56,6 +59,71 @@ function ProductList({ initialQuery }) {
   }, [productsQ.data, quickFilters]);
 
   const total = productsQ.data?.total ?? 0;
+
+  // Quick-chip count badges (mockup shows 在庫低下 3 / 期限間近 2). Counts use
+  // the same rules the chips filter by, computed over the fetched rows.
+  const chipCounts = React.useMemo(() => {
+    const list = productsQ.data?.items ?? [];
+    const low = list.filter((p) => (p.total_available ?? 0) <= 10).length;
+    const expire = list.filter((p) => {
+      const d = daysUntil(p.expiry_date);
+      return p.item_type === "consumable" && d != null && d <= 30;
+    }).length;
+    const reorder = list.filter((p) => p.reorder_requested_at).length;
+    return { low, expire, reorder };
+  }, [productsQ.data]);
+
+  // Client-side pagination over the filtered rows (PoC scale — one fetch).
+  const [page, setPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(25);
+  React.useEffect(() => { setPage(1); },
+    [searchQ, categoryFilter, vendorFilter, statusFilter, kindFilter, activeTags.join(","), quickFilters.join(","), pageSize]);
+  const pagedItems = items.slice((page - 1) * pageSize, page * pageSize);
+
+  // ── Bulk selection + actions (mockup's 一括操作 bar) ─────────────────────
+  const [selected, setSelected] = React.useState([]); // product ids
+  const [bulkBusy, setBulkBusy] = React.useState(false);
+  const [bulkCategory, setBulkCategory] = React.useState("");
+  React.useEffect(() => { setSelected([]); },
+    [searchQ, categoryFilter, vendorFilter, statusFilter, kindFilter, activeTags.join(","), quickFilters.join(",")]);
+
+  const toggleSelect = (id) =>
+    setSelected((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
+  const pageAllSelected = pagedItems.length > 0 && pagedItems.every((p) => selected.includes(p.id));
+  const toggleSelectAll = () =>
+    setSelected(pageAllSelected
+      ? selected.filter((id) => !pagedItems.some((p) => p.id === id))
+      : [...new Set([...selected, ...pagedItems.map((p) => p.id)])]);
+
+  async function bulkArchive() {
+    if (bulkBusy) return;
+    if (!window.confirm(`選択した ${selected.length} 件の商品をアーカイブしますか？`)) return;
+    setBulkBusy(true);
+    let ok = 0, failed = 0;
+    for (const id of selected) {
+      try { await api.archiveProduct(id); ok++; } catch (_) { failed++; }
+    }
+    setBulkBusy(false);
+    setSelected([]);
+    if (failed) window.PLX_TOAST.warn(`${ok} 件アーカイブ、${failed} 件失敗しました`);
+    else window.PLX_TOAST.success(`${ok} 件の商品をアーカイブしました`);
+    productsQ.refetch();
+  }
+
+  async function bulkChangeCategory() {
+    if (bulkBusy || !bulkCategory) return;
+    setBulkBusy(true);
+    let ok = 0, failed = 0;
+    for (const id of selected) {
+      try { await api.updateProduct(id, { category_id: Number(bulkCategory) }); ok++; } catch (_) { failed++; }
+    }
+    setBulkBusy(false);
+    setSelected([]);
+    setBulkCategory("");
+    if (failed) window.PLX_TOAST.warn(`${ok} 件変更、${failed} 件失敗しました`);
+    else window.PLX_TOAST.success(`${ok} 件の商品のカテゴリを変更しました`);
+    productsQ.refetch();
+  }
 
   const headerRight = (
     <button onClick={() => navigate("/products/new")} style={{
@@ -162,14 +230,10 @@ function ProductList({ initialQuery }) {
         {/* Quick filter chip row (Yoshioka 2026-05-11) */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span style={{ fontSize: 11, color: PLX_MUTED, fontWeight: 600 }}>クイックフィルタ</span>
-          <QuickChip on={quickFilters.includes("low")}    onClick={() => toggleQuick("low")}    dot={PLX_RED}  label="在庫低下"   color={PLX_RED}   bg={PLX_RED_LIGHT}/>
-          <QuickChip on={quickFilters.includes("expire")} onClick={() => toggleQuick("expire")} dot={PLX_WARN} label="期限間近"   color={PLX_WARN}  bg={PLX_WARN_BG}/>
-          <QuickChip on={quickFilters.includes("reorder")} onClick={() => {
-            // TODO: wire up after demo — needs `reorder_requested_at` column.
-            // eslint-disable-next-line no-console
-            console.log("[TODO] '再発注済' filter not yet wired to backend.");
-            toggleQuick("reorder");
-          }} check label="再発注済" color={PLX_MUTED} bg="#F3F4F6"/>
+          <QuickChip on={quickFilters.includes("low")}    onClick={() => toggleQuick("low")}    dot={PLX_RED}  label="在庫低下"   color={PLX_RED}   bg={PLX_RED_LIGHT} count={chipCounts.low}/>
+          <QuickChip on={quickFilters.includes("expire")} onClick={() => toggleQuick("expire")} dot={PLX_WARN} label="期限間近"   color={PLX_WARN}  bg={PLX_WARN_BG} count={chipCounts.expire}/>
+          <QuickChip on={quickFilters.includes("reorder")} onClick={() => toggleQuick("reorder")}
+            check label="再発注済" color={PLX_GREEN} bg={PLX_GREEN_LIGHT} count={chipCounts.reorder}/>
           <div style={{ width: 1, height: 20, background: PLX_BORDER, margin: "0 4px" }} />
           <span style={{ fontSize: 11, color: PLX_MUTED, fontWeight: 600 }}>タグ</span>
           {(tagsQ.data?.items ?? []).slice(0, 6).map((t) => {
@@ -188,6 +252,42 @@ function ProductList({ initialQuery }) {
         </div>
       </div>
 
+      {/* Bulk action bar — appears when rows are selected (mockup pattern) */}
+      {selected.length > 0 && (
+        <div style={{
+          marginTop: 16, padding: "10px 16px", borderRadius: 12,
+          background: PLX_GREEN, color: "#fff",
+          display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+        }}>
+          <span style={{ fontSize: 13, fontWeight: 700 }}>{selected.length} 件選択中</span>
+          <div style={{ width: 1, height: 20, background: "rgba(255,255,255,.35)" }} />
+          <select value={bulkCategory} onChange={(e) => setBulkCategory(e.target.value)} style={{
+            height: 32, padding: "0 10px", borderRadius: 8, border: "none",
+            fontSize: 12, color: PLX_TEXT, background: "#fff",
+          }}>
+            <option value="">カテゴリを選択…</option>
+            {(categoriesQ.data?.items ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <button onClick={bulkChangeCategory} disabled={bulkBusy || !bulkCategory} style={{
+            height: 32, padding: "0 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,.6)",
+            background: "transparent", color: "#fff", fontSize: 12, fontWeight: 700,
+            cursor: bulkBusy || !bulkCategory ? "not-allowed" : "pointer",
+            opacity: bulkBusy || !bulkCategory ? 0.5 : 1,
+          }}>{bulkBusy ? "適用中…" : "一括カテゴリ変更"}</button>
+          <button onClick={bulkArchive} disabled={bulkBusy} style={{
+            height: 32, padding: "0 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,.6)",
+            background: "transparent", color: "#fff", fontSize: 12, fontWeight: 700,
+            cursor: bulkBusy ? "not-allowed" : "pointer", opacity: bulkBusy ? 0.5 : 1,
+          }}>{bulkBusy ? "処理中…" : "🗄 一括アーカイブ"}</button>
+          <div style={{ flex: 1 }} />
+          <button onClick={() => setSelected([])} style={{
+            height: 32, padding: "0 12px", borderRadius: 8, border: "none",
+            background: "transparent", color: "#fff", fontSize: 12, fontWeight: 600,
+            cursor: "pointer", textDecoration: "underline",
+          }}>選択をクリア</button>
+        </div>
+      )}
+
       {/* Table */}
       <div style={{
         background: T.PLX_CARD_BG, borderRadius: 14, border: `1px solid ${PLX_BORDER}`,
@@ -199,7 +299,8 @@ function ProductList({ initialQuery }) {
           background: PLX_GREEN_50, letterSpacing: ".03em",
           borderBottom: `1px solid ${PLX_BORDER}`, alignItems: "center", gap: 6,
         }}>
-          <span><input type="checkbox" style={{ accentColor: PLX_GREEN }} /></span>
+          <span><input type="checkbox" checked={pageAllSelected} onChange={toggleSelectAll}
+            title="このページを全選択" style={{ accentColor: PLX_GREEN, cursor: "pointer" }} /></span>
           <span>商品名</span>
           <span>種別</span>
           <span>カテゴリ</span>
@@ -222,7 +323,7 @@ function ProductList({ initialQuery }) {
           </div>
         )}
 
-        {items.map((p, i) => {
+        {pagedItems.map((p, i) => {
           const av = p.total_available ?? 0;
           // Per-variant low-stock threshold (default 10 when missing).
           // See migration 005_low_stock_threshold.
@@ -233,13 +334,15 @@ function ProductList({ initialQuery }) {
             <div key={p.id} onClick={() => navigate(`/products/${p.id}`)} style={{
               display: "grid", gridTemplateColumns: "40px 1.7fr 0.65fr 0.85fr 0.95fr 0.7fr 0.65fr 0.95fr 0.75fr 22px",
               padding: "14px 18px", alignItems: "center", cursor: "pointer", gap: 6,
-              borderBottom: i < items.length - 1 ? `1px solid ${PLX_BORDER}` : "none",
+              borderBottom: i < pagedItems.length - 1 ? `1px solid ${PLX_BORDER}` : "none",
               transition: "background .12s",
             }}
               onMouseEnter={(e) => (e.currentTarget.style.background = PLX_GREEN_50)}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
               <span onClick={(e) => e.stopPropagation()}>
-                <input type="checkbox" style={{ accentColor: PLX_GREEN }} />
+                <input type="checkbox" checked={selected.includes(p.id)}
+                  onChange={() => toggleSelect(p.id)}
+                  style={{ accentColor: PLX_GREEN, cursor: "pointer" }} />
               </span>
               <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
                 <ProductThumb url={p.thumbnail_url} size={36} iconSize={16} />
@@ -333,6 +436,44 @@ function ProductList({ initialQuery }) {
         {!productsQ.loading && items.length === 0 && (
           <NoResultsState query={searchQ} />
         )}
+
+        {/* Pagination footer */}
+        {!productsQ.loading && items.length > 0 && (
+          <div style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            padding: "10px 14px", borderTop: `1px solid ${PLX_BORDER}`,
+            fontSize: 11, color: PLX_TEXT,
+          }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, color: PLX_MUTED }}>
+              <span>表示件数</span>
+              <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} style={{
+                height: 30, padding: "0 8px", fontSize: 12,
+                border: `1px solid ${PLX_BORDER}`, borderRadius: 8, background: T.PLX_CARD_BG,
+              }}>
+                {[25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+              <span>{(page - 1) * pageSize + 1} - {Math.min(page * pageSize, items.length)} 件 / 全 {items.length} 件</span>
+              <button
+                type="button" onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                style={{ ...btnSecondary, height: 30, padding: "0 12px", opacity: page <= 1 ? 0.5 : 1 }}
+              >← 前へ</button>
+              <span style={{
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                minWidth: 30, height: 30, padding: "0 10px", borderRadius: 8,
+                background: PLX_GREEN_LIGHT, color: PLX_GREEN, fontWeight: 700,
+              }}>{page}</span>
+              <button
+                type="button" onClick={() => setPage((p) => p + 1)}
+                disabled={page * pageSize >= items.length}
+                style={{ ...btnSecondary, height: 30, padding: "0 12px",
+                  opacity: page * pageSize >= items.length ? 0.5 : 1 }}
+              >次へ →</button>
+            </div>
+          </div>
+        )}
       </div>
     </AdminShell>
   );
@@ -373,7 +514,7 @@ function ExpiryIndicator({ days }) {
 }
 
 // Quick filter chip: dot + label, with a count badge on the right.
-function QuickChip({ on, onClick, dot, check, label, color, bg }) {
+function QuickChip({ on, onClick, dot, check, label, color, bg, count }) {
   return (
     <button onClick={onClick} style={{
       fontSize: 11, fontWeight: 700, padding: "5px 11px", borderRadius: 9999,
@@ -389,6 +530,15 @@ function QuickChip({ on, onClick, dot, check, label, color, bg }) {
         </svg>
       )}
       <span>{label}</span>
+      {count != null && (
+        <span style={{
+          minWidth: 16, height: 16, padding: "0 5px", borderRadius: 9999,
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          fontSize: 10, fontWeight: 800,
+          background: on ? color : PLX_BORDER,
+          color: on ? "#fff" : PLX_TEXT,
+        }}>{count}</span>
+      )}
     </button>
   );
 }

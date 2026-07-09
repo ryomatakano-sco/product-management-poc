@@ -74,6 +74,10 @@ function parseHash() {
   };
   if (realPages[h]) return { name: realPages[h], query };
 
+  // Receipt page — `#/sales/12/receipt`.
+  const receipt = h.match(/^\/sales\/(\d+)\/receipt$/);
+  if (receipt) return { name: "sale_receipt", id: receipt[1], query };
+
   // Detail pages — `#/vendors/3`, `#/branches/2`, `#/purchase-orders/8`.
   const detail = h.match(/^\/(vendors|branches|purchase-orders|sales)\/(\d+)$/);
   if (detail) {

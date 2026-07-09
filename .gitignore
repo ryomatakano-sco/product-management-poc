@@ -68,3 +68,6 @@ mockup/fonts/
 jan-lookup-poc/outputs/
 jan-lookup-poc/.venv/
 backend/.env
+
+# Uploaded media (logo etc.) — runtime data, not source
+backend/media/

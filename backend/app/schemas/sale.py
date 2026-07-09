@@ -28,6 +28,7 @@ class SaleCreate(BaseModel):
     unit_price: Decimal = Field(ge=0, description="Must be 0 or greater")
     payment_method: PaymentMethod = PaymentMethod.cash
     sold_at: datetime | None = None
+    sold_by: str | None = None
     patient_ref: str | None = None
     note: str | None = None
 
@@ -39,12 +40,16 @@ class SaleRead(BaseModel):
     store_id: int
     branch_id: int
     variant_id: int
+    transaction_id: str
     quantity: int
     unit_price: Decimal
     payment_method: PaymentMethod
     sold_at: datetime
+    sold_by: str | None
     patient_ref: str | None
     note: str | None
+    refunded_at: datetime | None = None
+    refund_of_sale_id: int | None = None
     created_at: datetime
     # Denormalized for the list view — populated by the GET handler.
     product_name: str | None = None
@@ -55,10 +60,10 @@ class SaleRead(BaseModel):
     def ser_decimal(cls, v: Decimal) -> str:
         return str(v)
 
-    @field_serializer("sold_at", "created_at")
+    @field_serializer("sold_at", "created_at", "refunded_at")
     @classmethod
-    def ser_datetime(cls, v: datetime) -> str:
-        return _utc_iso(v)
+    def ser_datetime(cls, v: datetime | None) -> str | None:
+        return _utc_iso(v) if v is not None else None
 
 
 class SaleListResponse(BaseModel):
@@ -69,5 +74,44 @@ class SaleListResponse(BaseModel):
 class SalesSummary(BaseModel):
     today_count: int
     today_revenue: str
+    yesterday_count: int = 0
+    yesterday_revenue: str = "0"
     month_count: int
     month_revenue: str
+    last_month_count: int = 0
+    last_month_revenue: str = "0"
+
+
+class ReceiptLine(BaseModel):
+    """One line item in the receipt breakdown."""
+    name: str
+    quantity: int
+    unit_price: str
+    line_total: str
+    tax_rate: str          # 'standard' | 'reduced'
+    tax_rate_pct: int      # 10 or 8
+    is_reduced: bool
+
+
+class ReceiptStore(BaseModel):
+    company_name: str
+    address: str | None = None
+    phone: str | None = None
+    registration_no: str | None = None  # 適格請求書 登録番号 (T-13-digit)
+
+
+class ReceiptData(BaseModel):
+    """Everything the receipt page needs to render one transaction."""
+    transaction_id: str
+    sold_at: str            # ISO 8601 UTC (Z-suffixed)
+    payment_method: str
+    payment_method_label: str
+    lines: list[ReceiptLine]
+    subtotal_10_tax_excl: str
+    tax_10: str
+    subtotal_10_tax_incl: str
+    subtotal_8_tax_excl: str
+    tax_8: str
+    subtotal_8_tax_incl: str
+    total: str
+    store: ReceiptStore

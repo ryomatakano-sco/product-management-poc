@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import csv
+import io
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.deps import DB, StoreId
 from app.models.inventory import AdjustmentReason, InventoryAdjustment, InventoryField
-from app.models.product import ProductVariant
+from app.models.product import Product, ProductVariant
 from app.models.purchase_order import POStatus, PurchaseOrder, PurchaseOrderItem, PurchaseOrderTag
 from app.models.tag import Tag
 from sqlalchemy import insert as sa_insert
@@ -25,6 +28,17 @@ from app.schemas.purchase_order import (
 )
 
 router = APIRouter(prefix="/purchase-orders", tags=["purchase-orders"])
+
+_JST = timezone(timedelta(hours=9))
+
+
+def _to_naive_jst(dt: datetime) -> datetime:
+    """PO created_at values come from MySQL NOW() — naive JST on the dev box.
+    Convert an (aware) query datetime into that space; pass naive through.
+    """
+    if dt.tzinfo is None:
+        return dt
+    return dt.astimezone(_JST).replace(tzinfo=None)
 
 
 def _item_to_read(item: PurchaseOrderItem) -> POItemRead:
@@ -109,6 +123,8 @@ async def list_purchase_orders(
     status: POStatus | None = Query(None),
     supplier_vendor_id: int | None = Query(None),
     destination_branch_id: int | None = Query(None),
+    date_from: datetime | None = Query(None, description="created_at >= (aware datetimes compared in JST)"),
+    date_to: datetime | None = Query(None, description="created_at < (aware datetimes compared in JST)"),
     q: str | None = Query(None, description="Search by PO number, reference, tracking, or note"),
 ):
     stmt = select(PurchaseOrder).where(PurchaseOrder.store_id == store_id).options(*_po_load_options())
@@ -118,6 +134,10 @@ async def list_purchase_orders(
         stmt = stmt.where(PurchaseOrder.supplier_vendor_id == supplier_vendor_id)
     if destination_branch_id:
         stmt = stmt.where(PurchaseOrder.destination_branch_id == destination_branch_id)
+    if date_from is not None:
+        stmt = stmt.where(PurchaseOrder.created_at >= _to_naive_jst(date_from))
+    if date_to is not None:
+        stmt = stmt.where(PurchaseOrder.created_at < _to_naive_jst(date_to))
     if q and q.strip():
         like = f"%{q.strip()}%"
         from sqlalchemy import or_ as _or
@@ -137,6 +157,116 @@ async def list_purchase_orders(
     total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     rows = (await db.execute(stmt.order_by(PurchaseOrder.id.desc()).offset(offset).limit(limit))).scalars().unique().all()
     return PaginatedResponse(items=[_po_to_read(po) for po in rows], total=total)
+
+
+# NOTE: declared before /{po_id} — "summary" must not be parsed as a po_id.
+@router.get("/summary", summary="発注KPIサマリー（今月/先月 + 現在の入荷待ち）")
+async def purchase_orders_summary(db: DB, store_id: StoreId):
+    """Month vs last-month PO count/amount (JST calendar months on created_at,
+    cancelled excluded) plus current pipeline counts — powers the list page's
+    KPI tiles and their 先月比 delta chips.
+    """
+    jst = timezone(timedelta(hours=9))
+    now_jst = datetime.now(jst)
+    month_start = now_jst.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    last_month_start = (month_start - timedelta(days=1)).replace(day=1)
+    # created_at comes from MySQL NOW() (server-local = JST on the dev box),
+    # so compare against naive JST boundaries — NOT UTC-converted ones.
+    m_utc  = month_start.replace(tzinfo=None)
+    lm_utc = last_month_start.replace(tzinfo=None)
+
+    base = select(
+        func.count(PurchaseOrder.id),
+        func.coalesce(func.sum(PurchaseOrder.total), 0),
+    ).where(
+        PurchaseOrder.store_id == store_id,
+        PurchaseOrder.status != POStatus.cancelled,
+    )
+
+    month_count, month_total = (await db.execute(
+        base.where(PurchaseOrder.created_at >= m_utc)
+    )).one()
+    last_month_count, last_month_total = (await db.execute(
+        base.where(PurchaseOrder.created_at >= lm_utc, PurchaseOrder.created_at < m_utc)
+    )).one()
+
+    status_rows = (await db.execute(
+        select(PurchaseOrder.status, func.count(PurchaseOrder.id))
+        .where(PurchaseOrder.store_id == store_id)
+        .group_by(PurchaseOrder.status)
+    )).all()
+    by_status = {s.value if hasattr(s, "value") else str(s): c for s, c in status_rows}
+
+    return {
+        "month_count": month_count or 0,
+        "month_total": str(month_total or 0),
+        "last_month_count": last_month_count or 0,
+        "last_month_total": str(last_month_total or 0),
+        "ordered_count": by_status.get("ordered", 0),
+        "partially_received_count": by_status.get("partially_received", 0),
+    }
+
+
+# NOTE: declared before /{po_id} — "export.csv" must not be parsed as a po_id.
+@router.get("/export.csv")
+async def export_purchase_orders_csv(
+    db: DB,
+    store_id: StoreId,
+    status: POStatus | None = Query(None),
+    supplier_vendor_id: int | None = Query(None),
+    destination_branch_id: int | None = Query(None),
+    date_from: datetime | None = Query(None),
+    date_to: datetime | None = Query(None),
+):
+    """CSV of the same rows the list endpoint returns, minus pagination."""
+    STATUS_JA = {
+        POStatus.draft: "下書き",
+        POStatus.ordered: "送信済み",
+        POStatus.partially_received: "一部入荷",
+        POStatus.received: "入荷済み",
+        POStatus.cancelled: "キャンセル",
+    }
+    stmt = select(PurchaseOrder).where(PurchaseOrder.store_id == store_id).options(*_po_load_options())
+    if status:
+        stmt = stmt.where(PurchaseOrder.status == status)
+    if supplier_vendor_id:
+        stmt = stmt.where(PurchaseOrder.supplier_vendor_id == supplier_vendor_id)
+    if destination_branch_id:
+        stmt = stmt.where(PurchaseOrder.destination_branch_id == destination_branch_id)
+    if date_from is not None:
+        stmt = stmt.where(PurchaseOrder.created_at >= _to_naive_jst(date_from))
+    if date_to is not None:
+        stmt = stmt.where(PurchaseOrder.created_at < _to_naive_jst(date_to))
+    rows = (await db.execute(stmt.order_by(PurchaseOrder.id.desc()))).scalars().unique().all()
+
+    buf = io.StringIO()
+    buf.write("﻿")  # UTF-8 BOM so Excel opens Japanese correctly
+    writer = csv.writer(buf)
+    writer.writerow([
+        "発注番号", "仕入先", "拠点", "状態", "発注日", "納品予定日",
+        "品目数", "小計", "送料", "合計 (税込)", "備考",
+    ])
+    for po in rows:
+        writer.writerow([
+            f"PO-{po.id:06d}",
+            po.supplier.company_name if po.supplier else "",
+            po.destination_branch.name if po.destination_branch else "",
+            STATUS_JA.get(po.status, str(po.status)),
+            po.ordered_at.strftime("%Y/%m/%d") if po.ordered_at else po.created_at.strftime("%Y/%m/%d"),
+            po.estimated_arrival.strftime("%Y/%m/%d") if po.estimated_arrival else "",
+            len(po.items),
+            f"{float(po.subtotal):.0f}",
+            f"{float(po.shipping_cost):.0f}",
+            f"{float(po.total):.0f}",
+            po.note or "",
+        ])
+
+    filename = f"purchase_orders_{datetime.now(timezone(timedelta(hours=9))).strftime('%Y%m%d_%H%M')}.csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{po_id}", response_model=PurchaseOrderRead)
@@ -309,6 +439,16 @@ async def receive_purchase_order(po_id: int, body: PurchaseOrderReceive, db: DB,
             )
         ).scalar_one()
         variant.on_hand += recv.quantity_received
+
+        # The reorder is fulfilled — clear the product's 再発注済 flag so the
+        # 商品一覧 chip stops surfacing it.
+        product = (
+            await db.execute(
+                select(Product).where(Product.id == variant.product_id)
+            )
+        ).scalar_one_or_none()
+        if product is not None and product.reorder_requested_at is not None:
+            product.reorder_requested_at = None
 
         # Log adjustment
         adj = InventoryAdjustment(

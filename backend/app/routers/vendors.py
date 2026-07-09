@@ -7,10 +7,13 @@ fills the entire 仕入先 list view.
 
 from __future__ import annotations
 
+import csv
+import io
 from datetime import date, datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 
 from app.deps import DB, StoreId
@@ -94,6 +97,49 @@ async def create_vendor(body: VendorCreate, db: DB, store_id: StoreId):
     await db.commit()
     await db.refresh(vendor)
     return _attach(vendor, {}, {})
+
+
+# NOTE: declared before /{vendor_id} — "export.csv" must not be parsed as an id.
+@router.get("/export.csv", summary="仕入先一覧をCSVでダウンロード")
+async def export_vendors_csv(
+    db: DB,
+    store_id: StoreId,
+    status: VendorStatus | None = Query(None),
+):
+    stmt = select(Vendor).where(Vendor.store_id == store_id)
+    if status is not None:
+        stmt = stmt.where(Vendor.status == status)
+    rows = (await db.execute(stmt.order_by(Vendor.id))).scalars().all()
+    counts, ytd = await _vendor_aggregates(db, store_id)
+
+    buf = io.StringIO()
+    buf.write("﻿")  # UTF-8 BOM so Excel opens Japanese correctly
+    writer = csv.writer(buf)
+    writer.writerow([
+        "ID", "会社名", "担当者", "メール", "電話", "住所", "支払条件",
+        "状態", "取扱商品数", "YTD仕入額", "メモ",
+    ])
+    for v in rows:
+        writer.writerow([
+            v.id,
+            v.company_name,
+            v.contact_name or "",
+            v.email or "",
+            v.phone or "",
+            v.address or "",
+            v.payment_terms or "",
+            "取引中" if v.status == VendorStatus.active else "停止中",
+            counts.get(v.id, 0),
+            f"{float(ytd.get(v.id, 0)):.0f}",
+            v.notes or "",
+        ])
+
+    filename = f"vendors_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{vendor_id}", response_model=VendorRead, summary="仕入先詳細を取得")

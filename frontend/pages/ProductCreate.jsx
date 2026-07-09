@@ -139,6 +139,36 @@ function ProductCreate({ editId }) {
     originalStock: 0,
   });
 
+  // ── Smart duplicate detection ────────────────────────────────────────────
+  // Debounced check against the existing catalog while the user types.
+  // Exact JAN hit = hard duplicate; name hit = soft "similar product" note.
+  // Skipped entirely in edit mode (matching yourself is expected there).
+  const [dupWarning, setDupWarning] = React.useState(null); // {id, name, matchType}
+  React.useEffect(() => {
+    if (isEdit) { setDupWarning(null); return; }
+    const jan = (variant.barcode || "").trim();
+    const nm = (name || "").trim();
+    if (jan.length < 8 && nm.length < 3) { setDupWarning(null); return; }
+    let cancelled = false;
+    const h = setTimeout(async () => {
+      try {
+        if (jan.length >= 8) {
+          const res = await api.listProducts({ q: jan, status: undefined, limit: 5 });
+          const hit = (res.items || []).find((x) => (x.match_reasons || []).includes("barcode"));
+          if (hit) { if (!cancelled) setDupWarning({ id: hit.id, name: hit.name, matchType: "jan" }); return; }
+        }
+        if (nm.length >= 3) {
+          const res = await api.listProducts({ q: nm, status: undefined, limit: 5 });
+          const hit = (res.items || []).find((x) =>
+            x.name === nm || x.name.includes(nm) || nm.includes(x.name));
+          if (hit) { if (!cancelled) setDupWarning({ id: hit.id, name: hit.name, matchType: "name" }); return; }
+        }
+        if (!cancelled) setDupWarning(null);
+      } catch (_) { if (!cancelled) setDupWarning(null); }
+    }, 500);
+    return () => { cancelled = true; clearTimeout(h); };
+  }, [name, variant.barcode, isEdit]);
+
   // When loading an existing product for edit, prefill the form once the
   // data lands. Only runs in edit mode.
   const [prefilled, setPrefilled] = React.useState(false);
@@ -536,6 +566,32 @@ function ProductCreate({ editId }) {
                   placeholder="エグザフレックス インプレッション" style={formInput} />
               </FormRow>
             </div>
+
+            {/* Duplicate-detection banner */}
+            {dupWarning && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+                padding: "10px 14px", marginBottom: 14, borderRadius: 10,
+                background: dupWarning.matchType === "jan" ? PLX_RED_LIGHT : PLX_WARN_BG,
+                border: `1px solid ${dupWarning.matchType === "jan" ? PLX_RED : PLX_WARN}`,
+                fontSize: 12,
+              }}>
+                <span style={{ fontWeight: 700, color: dupWarning.matchType === "jan" ? PLX_RED : PLX_WARN }}>
+                  {dupWarning.matchType === "jan" ? "⚠ 同じ JAN の商品が既に登録されています" : "💡 似た名前の商品が既にあります"}
+                </span>
+                <span style={{ color: PLX_TEXT }}>「{dupWarning.name}」</span>
+                <button type="button" onClick={() => navigate(`/products/${dupWarning.id}`)} style={{
+                  height: 26, padding: "0 12px", borderRadius: 9999,
+                  border: `1px solid ${PLX_BORDER}`, background: T.PLX_CARD_BG,
+                  fontSize: 11, fontWeight: 700, cursor: "pointer", color: PLX_TEXT,
+                }}>既存の商品を開く →</button>
+                <span style={{ fontSize: 11, color: PLX_MUTED }}>
+                  {dupWarning.matchType === "jan"
+                    ? "重複登録の可能性が高いため、既存商品の編集をおすすめします。"
+                    : "重複でなければこのまま登録できます。"}
+                </span>
+              </div>
+            )}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
               <FormRow label="カテゴリ" requiredFor="公開" error={fieldErrors.categoryId}>
                 <Select value={categoryId} onChange={setCategoryId} options={[
