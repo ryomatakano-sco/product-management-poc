@@ -11,7 +11,8 @@ function ProductList({ initialQuery }) {
   const initial = initialQuery || {};
   const [searchQ, setSearchQ] = React.useState("");
   const [kindFilter, setKindFilter] = React.useState(initial.kind || "all"); // all | product | consumable
-  const [categoryFilter, setCategoryFilter] = React.useState("");
+  // ?category_id= deep link — dashboard's カテゴリ別在庫 bars land here.
+  const [categoryFilter, setCategoryFilter] = React.useState(initial.category_id || "");
   const [vendorFilter, setVendorFilter] = React.useState("");
   // ProductCreate.save("draft") navigates to /products?status=draft so the
   // user lands on the drafts list and can see what they just saved.
@@ -75,6 +76,51 @@ function ProductList({ initialQuery }) {
   React.useEffect(() => { setPage(1); },
     [searchQ, categoryFilter, vendorFilter, statusFilter, kindFilter, activeTags.join(","), quickFilters.join(","), pageSize]);
   const pagedItems = items.slice((page - 1) * pageSize, page * pageSize);
+
+  // ── Bulk selection + actions (mockup's 一括操作 bar) ─────────────────────
+  const [selected, setSelected] = React.useState([]); // product ids
+  const [bulkBusy, setBulkBusy] = React.useState(false);
+  const [bulkCategory, setBulkCategory] = React.useState("");
+  React.useEffect(() => { setSelected([]); },
+    [searchQ, categoryFilter, vendorFilter, statusFilter, kindFilter, activeTags.join(","), quickFilters.join(",")]);
+
+  const toggleSelect = (id) =>
+    setSelected((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
+  const pageAllSelected = pagedItems.length > 0 && pagedItems.every((p) => selected.includes(p.id));
+  const toggleSelectAll = () =>
+    setSelected(pageAllSelected
+      ? selected.filter((id) => !pagedItems.some((p) => p.id === id))
+      : [...new Set([...selected, ...pagedItems.map((p) => p.id)])]);
+
+  async function bulkArchive() {
+    if (bulkBusy) return;
+    if (!window.confirm(`選択した ${selected.length} 件の商品をアーカイブしますか？`)) return;
+    setBulkBusy(true);
+    let ok = 0, failed = 0;
+    for (const id of selected) {
+      try { await api.archiveProduct(id); ok++; } catch (_) { failed++; }
+    }
+    setBulkBusy(false);
+    setSelected([]);
+    if (failed) window.PLX_TOAST.warn(`${ok} 件アーカイブ、${failed} 件失敗しました`);
+    else window.PLX_TOAST.success(`${ok} 件の商品をアーカイブしました`);
+    productsQ.refetch();
+  }
+
+  async function bulkChangeCategory() {
+    if (bulkBusy || !bulkCategory) return;
+    setBulkBusy(true);
+    let ok = 0, failed = 0;
+    for (const id of selected) {
+      try { await api.updateProduct(id, { category_id: Number(bulkCategory) }); ok++; } catch (_) { failed++; }
+    }
+    setBulkBusy(false);
+    setSelected([]);
+    setBulkCategory("");
+    if (failed) window.PLX_TOAST.warn(`${ok} 件変更、${failed} 件失敗しました`);
+    else window.PLX_TOAST.success(`${ok} 件の商品のカテゴリを変更しました`);
+    productsQ.refetch();
+  }
 
   const headerRight = (
     <button onClick={() => navigate("/products/new")} style={{
@@ -207,6 +253,42 @@ function ProductList({ initialQuery }) {
         </div>
       </div>
 
+      {/* Bulk action bar — appears when rows are selected (mockup pattern) */}
+      {selected.length > 0 && (
+        <div style={{
+          marginTop: 16, padding: "10px 16px", borderRadius: 12,
+          background: PLX_GREEN, color: "#fff",
+          display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+        }}>
+          <span style={{ fontSize: 13, fontWeight: 700 }}>{selected.length} 件選択中</span>
+          <div style={{ width: 1, height: 20, background: "rgba(255,255,255,.35)" }} />
+          <select value={bulkCategory} onChange={(e) => setBulkCategory(e.target.value)} style={{
+            height: 32, padding: "0 10px", borderRadius: 8, border: "none",
+            fontSize: 12, color: PLX_TEXT, background: "#fff",
+          }}>
+            <option value="">カテゴリを選択…</option>
+            {(categoriesQ.data?.items ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <button onClick={bulkChangeCategory} disabled={bulkBusy || !bulkCategory} style={{
+            height: 32, padding: "0 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,.6)",
+            background: "transparent", color: "#fff", fontSize: 12, fontWeight: 700,
+            cursor: bulkBusy || !bulkCategory ? "not-allowed" : "pointer",
+            opacity: bulkBusy || !bulkCategory ? 0.5 : 1,
+          }}>{bulkBusy ? "適用中…" : "一括カテゴリ変更"}</button>
+          <button onClick={bulkArchive} disabled={bulkBusy} style={{
+            height: 32, padding: "0 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,.6)",
+            background: "transparent", color: "#fff", fontSize: 12, fontWeight: 700,
+            cursor: bulkBusy ? "not-allowed" : "pointer", opacity: bulkBusy ? 0.5 : 1,
+          }}>{bulkBusy ? "処理中…" : "🗄 一括アーカイブ"}</button>
+          <div style={{ flex: 1 }} />
+          <button onClick={() => setSelected([])} style={{
+            height: 32, padding: "0 12px", borderRadius: 8, border: "none",
+            background: "transparent", color: "#fff", fontSize: 12, fontWeight: 600,
+            cursor: "pointer", textDecoration: "underline",
+          }}>選択をクリア</button>
+        </div>
+      )}
+
       {/* Table */}
       <div style={{
         background: T.PLX_CARD_BG, borderRadius: 14, border: `1px solid ${PLX_BORDER}`,
@@ -218,7 +300,8 @@ function ProductList({ initialQuery }) {
           background: PLX_GREEN_50, letterSpacing: ".03em",
           borderBottom: `1px solid ${PLX_BORDER}`, alignItems: "center", gap: 6,
         }}>
-          <span><input type="checkbox" style={{ accentColor: PLX_GREEN }} /></span>
+          <span><input type="checkbox" checked={pageAllSelected} onChange={toggleSelectAll}
+            title="このページを全選択" style={{ accentColor: PLX_GREEN, cursor: "pointer" }} /></span>
           <span>商品名</span>
           <span>種別</span>
           <span>カテゴリ</span>
@@ -258,7 +341,9 @@ function ProductList({ initialQuery }) {
               onMouseEnter={(e) => (e.currentTarget.style.background = PLX_GREEN_50)}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
               <span onClick={(e) => e.stopPropagation()}>
-                <input type="checkbox" style={{ accentColor: PLX_GREEN }} />
+                <input type="checkbox" checked={selected.includes(p.id)}
+                  onChange={() => toggleSelect(p.id)}
+                  style={{ accentColor: PLX_GREEN, cursor: "pointer" }} />
               </span>
               <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
                 <ProductThumb url={p.thumbnail_url} size={36} iconSize={16} />

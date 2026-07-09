@@ -102,10 +102,10 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Category breakdown — mock for PoC. TODO: wire to /categories + aggregate variants. */}
+      {/* Category breakdown — real data from summary.category_breakdown. */}
       <div style={{ ...dashCard, marginTop: 14 }}>
         <DashCardHeader title="カテゴリ別在庫状況" />
-        {loading ? <CategorySkeleton /> : <CategoryBars />}
+        {loading ? <CategorySkeleton /> : <CategoryBars rows={summary?.category_breakdown || []} />}
       </div>
 
       <style>{`@keyframes plxshimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}`}</style>
@@ -565,43 +565,47 @@ function ActivitySkeleton() {
   );
 }
 
-// ── Category bars — static mock for PoC ────────────────────────────────────
-// TODO: wire to /categories + variant aggregates after demo.
+// ── Category bars — real data from /dashboard/summary.category_breakdown ───
+// rows: [{ category_id, name, stock_count, stock_value_jpy }]. Categories
+// with zero stock are hidden so seed categories don't render as empty bars.
 
-function CategoryBars() {
-  const rows = [
-    { name: "歯ブラシ",     total: 124, low: 1 },
-    { name: "歯磨剤",       total: 88,  low: 2 },
-    { name: "予防・歯磨剤", total: 412, low: 1 },
-    { name: "麻酔",         total: 36,  low: 0 },
-    { name: "消耗品",       total: 208, low: 1 },
-    { name: "器具",         total: 54,  low: 0 },
-  ];
-  const max = Math.max(...rows.map((r) => r.total));
+function CategoryBars({ rows: rawRows }) {
+  const rows = (rawRows || [])
+    .filter((r) => (r.stock_count || 0) > 0)
+    .sort((a, b) => (b.stock_count || 0) - (a.stock_count || 0))
+    .slice(0, 8);
+  if (rows.length === 0) {
+    return (
+      <div style={{ padding: "18px 0", textAlign: "center", color: PLX_MUTED, fontSize: 12 }}>
+        カテゴリ別の在庫データはまだありません。
+      </div>
+    );
+  }
+  const max = Math.max(...rows.map((r) => r.stock_count));
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {rows.map((r) => (
-        <div key={r.name} style={{
-          display: "grid", gridTemplateColumns: "140px 1fr 90px",
-          alignItems: "center", gap: 14, fontSize: 12,
-        }}>
-          <div style={{ fontWeight: 600 }}>{r.name}</div>
+        <div key={r.category_id}
+          onClick={() => navigate(`/products?category_id=${r.category_id}`)}
+          title={`在庫金額 ¥${formatYen(r.stock_value_jpy)}`}
+          style={{
+            display: "grid", gridTemplateColumns: "140px 1fr 130px",
+            alignItems: "center", gap: 14, fontSize: 12, cursor: "pointer",
+          }}>
+          <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>
           <div style={{ height: 10, background: PLX_GREEN_50, borderRadius: 9999, position: "relative", overflow: "hidden" }}>
             <div style={{
               position: "absolute", left: 0, top: 0, bottom: 0,
-              width: `${(r.total / max) * 100}%`,
+              width: `${(r.stock_count / max) * 100}%`,
               background: PLX_GREEN, borderRadius: 9999,
             }} />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
-            <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>{r.total}</span>
+            <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>{r.stock_count}</span>
             <span style={{ fontSize: 10, color: PLX_MUTED }}>個</span>
-            {r.low > 0 && (
-              <span style={{
-                fontSize: 9, fontWeight: 700, color: DASH_RED,
-                background: DASH_RED_LIGHT, padding: "2px 7px", borderRadius: 9999, marginLeft: 4,
-              }}>低 {r.low}</span>
-            )}
+            <span style={{ fontSize: 10, color: PLX_MUTED, fontVariantNumeric: "tabular-nums" }}>
+              ¥{formatYen(r.stock_value_jpy)}
+            </span>
           </div>
         </div>
       ))}

@@ -275,3 +275,21 @@ Three more medium items.
 1. 在庫 → ＋在庫調整 → pick 商品/バリアント → 次へ → set ±数量/理由 → 調整を確定 → history section updates.
 2. 商品詳細 → 売上推移 tab → bars are real weekly sales (hover a bar for units + revenue). Record a sale and refresh to see the current week move.
 3. 発注書詳細 → 🖨 印刷 / PDF → print preview shows only the 発注書 sheet; choose "Save as PDF".
+
+---
+
+## クイック改善バッチ 4 (Quick wins batch 4)
+
+Branch: `feature/sales-records`
+
+| Feature | Where |
+|---|---|
+| 商品一覧の一括操作 | [ProductList.jsx](frontend/pages/ProductList.jsx) — the previously decorative checkboxes now track selection (row + header select-all per page). A green bulk bar appears when rows are selected: **N件選択中 / 一括カテゴリ変更 (category dropdown + apply) / 🗄 一括アーカイブ (confirm → DELETE loop) / 選択をクリア**. Per-item failures are counted and reported in the toast. Selection resets when filters change. |
+| ダッシュボード カテゴリ別在庫 (実データ) | `CategoryBars` was hard-coded sample data with a TODO; the backend's `/dashboard/summary` already returned `category_breakdown`. Now rendered for real: zero-stock categories hidden, sorted by stock desc (top 8), each row shows count + 在庫金額 and **clicks through to `#/products?category_id=N`** (ProductList now honours that query param). |
+| 重複登録の検知 (商品登録) | [ProductCreate.jsx](frontend/pages/ProductCreate.jsx) — debounced (500ms) catalog check while typing. Exact **JAN match → red banner** 「⚠ 同じ JAN の商品が既に登録されています」; **name similarity → amber note** 「💡 似た名前の商品が既にあります」. Both show the existing product's name + 既存の商品を開く → button. Non-blocking (you can still save), skipped in edit mode. Uses the list endpoint's `match_reasons` (barcode/name/kana) — no new backend. Future-features doc item #22. |
+
+### How to test
+
+1. 商品一覧 → tick the header checkbox → green bar shows 12件選択中 → pick a category → 一括カテゴリ変更 (or 一括アーカイブ with confirm).
+2. ダッシュボード → カテゴリ別在庫状況 shows real counts/values; click a bar to open that category's product list.
+3. 商品登録 → type an existing JAN (e.g. `4901616213241`) in JAN/バーコード → red duplicate banner; type an existing product name → amber similar-name note.
