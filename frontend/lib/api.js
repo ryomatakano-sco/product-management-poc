@@ -113,6 +113,7 @@ const api = {
 
   // Inventory (aggregate view + adjustments)
   listInventory:   (params) => request(`/inventory${qs(params)}`),
+  listRecentAdjustments: (params) => request(`/inventory/adjustments${qs(params)}`),
 
   // Purchase orders (existing backend at /purchase-orders)
   listPurchaseOrders: (params) => request(`/purchase-orders${qs(params)}`),

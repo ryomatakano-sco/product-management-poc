@@ -30,9 +30,10 @@ function periodRange(preset) {
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
-function SalesRecords({ query }) {
+function SalesRecords({ query, initialSaleId }) {
   const [showManualEntry, setShowManualEntry] = React.useState(false);
-  const [detailId, setDetailId]     = React.useState(null);
+  // Deep link `#/sales/12` lands here with initialSaleId — open its detail modal.
+  const [detailId, setDetailId]     = React.useState(initialSaleId || null);
   const [period, setPeriod]         = React.useState("today");
   const [branchFilter, setBranchFilter] = React.useState("");
   const [paymentFilter, setPaymentFilter] = React.useState("");

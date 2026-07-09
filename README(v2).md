@@ -226,3 +226,32 @@ frontend/
 3. 在庫: ⬇ 棚卸しCSVダウンロード; pager at the bottom of the table.
 4. 商品一覧: 在庫低下/期限間近 chips show live counts; pager at the bottom.
 5. 設定 › AI設定: 接続テスト → green 接続済み pill (or a reasoned failure message).
+
+---
+
+## クイック改善バッチ 2 (Quick wins batch 2)
+
+Branch: `feature/sales-records`
+
+Three items from the medium list plus a navigation-reachability fix found by audit.
+
+### Navigation audit result
+
+Every route was checked for inbound links (sidebar, buttons, row clicks). One orphan found and fixed:
+
+- `#/sales/:id` was parsed by the router (`sale_detail` in `lib/hooks.js`) but `app.jsx` had **no case for it** — it silently rendered the 開発中 placeholder, and no page ever linked to it. It now renders the Sales Records page with that sale's 販売詳細 modal auto-opened, making sales deep-linkable (e.g. from a future notification or the command palette).
+- Everything else is reachable: all 12 sidebar pages, product detail/create/edit, PO detail (list rows), vendor/branch detail (list rows / cards), receipt page (detail modal), scan page (QR — intentionally unlinked).
+
+### Features
+
+| Feature | Where |
+|---|---|
+| 仕入先詳細タブ (取扱商品 / 発注履歴) | `frontend/pages/Vendors.jsx` — `VendorProductsTab` / `VendorPosTab`. **No new backend** — the existing list endpoints already filter by `vendor_id` / `supplier_vendor_id`. Replaces the 近日対応 blue card; `POStatusPill` exported on `window` for reuse. |
+| 在庫金額 (税抜) KPI | Backend adds per-row `value_jpy` (on_hand × variant price — same rule as the branch snapshot, so figures agree) in `_build_inventory_rows`; 5th KPI tile on 在庫 |
+| 最近の調整履歴 | New `GET /inventory/adjustments` (cross-variant, newest first, product name + SKU denormalized); table section at the bottom of 在庫 with signed colored deltas, reason labels (販売/入荷/棚卸修正/破損/返品…), row click → product detail |
+
+### How to test
+
+1. 仕入先 → any vendor → 取扱商品 / 発注履歴 tabs show that vendor's products and POs; rows click through.
+2. 在庫 → second KPI tile shows 在庫金額 (税抜); scroll down for 最近の調整履歴 (record a sale or adjustment to see it update).
+3. Type `#/sales/1` in the URL → sales page opens with the 販売詳細 modal for that sale.

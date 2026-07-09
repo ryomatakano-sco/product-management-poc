@@ -1174,3 +1174,4 @@ function DetailKV({ k, v }) {
 window.PurchaseOrders = PurchaseOrders;
 window.PurchaseOrderDetail = PurchaseOrderDetail;
 window.PlxDetailKV = DetailKV;
+window.POStatusPill = POStatusPill;  // reused by the vendor detail 発注履歴 tab

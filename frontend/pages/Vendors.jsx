@@ -175,6 +175,7 @@ function VendorFormModal({ onClose, onSaved }) {
 function VendorDetail({ id }) {
   const vendorQ = useFetch(() => api.getVendor(Number(id)), [id]);
   const v = vendorQ.data;
+  const [tab, setTab] = React.useState("overview"); // overview | products | pos
   const [notes, setNotes] = React.useState("");
   const [savingNotes, setSavingNotes] = React.useState(false);
   React.useEffect(() => { if (v) setNotes(v.notes || ""); }, [v]);
@@ -226,27 +227,139 @@ function VendorDetail({ id }) {
             </div>
           </div>
 
-          <div style={{
-            background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
-            boxShadow: T.SHADOW_SM, padding: 24,
-          }}>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, marginBottom: 12 }}>メモ</h3>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
-              style={{ ...formInput, height: 120, padding: "12px 14px", resize: "vertical" }}
-              placeholder="この仕入先に関するメモを記入..." />
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
-              <button onClick={saveNotes} disabled={savingNotes}
-                style={{ ...btnPrimary, opacity: savingNotes ? 0.5 : 1 }}>
-                {savingNotes ? "保存中..." : "メモを保存"}
-              </button>
-            </div>
-            <div style={{ marginTop: 16, padding: 12, background: T.PLX_BLUE_100, borderRadius: T.RADIUS_MD, fontSize: 12, color: T.PLX_BLUE_600 }}>
-              取扱商品・発注履歴タブは近日対応予定です。
-            </div>
+          {/* Tab bar — 概要 / 取扱商品 / 発注履歴 */}
+          <div style={{ display: "flex", gap: 4, marginBottom: 14, borderBottom: `1px solid ${T.PLX_LINE_200}` }}>
+            {[
+              { id: "overview", label: "概要" },
+              { id: "products", label: `取扱商品 (${v.product_count})` },
+              { id: "pos",      label: "発注履歴" },
+            ].map((t) => (
+              <button key={t.id} onClick={() => setTab(t.id)} style={{
+                padding: "9px 16px", border: "none", cursor: "pointer",
+                background: "transparent", fontSize: 13, fontWeight: 600,
+                color: tab === t.id ? T.PLX_GREEN_700 : T.PLX_INK_500,
+                borderBottom: tab === t.id ? `2px solid ${T.PLX_GREEN_600}` : "2px solid transparent",
+                marginBottom: -1,
+              }}>{t.label}</button>
+            ))}
           </div>
+
+          {tab === "overview" && (
+            <div style={{
+              background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+              boxShadow: T.SHADOW_SM, padding: 24,
+            }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, marginBottom: 12 }}>メモ</h3>
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
+                style={{ ...formInput, height: 120, padding: "12px 14px", resize: "vertical" }}
+                placeholder="この仕入先に関するメモを記入..." />
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+                <button onClick={saveNotes} disabled={savingNotes}
+                  style={{ ...btnPrimary, opacity: savingNotes ? 0.5 : 1 }}>
+                  {savingNotes ? "保存中..." : "メモを保存"}
+                </button>
+              </div>
+            </div>
+          )}
+          {tab === "products" && <VendorProductsTab vendorId={v.id} />}
+          {tab === "pos" && <VendorPosTab vendorId={v.id} />}
         </>
       )}
     </AdminShell>
+  );
+}
+
+// 取扱商品 tab — the products list already filters by vendor_id; no new API.
+function VendorProductsTab({ vendorId }) {
+  const q = useFetch(() => api.listProducts({ vendor_id: vendorId, status: undefined, limit: 100 }), [vendorId]);
+  const rows = q.data?.items ?? [];
+  return (
+    <div style={{
+      background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+      boxShadow: T.SHADOW_SM, overflow: "hidden",
+    }}>
+      <div style={{
+        display: "grid", gridTemplateColumns: "2fr 0.8fr 1fr 0.8fr 0.7fr 0.8fr",
+        padding: "12px 18px", fontSize: 11, fontWeight: 700, color: T.PLX_INK_500,
+        background: T.PLX_SURFACE_50, borderBottom: `1px solid ${T.PLX_LINE_200}`,
+      }}>
+        <span>商品名</span><span>種別</span><span>SKU</span>
+        <span style={{ textAlign: "right" }}>価格</span>
+        <span style={{ textAlign: "right" }}>在庫</span>
+        <span style={{ textAlign: "center" }}>ステータス</span>
+      </div>
+      {q.loading && <div style={{ padding: 40, textAlign: "center", color: T.PLX_INK_500 }}>読み込み中…</div>}
+      {q.error && <PlxErrorBanner error={q.error} onRetry={q.refetch} />}
+      {!q.loading && rows.length === 0 && (
+        <PlxEmptyState title="この仕入先の商品はありません" message="商品登録時に仕入先を設定すると、ここに表示されます。" />
+      )}
+      {rows.map((p, i) => (
+        <div key={p.id} onClick={() => navigate(`/products/${p.id}`)} style={{
+          display: "grid", gridTemplateColumns: "2fr 0.8fr 1fr 0.8fr 0.7fr 0.8fr",
+          padding: "13px 18px", alignItems: "center", fontSize: 12, cursor: "pointer",
+          borderBottom: i < rows.length - 1 ? `1px solid ${T.PLX_LINE_100}` : "none",
+        }}
+          onMouseEnter={(e) => e.currentTarget.style.background = T.PLX_SURFACE_50}
+          onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+          <span style={{ fontWeight: 600, color: T.PLX_INK_900 }}>{p.name}</span>
+          <span>{p.item_type === "consumable"
+            ? <Pill color={T.PLX_BLUE_600} bg={T.PLX_BLUE_100}>消耗品</Pill>
+            : <Pill color={T.PLX_GREEN_700} bg={T.PLX_GREEN_100}>物販</Pill>}</span>
+          <span style={{ fontFamily: T.FONT_MONO, fontSize: 11, color: T.PLX_INK_500 }}>{p.default_sku || "—"}</span>
+          <span style={{ textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>¥{formatYen(p.default_price)}</span>
+          <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{p.total_available ?? 0}</span>
+          <span style={{ textAlign: "center" }}><StatusPill status={p.status} /></span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// 発注履歴 tab — the PO list already filters by supplier_vendor_id; no new API.
+function VendorPosTab({ vendorId }) {
+  const q = useFetch(() => api.listPurchaseOrders({ supplier_vendor_id: vendorId, limit: 100 }), [vendorId]);
+  const rows = q.data?.items ?? [];
+  return (
+    <div style={{
+      background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+      boxShadow: T.SHADOW_SM, overflow: "hidden",
+    }}>
+      <div style={{
+        display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 0.6fr 0.9fr 0.9fr",
+        padding: "12px 18px", fontSize: 11, fontWeight: 700, color: T.PLX_INK_500,
+        background: T.PLX_SURFACE_50, borderBottom: `1px solid ${T.PLX_LINE_200}`,
+      }}>
+        <span>発注番号</span><span>発注日</span><span>納品予定日</span>
+        <span style={{ textAlign: "right" }}>品目数</span>
+        <span style={{ textAlign: "right" }}>合計（税込）</span>
+        <span style={{ textAlign: "center" }}>状態</span>
+      </div>
+      {q.loading && <div style={{ padding: 40, textAlign: "center", color: T.PLX_INK_500 }}>読み込み中…</div>}
+      {q.error && <PlxErrorBanner error={q.error} onRetry={q.refetch} />}
+      {!q.loading && rows.length === 0 && (
+        <PlxEmptyState title="この仕入先への発注はまだありません" message="発注書ページから新しい発注書を作成できます。" />
+      )}
+      {rows.map((po, i) => (
+        <div key={po.id} onClick={() => navigate(`/purchase-orders/${po.id}`)} style={{
+          display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 0.6fr 0.9fr 0.9fr",
+          padding: "13px 18px", alignItems: "center", fontSize: 12, cursor: "pointer",
+          borderBottom: i < rows.length - 1 ? `1px solid ${T.PLX_LINE_100}` : "none",
+        }}
+          onMouseEnter={(e) => e.currentTarget.style.background = T.PLX_SURFACE_50}
+          onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+          <span style={{ fontFamily: T.FONT_MONO, fontWeight: 700, color: T.PLX_BLUE_600 }}>
+            PO-{String(po.id).padStart(6, "0")}
+          </span>
+          <span style={{ fontSize: 11, color: T.PLX_INK_600 }}>
+            {po.ordered_at ? formatJpDate(po.ordered_at) : formatJpDate(po.created_at)}
+          </span>
+          <span style={{ fontSize: 11 }}>{po.estimated_arrival ? formatJpDate(po.estimated_arrival) : "—"}</span>
+          <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{po.items?.length ?? 0}</span>
+          <span style={{ textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>¥{formatYen(po.total)}</span>
+          <span style={{ textAlign: "center" }}><POStatusPill status={po.status} /></span>
+        </div>
+      ))}
+    </div>
   );
 }
 

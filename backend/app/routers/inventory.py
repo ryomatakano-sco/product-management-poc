@@ -89,6 +89,9 @@ async def _build_inventory_rows(
             "on_hand": on_hand,
             "committed": committed,
             "available": available,
+            # on_hand × price per variant — same rule as the branch snapshot's
+            # total_value_jpy, so the two pages' 在庫金額 figures agree.
+            "value_jpy": int(sum(v.on_hand * (v.price or 0) for v in p.variants)),
             "status": status,
             "earliest_expiry_date": p.expiry_date.isoformat() if p.expiry_date else None,
             "last_adjusted_at": (
@@ -125,6 +128,46 @@ _INV_STATUS_JA = {
     "expiring_soon": "期限間近",
     "out_of_stock": "在庫切れ",
 }
+
+
+@router.get("/inventory/adjustments", summary="最近の在庫調整履歴を取得")
+async def list_recent_adjustments(
+    db: DB,
+    store_id: StoreId,
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    """Recent adjustments across ALL variants, newest first, with product
+    name + SKU denormalized — powers the 最近の調整履歴 section on the 在庫 page.
+    (The per-variant history stays at /variants/{id}/inventory-history.)
+    """
+    base = select(InventoryAdjustment).where(InventoryAdjustment.store_id == store_id)
+    total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+    rows = (await db.execute(
+        base.options(
+            selectinload(InventoryAdjustment.variant).selectinload(ProductVariant.product)
+        )
+        .order_by(InventoryAdjustment.created_at.desc(), InventoryAdjustment.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )).scalars().all()
+
+    items = []
+    for a in rows:
+        variant = a.variant
+        product = variant.product if variant else None
+        items.append({
+            "id": a.id,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+            "product_id": product.id if product else None,
+            "product_name": product.name if product else f"#{a.variant_id}",
+            "sku": variant.sku if variant else None,
+            "field": a.field.value if hasattr(a.field, "value") else str(a.field),
+            "delta": a.delta,
+            "reason": a.reason.value if hasattr(a.reason, "value") else str(a.reason),
+            "note": a.note,
+        })
+    return {"items": items, "total": total}
 
 
 @router.get("/inventory/export.csv", summary="棚卸しCSVをダウンロード")

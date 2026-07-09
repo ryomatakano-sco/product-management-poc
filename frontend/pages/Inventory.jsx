@@ -68,8 +68,9 @@ function Inventory({ query }) {
       <PlxPageHead title="在庫" subtitle={`全 ${kpis.total} 件の在庫状況`} right={headerRight} />
 
       {/* KPI strip */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 14, marginBottom: 16 }}>
         <KpiTile label="総在庫点数" value={allItems.reduce((s, r) => s + (r.on_hand || 0), 0)} unit="点" tone="green"/>
+        <KpiTile label="在庫金額 (税抜)" value={`¥${formatYen(allItems.reduce((s, r) => s + (r.value_jpy || 0), 0))}`} unit="" tone="green"/>
         <KpiTile label="在庫低下" value={kpis.lowStock} unit="件"
           tone={kpis.lowStock > 0 ? "amber" : "muted"}
           onClick={() => setStatusFilter("low_stock")} clickable/>
@@ -229,7 +230,78 @@ function Inventory({ query }) {
           </div>
         )}
       </div>
+
+      {/* 最近の調整履歴 — cross-variant audit trail (mockup bottom section) */}
+      <RecentAdjustments />
     </AdminShell>
+  );
+}
+
+const ADJ_REASON_JA = {
+  manual: "手動調整",
+  sale: "販売",
+  purchase_order_received: "入荷",
+  correction: "棚卸修正",
+  damage: "破損",
+  refund: "返品",
+  other: "その他",
+};
+
+function RecentAdjustments() {
+  const q = useFetch(() => api.listRecentAdjustments({ limit: 10 }), []);
+  const rows = q.data?.items ?? [];
+  return (
+    <div style={{
+      background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+      boxShadow: T.SHADOW_SM, overflow: "hidden", marginTop: 18,
+    }}>
+      <div style={{
+        padding: "12px 18px", fontSize: 13, fontWeight: 700,
+        borderBottom: `1px solid ${T.PLX_LINE_200}`,
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+      }}>
+        <span>最近の調整履歴</span>
+        <span style={{ fontSize: 11, color: T.PLX_INK_500, fontWeight: 500 }}>
+          直近 {rows.length} 件 / 全 {q.data?.total ?? 0} 件
+        </span>
+      </div>
+      <div style={{
+        display: "grid", gridTemplateColumns: "1.1fr 2fr 0.9fr 0.6fr 2fr",
+        padding: "10px 18px", fontSize: 11, fontWeight: 700, color: T.PLX_INK_500,
+        background: T.PLX_SURFACE_50, borderBottom: `1px solid ${T.PLX_LINE_200}`, columnGap: 14,
+      }}>
+        <span>日時</span><span>商品</span><span>タイプ</span>
+        <span style={{ textAlign: "right" }}>数量</span><span>メモ</span>
+      </div>
+      {q.loading && <div style={{ padding: 24, textAlign: "center", color: T.PLX_INK_500, fontSize: 12 }}>読み込み中…</div>}
+      {!q.loading && rows.length === 0 && (
+        <div style={{ padding: 24, textAlign: "center", color: T.PLX_INK_400, fontSize: 12 }}>調整履歴はまだありません。</div>
+      )}
+      {rows.map((a, i) => (
+        <div key={a.id} onClick={() => a.product_id && navigate(`/products/${a.product_id}`)} style={{
+          display: "grid", gridTemplateColumns: "1.1fr 2fr 0.9fr 0.6fr 2fr",
+          padding: "11px 18px", alignItems: "center", fontSize: 12, columnGap: 14,
+          borderBottom: i < rows.length - 1 ? `1px solid ${T.PLX_LINE_100}` : "none",
+          cursor: a.product_id ? "pointer" : "default",
+        }}
+          onMouseEnter={(e) => e.currentTarget.style.background = T.PLX_SURFACE_50}
+          onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+          <span style={{ fontSize: 11, color: T.PLX_INK_500 }}>{formatJpDateTime(a.created_at)}</span>
+          <div>
+            <div style={{ fontWeight: 600, color: T.PLX_INK_900 }}>{a.product_name}</div>
+            {a.sku && <div style={{ fontSize: 10, color: T.PLX_INK_500, fontFamily: T.FONT_MONO }}>{a.sku}</div>}
+          </div>
+          <span style={{ fontSize: 11, color: T.PLX_INK_700 }}>{ADJ_REASON_JA[a.reason] || a.reason}</span>
+          <span style={{
+            textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700,
+            color: a.delta > 0 ? T.PLX_GREEN_700 : a.delta < 0 ? T.PLX_RED_600 : T.PLX_INK_500,
+          }}>{a.delta > 0 ? `+${a.delta}` : a.delta}</span>
+          <span style={{ fontSize: 11, color: T.PLX_INK_500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {a.note || "—"}
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
 
