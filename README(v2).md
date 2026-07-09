@@ -182,17 +182,47 @@ VALUES (@pid, 1, 'TEST-OOS', 500, 300, 0, 1, 'g', 10);
 
 ---
 
-<!--
-Add the next feature section here. Suggested template:
+## クイック改善バッチ (Quick wins batch)
 
-## <Feature name>
+Branch: `feature/sales-records`
 
-Branch: `feature/...`
-
-One-paragraph summary.
+Eight small features from the "Quickest Improvements" list, shipped together: a real 発注書作成 form, 仕入先/店舗の追加・編集 forms, CSV export on four pages, pagination on three list pages, quick-chip count badges, and an AI 接続テスト button. All of them wire existing backend capabilities to the UI; the only new backend surface is the CSV export endpoints and the connection test.
 
 ### What's where
-### What you see in the UI
-### API endpoints added
+
+```
+backend/app/routers/
+├── purchase_orders.py   GET /purchase-orders/export.csv (before /{po_id})
+├── vendors.py           GET /vendors/export.csv (before /{vendor_id})
+├── categories.py        GET /categories/export.csv (before /{category_id})
+├── inventory.py         GET /inventory/export.csv (棚卸し形式) + shared _build_inventory_rows
+└── settings.py          POST /settings/ai/test + fix: AI PUT no longer wipes the stored key
+frontend/
+├── lib/api.js           downloadCsv generic + per-page wrappers, createPurchaseOrder, testAiConnection
+└── pages/
+    ├── PurchaseOrders.jsx  POCreateModal (仕入先/拠点/納品予定日/備考/明細エディタ) + CSV button
+    │                       + pagination + receive modal shows product name (was 商品ID)
+    ├── Vendors.jsx         VendorFormModal (追加) + エクスポート button
+    ├── Branches.jsx        BranchFormModal (追加・編集) + card 詳細/編集 buttons
+    │                       + fix: BranchDetail crashed on undefined `snap`
+    ├── Inventory.jsx       棚卸しCSVダウンロード + pagination
+    ├── Categories.jsx      エクスポート button
+    ├── ProductList.jsx     pagination + count badges on 在庫低下/期限間近 chips
+    └── Settings.jsx        AI 接続テスト button + 接続済み/失敗 pill
+```
+
+### Notes
+
+- All CSV endpoints stream with a UTF-8 BOM so Excel renders Japanese correctly, and respect the page's active filters.
+- The 棚卸しCSV has blank 実地棚卸数 / 差異 / メモ columns for use on the floor during a stock take.
+- Pagination is client-side over one capped fetch (100–200 rows) — right-sized for PoC data volumes; KPI strips stay whole-dataset accurate.
+- `POST /settings/ai/test` uses the settings-stored key first, then the env `OPENAI_API_KEY`; it never echoes the key back.
+- Static-path routes (`export.csv`) are registered before `/{id}` routes so they aren't parsed as integer ids.
+
 ### How to test
--->
+
+1. 発注書: ＋発注書を作成 → pick 仕入先/拠点, add 明細 → 下書きとして作成 → lands on the new PO detail. ⬇ CSVエクスポート downloads the filtered list.
+2. 仕入先 / 院・店舗: ＋追加 opens a real form; branch cards now have 詳細 / 編集 buttons.
+3. 在庫: ⬇ 棚卸しCSVダウンロード; pager at the bottom of the table.
+4. 商品一覧: 在庫低下/期限間近 chips show live counts; pager at the bottom.
+5. 設定 › AI設定: 接続テスト → green 接続済み pill (or a reasoned failure message).

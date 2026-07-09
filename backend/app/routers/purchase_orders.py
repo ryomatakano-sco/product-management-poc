@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import csv
+import io
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
@@ -137,6 +140,62 @@ async def list_purchase_orders(
     total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     rows = (await db.execute(stmt.order_by(PurchaseOrder.id.desc()).offset(offset).limit(limit))).scalars().unique().all()
     return PaginatedResponse(items=[_po_to_read(po) for po in rows], total=total)
+
+
+# NOTE: declared before /{po_id} — "export.csv" must not be parsed as a po_id.
+@router.get("/export.csv")
+async def export_purchase_orders_csv(
+    db: DB,
+    store_id: StoreId,
+    status: POStatus | None = Query(None),
+    supplier_vendor_id: int | None = Query(None),
+    destination_branch_id: int | None = Query(None),
+):
+    """CSV of the same rows the list endpoint returns, minus pagination."""
+    STATUS_JA = {
+        POStatus.draft: "下書き",
+        POStatus.ordered: "送信済み",
+        POStatus.partially_received: "一部入荷",
+        POStatus.received: "入荷済み",
+        POStatus.cancelled: "キャンセル",
+    }
+    stmt = select(PurchaseOrder).where(PurchaseOrder.store_id == store_id).options(*_po_load_options())
+    if status:
+        stmt = stmt.where(PurchaseOrder.status == status)
+    if supplier_vendor_id:
+        stmt = stmt.where(PurchaseOrder.supplier_vendor_id == supplier_vendor_id)
+    if destination_branch_id:
+        stmt = stmt.where(PurchaseOrder.destination_branch_id == destination_branch_id)
+    rows = (await db.execute(stmt.order_by(PurchaseOrder.id.desc()))).scalars().unique().all()
+
+    buf = io.StringIO()
+    buf.write("﻿")  # UTF-8 BOM so Excel opens Japanese correctly
+    writer = csv.writer(buf)
+    writer.writerow([
+        "発注番号", "仕入先", "拠点", "状態", "発注日", "納品予定日",
+        "品目数", "小計", "送料", "合計 (税込)", "備考",
+    ])
+    for po in rows:
+        writer.writerow([
+            f"PO-{po.id:06d}",
+            po.supplier.company_name if po.supplier else "",
+            po.destination_branch.name if po.destination_branch else "",
+            STATUS_JA.get(po.status, str(po.status)),
+            po.ordered_at.strftime("%Y/%m/%d") if po.ordered_at else po.created_at.strftime("%Y/%m/%d"),
+            po.estimated_arrival.strftime("%Y/%m/%d") if po.estimated_arrival else "",
+            len(po.items),
+            f"{float(po.subtotal):.0f}",
+            f"{float(po.shipping_cost):.0f}",
+            f"{float(po.total):.0f}",
+            po.note or "",
+        ])
+
+    filename = f"purchase_orders_{datetime.now(timezone(timedelta(hours=9))).strftime('%Y%m%d_%H%M')}.csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{po_id}", response_model=PurchaseOrderRead)

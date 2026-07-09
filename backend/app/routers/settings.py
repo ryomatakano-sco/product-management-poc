@@ -122,9 +122,21 @@ async def put_settings(
         )
 
     # AI-namespace: relocate `openai_api_key` from body to a `_secret_*` field
-    # so subsequent GETs don't leak it.
-    if namespace == "ai" and body.get("openai_api_key"):
-        validated["_secret_openai_api_key"] = body["openai_api_key"]
+    # so subsequent GETs don't leak it. When the body carries no new key,
+    # preserve the previously stored secret — otherwise a plain settings save
+    # (e.g. changing the model) would silently wipe the key.
+    if namespace == "ai":
+        if body.get("openai_api_key"):
+            validated["_secret_openai_api_key"] = body["openai_api_key"]
+        else:
+            existing = (await db.execute(
+                select(SettingsKV).where(
+                    SettingsKV.store_id == store_id,
+                    SettingsKV.namespace == "ai",
+                )
+            )).scalar_one_or_none()
+            if existing and (existing.data_json or {}).get("_secret_openai_api_key"):
+                validated["_secret_openai_api_key"] = existing.data_json["_secret_openai_api_key"]
     validated.pop("openai_api_key", None)
 
     # UPSERT — SQLAlchemy MySQL dialect supports ON DUPLICATE KEY UPDATE.
@@ -147,3 +159,52 @@ async def put_settings(
         data=_scrub_secrets(namespace, row.data_json),
         updated_at=row.updated_at,
     )
+
+
+@router.post("/ai/test", summary="OpenAI 接続テスト")
+async def test_ai_connection(db: DB, store_id: StoreId):
+    """Ping the OpenAI API with the effective key (settings-stored key first,
+    env `OPENAI_API_KEY` as fallback) and report success/failure.
+
+    The key itself is never echoed back — only which source supplied it.
+    """
+    from app.config import settings as app_settings
+
+    row = (await db.execute(
+        select(SettingsKV).where(
+            SettingsKV.store_id == store_id,
+            SettingsKV.namespace == "ai",
+        )
+    )).scalar_one_or_none()
+    stored_key = ((row.data_json or {}).get("_secret_openai_api_key") or "").strip() if row else ""
+    env_key = (app_settings.openai_api_key or "").strip()
+
+    key = stored_key or env_key
+    source = "settings" if stored_key else ("env" if env_key else None)
+    if not key:
+        return {
+            "ok": False,
+            "source": None,
+            "message": "APIキーが設定されていません。キーを保存してから再度お試しください。",
+        }
+
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            res = await client.get(
+                "https://api.openai.com/v1/models",
+                headers={"Authorization": f"Bearer {key}"},
+            )
+    except httpx.HTTPError as e:
+        return {"ok": False, "source": source, "message": f"OpenAI に到達できませんでした（{type(e).__name__}）。ネットワークを確認してください。"}
+
+    if res.status_code == 200:
+        try:
+            model_count = len(res.json().get("data", []))
+        except Exception:
+            model_count = None
+        return {"ok": True, "source": source, "message": "接続に成功しました。", "model_count": model_count}
+    if res.status_code == 401:
+        return {"ok": False, "source": source, "message": "認証に失敗しました。APIキーが正しいか確認してください。"}
+    return {"ok": False, "source": source, "message": f"OpenAI がエラーを返しました（HTTP {res.status_code}）。"}

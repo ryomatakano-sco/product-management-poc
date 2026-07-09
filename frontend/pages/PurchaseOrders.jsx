@@ -4,6 +4,13 @@ function PurchaseOrders() {
   const [branchFilter, setBranchFilter] = React.useState("");
   const [search, setSearch] = React.useState("");
   const [searchInput, setSearchInput] = React.useState("");
+  const [showCreateModal, setShowCreateModal] = React.useState(false);
+  const [exporting, setExporting] = React.useState(false);
+  // Client-side pagination — PoC scale fits in one 100-row fetch, so the
+  // pager just slices the loaded rows (same pattern for Inventory/Products).
+  const [page, setPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(25);
+  React.useEffect(() => { setPage(1); }, [statusFilter, vendorFilter, branchFilter, search, pageSize]);
 
   const posQ = useFetch(
     () => api.listPurchaseOrders({
@@ -18,15 +25,16 @@ function PurchaseOrders() {
   const vendorsQ = useFetch(() => api.listVendors(), []);
   const branchesQ = useFetch(() => api.listBranches(), []);
 
-  const rows = posQ.data?.items ?? [];
+  const allRows = posQ.data?.items ?? [];
+  const rows = allRows.slice((page - 1) * pageSize, page * pageSize);
   const vendors = vendorsQ.data?.items ?? [];
   const branches = branchesQ.data?.items ?? [];
 
   const kpis = React.useMemo(() => {
-    const c = (s) => rows.filter((r) => r.status === s).length;
-    const sumTotal = rows.reduce((s, r) => s + Number(r.total || 0), 0);
+    const c = (s) => allRows.filter((r) => r.status === s).length;
+    const sumTotal = allRows.reduce((s, r) => s + Number(r.total || 0), 0);
     return {
-      total: rows.length,
+      total: allRows.length,
       draft: c("draft"),
       sent: c("ordered"),
       partial: c("partially_received"),
@@ -34,7 +42,7 @@ function PurchaseOrders() {
       cancelled: c("cancelled"),
       sumTotal,
     };
-  }, [rows]);
+  }, [allRows]);
 
   function handleSearchKey(e) {
     if (e.key === "Enter") setSearch(searchInput);
@@ -46,10 +54,30 @@ function PurchaseOrders() {
     fontSize: 12, color: T.PLX_INK_900, cursor: "pointer", outline: "none",
   };
 
+  async function handleExport() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      await api.downloadPurchaseOrdersCsv({
+        status: statusFilter || undefined,
+        supplier_vendor_id: vendorFilter || undefined,
+        destination_branch_id: branchFilter || undefined,
+      });
+    } catch (e) {
+      window.PLX_TOAST.error("CSVエクスポートに失敗しました");
+    } finally { setExporting(false); }
+  }
+
   const headerRight = (
-    <button onClick={() => window.PLX_TOAST.warn("発注書の新規作成は近日対応予定です")} style={{
-      ...btnPrimary, display: "inline-flex", alignItems: "center", gap: 6,
-    }}>＋ 発注書を作成</button>
+    <div style={{ display: "inline-flex", gap: 8 }}>
+      <button onClick={handleExport} disabled={exporting} style={{
+        ...btnSecondary, display: "inline-flex", alignItems: "center", gap: 6,
+        opacity: exporting ? 0.6 : 1,
+      }}>⬇ CSVエクスポート</button>
+      <button onClick={() => setShowCreateModal(true)} style={{
+        ...btnPrimary, display: "inline-flex", alignItems: "center", gap: 6,
+      }}>＋ 発注書を作成</button>
+    </div>
   );
 
   return (
@@ -126,7 +154,7 @@ function PurchaseOrders() {
         </div>
 
         {posQ.loading && <div style={{ padding: 40, textAlign: "center", color: T.PLX_INK_500 }}>読み込み中…</div>}
-        {!posQ.loading && rows.length === 0 && (
+        {!posQ.loading && allRows.length === 0 && (
           <PlxEmptyState title="該当する発注書がありません" message="新しい発注書を作成するか、フィルタを変更してください。" />
         )}
         {rows.map((po, i) => (
@@ -161,7 +189,58 @@ function PurchaseOrders() {
             </span>
           </div>
         ))}
+
+        {/* Pagination footer */}
+        {!posQ.loading && allRows.length > 0 && (
+          <div style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            padding: "10px 14px", borderTop: `1px solid ${T.PLX_LINE_100}`,
+            fontSize: 11, color: T.PLX_INK_700,
+          }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, color: T.PLX_INK_500 }}>
+              <span>表示件数</span>
+              <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} style={{
+                height: 30, padding: "0 8px", fontSize: 12,
+                border: `1px solid ${T.PLX_LINE_200}`, borderRadius: T.RADIUS_MD, background: T.PLX_CARD_BG,
+              }}>
+                {[25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+              <span>{(page - 1) * pageSize + 1} - {Math.min(page * pageSize, allRows.length)} 件 / 全 {allRows.length} 件</span>
+              <button
+                type="button" onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                style={{ ...btnSecondary, height: 30, padding: "0 12px", opacity: page <= 1 ? 0.5 : 1 }}
+              >← 前へ</button>
+              <span style={{
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                minWidth: 30, height: 30, padding: "0 10px", borderRadius: T.RADIUS_MD,
+                background: T.PLX_GREEN_100, color: T.PLX_GREEN_700, fontWeight: 700,
+              }}>{page}</span>
+              <button
+                type="button" onClick={() => setPage((p) => p + 1)}
+                disabled={page * pageSize >= allRows.length}
+                style={{ ...btnSecondary, height: 30, padding: "0 12px",
+                  opacity: page * pageSize >= allRows.length ? 0.5 : 1 }}
+              >次へ →</button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {showCreateModal && (
+        <POCreateModal
+          vendors={vendors}
+          branches={branches}
+          onClose={() => setShowCreateModal(false)}
+          onCreated={(po) => {
+            setShowCreateModal(false);
+            window.PLX_TOAST.success(`発注書 PO-${String(po.id).padStart(6, "0")} を作成しました`);
+            navigate(`/purchase-orders/${po.id}`);
+          }}
+        />
+      )}
     </AdminShell>
   );
 }
@@ -815,6 +894,196 @@ function POEditView({ po, form, updateField, updateItem, deleteItem, addBlankIte
   );
 }
 
+// Create form — supplier / branch dropdowns, ETA, note, line-item editor.
+// Mirrors the mockup's 発注書 create intent; posts to POST /purchase-orders
+// (status=draft) and hands the new PO's id to onCreated.
+function POCreateModal({ vendors, branches, onClose, onCreated }) {
+  const productsQ = useFetch(() => api.listProducts({ status: "active", limit: 100 }), []);
+  const products = (productsQ.data?.items || []).filter((p) => p.default_variant_id);
+
+  const [vendorId, setVendorId] = React.useState("");
+  const [branchId, setBranchId] = React.useState("");
+  const [eta, setEta] = React.useState("");
+  const [note, setNote] = React.useState("");
+  const [items, setItems] = React.useState([]);
+  const [busy, setBusy] = React.useState(false);
+
+  React.useEffect(() => {
+    // Sensible defaults once ref data arrives: single-branch stores shouldn't
+    // have to pick the only branch.
+    if (!branchId && branches.length === 1) setBranchId(String(branches[0].id));
+  }, [branches]);
+
+  const inputStyle = {
+    width: "100%", height: 36, padding: "0 10px", borderRadius: T.RADIUS_MD,
+    border: `1px solid ${T.PLX_LINE_200}`, fontSize: 13, color: T.PLX_INK_900,
+    boxSizing: "border-box", outline: "none", background: T.PLX_CARD_BG,
+  };
+  const labelStyle = { fontSize: 11, fontWeight: 600, color: T.PLX_INK_500, marginBottom: 4, display: "block" };
+
+  const addItem = () => setItems((p) => [...p, { variant_id: null, product_name: "", sku: "", quantity_ordered: 1, unit_cost: "0" }]);
+  const updateItem = (idx, key, value) => setItems((p) => p.map((it, i) => i === idx ? { ...it, [key]: value } : it));
+  const removeItem = (idx) => setItems((p) => p.filter((_, i) => i !== idx));
+
+  const subtotal = items.reduce((s, it) => s + Number(it.unit_cost || 0) * Number(it.quantity_ordered || 0), 0);
+
+  async function handleCreate() {
+    if (busy) return;
+    if (!vendorId) { window.PLX_TOAST.warn("仕入先を選択してください"); return; }
+    if (!branchId) { window.PLX_TOAST.warn("拠点を選択してください"); return; }
+    if (items.some((it) => !it.variant_id)) {
+      window.PLX_TOAST.warn("商品が選択されていない明細があります"); return;
+    }
+    if (items.some((it) => Number(it.quantity_ordered) < 1)) {
+      window.PLX_TOAST.warn("数量は1以上を入力してください"); return;
+    }
+    setBusy(true);
+    try {
+      const po = await api.createPurchaseOrder({
+        supplier_vendor_id: Number(vendorId),
+        destination_branch_id: Number(branchId),
+        estimated_arrival: eta || null,
+        note: note || null,
+        items: items.map((it) => ({
+          variant_id: it.variant_id,
+          quantity_ordered: Number(it.quantity_ordered),
+          unit_cost: String(it.unit_cost || "0"),
+        })),
+      });
+      onCreated(po);
+    } catch (e) {
+      window.PLX_TOAST.error(e?.body?.detail ?? "発注書の作成に失敗しました");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000,
+      display: "flex", alignItems: "center", justifyContent: "center",
+    }} onClick={onClose}>
+      <div style={{
+        background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, boxShadow: T.SHADOW_LG || "0 8px 32px rgba(0,0,0,0.18)",
+        padding: 24, width: 720, maxWidth: "94vw", maxHeight: "86vh", overflowY: "auto",
+      }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>発注書を作成</h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: T.PLX_INK_400 }}>✕</button>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+          <div>
+            <label style={labelStyle}>仕入先 <span style={{ color: T.PLX_RED_600 }}>*</span></label>
+            <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} style={inputStyle}>
+              <option value="" disabled>選択してください…</option>
+              {vendors.map((v) => <option key={v.id} value={v.id}>{v.company_name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>拠点 <span style={{ color: T.PLX_RED_600 }}>*</span></label>
+            <select value={branchId} onChange={(e) => setBranchId(e.target.value)} style={inputStyle}>
+              <option value="" disabled>選択してください…</option>
+              {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>納品予定日</label>
+            <input type="date" value={eta} onChange={(e) => setEta(e.target.value)} style={inputStyle} />
+          </div>
+          <div />
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label style={labelStyle}>備考</label>
+            <textarea value={note} onChange={(e) => setNote(e.target.value.slice(0, 200))} rows={2}
+              placeholder="社内メモ・特記事項があれば入力（任意）"
+              style={{ ...inputStyle, height: "auto", padding: "8px 10px", fontFamily: "inherit", resize: "vertical" }} />
+            <div style={{ fontSize: 10, color: T.PLX_INK_400, marginTop: 2, textAlign: "right" }}>{note.length} / 200</div>
+          </div>
+        </div>
+
+        {/* Line items */}
+        <div style={{ border: `1px solid ${T.PLX_LINE_200}`, borderRadius: T.RADIUS_MD, overflow: "hidden", marginBottom: 12 }}>
+          <div style={{
+            display: "grid", gridTemplateColumns: "1fr 110px 80px 110px 36px",
+            padding: "7px 12px", fontSize: 11, fontWeight: 700, color: T.PLX_INK_500,
+            background: T.PLX_SURFACE_50, borderBottom: `1px solid ${T.PLX_LINE_200}`, gap: 8,
+          }}>
+            <span>商品</span>
+            <span style={{ textAlign: "right" }}>単価</span>
+            <span style={{ textAlign: "right" }}>数量</span>
+            <span style={{ textAlign: "right" }}>行合計</span>
+            <span />
+          </div>
+          {items.length === 0 && (
+            <div style={{ padding: 14, fontSize: 12, color: T.PLX_INK_400, textAlign: "center" }}>
+              明細はまだありません。下書きのまま保存して後から追加もできます。
+            </div>
+          )}
+          {items.map((it, i) => (
+            <div key={i} style={{
+              display: "grid", gridTemplateColumns: "1fr 110px 80px 110px 36px",
+              padding: "8px 12px", fontSize: 12, alignItems: "center", gap: 8,
+              borderBottom: `1px solid ${T.PLX_LINE_100}`,
+            }}>
+              <select
+                value={it.variant_id ?? ""}
+                onChange={(e) => {
+                  const p = products.find((x) => String(x.default_variant_id) === e.target.value);
+                  if (!p) return;
+                  updateItem(i, "variant_id", p.default_variant_id);
+                  updateItem(i, "product_name", p.name);
+                  updateItem(i, "sku", p.default_sku || "");
+                  if (p.default_cost != null) updateItem(i, "unit_cost", String(p.default_cost));
+                }}
+                style={{ ...inputStyle, height: 32, fontSize: 12 }}>
+                <option value="" disabled>商品を選択してください…</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.default_variant_id}>
+                    {p.name} {p.default_sku ? `（${p.default_sku}）` : ""}
+                  </option>
+                ))}
+              </select>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ fontSize: 11, color: T.PLX_INK_500 }}>¥</span>
+                <input type="number" min={0} value={it.unit_cost}
+                  onChange={(e) => updateItem(i, "unit_cost", e.target.value)}
+                  style={{ ...inputStyle, height: 30, textAlign: "right", fontSize: 12 }} />
+              </div>
+              <input type="number" min={1} value={it.quantity_ordered}
+                onChange={(e) => updateItem(i, "quantity_ordered", e.target.value)}
+                style={{ ...inputStyle, height: 30, textAlign: "right", fontSize: 12 }} />
+              <span style={{ textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                ¥{formatYen(Number(it.unit_cost || 0) * Number(it.quantity_ordered || 0))}
+              </span>
+              <button onClick={() => removeItem(i)} title="この明細を削除" style={{
+                background: "none", border: "none", cursor: "pointer", color: T.PLX_INK_400,
+                fontSize: 14, padding: 4, borderRadius: T.RADIUS_SM,
+              }}>🗑</button>
+            </div>
+          ))}
+          <div style={{ padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <button onClick={addItem} style={{
+              padding: "6px 14px", borderRadius: T.RADIUS_MD, border: `1px dashed ${T.PLX_LINE_200}`,
+              background: T.PLX_CARD_BG, fontSize: 12, fontWeight: 600, cursor: "pointer",
+              color: T.PLX_INK_700,
+            }}>＋ 明細を追加</button>
+            <span style={{ fontSize: 12 }}>小計 <b style={{ fontSize: 14 }}>¥{formatYen(subtotal)}</b></span>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+          <button onClick={onClose} disabled={busy} style={{
+            padding: "8px 18px", borderRadius: T.RADIUS_MD, border: `1px solid ${T.PLX_LINE_200}`,
+            background: T.PLX_CARD_BG, fontSize: 13, cursor: "pointer", color: T.PLX_INK_700,
+          }}>キャンセル</button>
+          <button onClick={handleCreate} disabled={busy} style={{
+            ...btnPrimary, opacity: busy ? 0.6 : 1, cursor: busy ? "not-allowed" : "pointer",
+          }}>{busy ? "作成中…" : "下書きとして作成"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function POReceiveModal({ po, onClose, onDone }) {
   const items = po.items || [];
   const [qtys, setQtys] = React.useState(() =>
@@ -859,8 +1128,11 @@ function POReceiveModal({ po, onClose, onDone }) {
               padding: "10px 0", borderBottom: `1px solid ${T.PLX_LINE_100}`,
             }}>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>商品 ID: {it.variant_id}</div>
-                <div style={{ fontSize: 11, color: T.PLX_INK_400 }}>発注数: {it.quantity_ordered}　入荷済: {it.quantity_received}　残: {remaining}</div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{it.product_name || `商品 ID: ${it.variant_id}`}</div>
+                <div style={{ fontSize: 11, color: T.PLX_INK_400 }}>
+                  {it.sku && <span style={{ fontFamily: T.FONT_MONO, marginRight: 8 }}>{it.sku}</span>}
+                  発注数: {it.quantity_ordered}　入荷済: {it.quantity_received}　残: {remaining}
+                </div>
               </div>
               <div style={{ fontSize: 11, color: T.PLX_INK_500, textAlign: "center" }}>今回の入荷数</div>
               <input

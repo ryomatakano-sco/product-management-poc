@@ -41,7 +41,7 @@ function ProductList({ initialQuery }) {
       tag: activeTags.length ? activeTags : undefined,
       // "期限間近" chip = backend filter by expiry within 30 days.
       expiring_within_days: quickFilters.includes("expire") ? 30 : undefined,
-      limit: 50,
+      limit: 100,
     }),
     [searchQ, categoryFilter, vendorFilter, statusFilter, kindFilter, activeTags.join(","), quickFilters.join(",")],
   );
@@ -56,6 +56,25 @@ function ProductList({ initialQuery }) {
   }, [productsQ.data, quickFilters]);
 
   const total = productsQ.data?.total ?? 0;
+
+  // Quick-chip count badges (mockup shows 在庫低下 3 / 期限間近 2). Counts use
+  // the same rules the chips filter by, computed over the fetched rows.
+  const chipCounts = React.useMemo(() => {
+    const list = productsQ.data?.items ?? [];
+    const low = list.filter((p) => (p.total_available ?? 0) <= 10).length;
+    const expire = list.filter((p) => {
+      const d = daysUntil(p.expiry_date);
+      return p.item_type === "consumable" && d != null && d <= 30;
+    }).length;
+    return { low, expire };
+  }, [productsQ.data]);
+
+  // Client-side pagination over the filtered rows (PoC scale — one fetch).
+  const [page, setPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(25);
+  React.useEffect(() => { setPage(1); },
+    [searchQ, categoryFilter, vendorFilter, statusFilter, kindFilter, activeTags.join(","), quickFilters.join(","), pageSize]);
+  const pagedItems = items.slice((page - 1) * pageSize, page * pageSize);
 
   const headerRight = (
     <button onClick={() => navigate("/products/new")} style={{
@@ -162,8 +181,8 @@ function ProductList({ initialQuery }) {
         {/* Quick filter chip row (Yoshioka 2026-05-11) */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span style={{ fontSize: 11, color: PLX_MUTED, fontWeight: 600 }}>クイックフィルタ</span>
-          <QuickChip on={quickFilters.includes("low")}    onClick={() => toggleQuick("low")}    dot={PLX_RED}  label="在庫低下"   color={PLX_RED}   bg={PLX_RED_LIGHT}/>
-          <QuickChip on={quickFilters.includes("expire")} onClick={() => toggleQuick("expire")} dot={PLX_WARN} label="期限間近"   color={PLX_WARN}  bg={PLX_WARN_BG}/>
+          <QuickChip on={quickFilters.includes("low")}    onClick={() => toggleQuick("low")}    dot={PLX_RED}  label="在庫低下"   color={PLX_RED}   bg={PLX_RED_LIGHT} count={chipCounts.low}/>
+          <QuickChip on={quickFilters.includes("expire")} onClick={() => toggleQuick("expire")} dot={PLX_WARN} label="期限間近"   color={PLX_WARN}  bg={PLX_WARN_BG} count={chipCounts.expire}/>
           <QuickChip on={quickFilters.includes("reorder")} onClick={() => {
             // TODO: wire up after demo — needs `reorder_requested_at` column.
             // eslint-disable-next-line no-console
@@ -222,7 +241,7 @@ function ProductList({ initialQuery }) {
           </div>
         )}
 
-        {items.map((p, i) => {
+        {pagedItems.map((p, i) => {
           const av = p.total_available ?? 0;
           // Per-variant low-stock threshold (default 10 when missing).
           // See migration 005_low_stock_threshold.
@@ -233,7 +252,7 @@ function ProductList({ initialQuery }) {
             <div key={p.id} onClick={() => navigate(`/products/${p.id}`)} style={{
               display: "grid", gridTemplateColumns: "40px 1.7fr 0.65fr 0.85fr 0.95fr 0.7fr 0.65fr 0.95fr 0.75fr 22px",
               padding: "14px 18px", alignItems: "center", cursor: "pointer", gap: 6,
-              borderBottom: i < items.length - 1 ? `1px solid ${PLX_BORDER}` : "none",
+              borderBottom: i < pagedItems.length - 1 ? `1px solid ${PLX_BORDER}` : "none",
               transition: "background .12s",
             }}
               onMouseEnter={(e) => (e.currentTarget.style.background = PLX_GREEN_50)}
@@ -333,6 +352,44 @@ function ProductList({ initialQuery }) {
         {!productsQ.loading && items.length === 0 && (
           <NoResultsState query={searchQ} />
         )}
+
+        {/* Pagination footer */}
+        {!productsQ.loading && items.length > 0 && (
+          <div style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            padding: "10px 14px", borderTop: `1px solid ${PLX_BORDER}`,
+            fontSize: 11, color: PLX_TEXT,
+          }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, color: PLX_MUTED }}>
+              <span>表示件数</span>
+              <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} style={{
+                height: 30, padding: "0 8px", fontSize: 12,
+                border: `1px solid ${PLX_BORDER}`, borderRadius: 8, background: T.PLX_CARD_BG,
+              }}>
+                {[25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+              <span>{(page - 1) * pageSize + 1} - {Math.min(page * pageSize, items.length)} 件 / 全 {items.length} 件</span>
+              <button
+                type="button" onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                style={{ ...btnSecondary, height: 30, padding: "0 12px", opacity: page <= 1 ? 0.5 : 1 }}
+              >← 前へ</button>
+              <span style={{
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                minWidth: 30, height: 30, padding: "0 10px", borderRadius: 8,
+                background: PLX_GREEN_LIGHT, color: PLX_GREEN, fontWeight: 700,
+              }}>{page}</span>
+              <button
+                type="button" onClick={() => setPage((p) => p + 1)}
+                disabled={page * pageSize >= items.length}
+                style={{ ...btnSecondary, height: 30, padding: "0 12px",
+                  opacity: page * pageSize >= items.length ? 0.5 : 1 }}
+              >次へ →</button>
+            </div>
+          </div>
+        )}
       </div>
     </AdminShell>
   );
@@ -373,7 +430,7 @@ function ExpiryIndicator({ days }) {
 }
 
 // Quick filter chip: dot + label, with a count badge on the right.
-function QuickChip({ on, onClick, dot, check, label, color, bg }) {
+function QuickChip({ on, onClick, dot, check, label, color, bg, count }) {
   return (
     <button onClick={onClick} style={{
       fontSize: 11, fontWeight: 700, padding: "5px 11px", borderRadius: 9999,
@@ -389,6 +446,15 @@ function QuickChip({ on, onClick, dot, check, label, color, bg }) {
         </svg>
       )}
       <span>{label}</span>
+      {count != null && (
+        <span style={{
+          minWidth: 16, height: 16, padding: "0 5px", borderRadius: 9999,
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          fontSize: 10, fontWeight: 800,
+          background: on ? color : PLX_BORDER,
+          color: on ? "#fff" : PLX_TEXT,
+        }}>{count}</span>
+      )}
     </button>
   );
 }

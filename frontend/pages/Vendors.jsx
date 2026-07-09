@@ -8,6 +8,8 @@
 
 function Vendors() {
   const [q, setQ] = React.useState("");
+  const [showAddModal, setShowAddModal] = React.useState(false);
+  const [exporting, setExporting] = React.useState(false);
   const vendorsQ = useFetch(() => api.listVendors(), []);
   const allRows = vendorsQ.data?.items ?? [];
   const rows = q
@@ -15,10 +17,24 @@ function Vendors() {
                          || (v.contact_name || "").includes(q))
     : allRows;
 
+  async function handleExport() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      await api.downloadVendorsCsv();
+    } catch (e) {
+      window.PLX_TOAST.error("CSVエクスポートに失敗しました");
+    } finally { setExporting(false); }
+  }
+
   const headerRight = (
-    <button onClick={() => window.PLX_TOAST.warn("仕入先の追加機能は近日対応予定です")} style={btnPrimary}>
-      ＋ 仕入先を追加
-    </button>
+    <div style={{ display: "inline-flex", gap: 8 }}>
+      <button onClick={handleExport} disabled={exporting}
+        style={{ ...btnSecondary, opacity: exporting ? 0.6 : 1 }}>⬇ エクスポート</button>
+      <button onClick={() => setShowAddModal(true)} style={btnPrimary}>
+        ＋ 仕入先を追加
+      </button>
+    </div>
   );
 
   return (
@@ -77,7 +93,82 @@ function Vendors() {
           </div>
         ))}
       </div>
+
+      {showAddModal && (
+        <VendorFormModal
+          onClose={() => setShowAddModal(false)}
+          onSaved={(v) => {
+            setShowAddModal(false);
+            window.PLX_TOAST.success(`仕入先「${v.company_name}」を追加しました`);
+            vendorsQ.refetch();
+          }}
+        />
+      )}
     </AdminShell>
+  );
+}
+
+// Create form — mirrors the vendor fields the backend accepts (POST /vendors).
+function VendorFormModal({ onClose, onSaved }) {
+  const [form, setForm] = React.useState({
+    company_name: "", contact_name: "", email: "", phone: "",
+    address: "", website: "", payment_terms: "", notes: "",
+  });
+  const [saving, setSaving] = React.useState(false);
+  const update = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+
+  const submit = async () => {
+    if (!form.company_name.trim()) { window.PLX_TOAST.warn("会社名を入力してください"); return; }
+    setSaving(true);
+    try {
+      const body = {};
+      for (const [k, v] of Object.entries(form)) body[k] = v.trim() ? v.trim() : null;
+      body.company_name = form.company_name.trim();
+      const v = await api.createVendor(body);
+      onSaved(v);
+    } catch (e) {
+      window.PLX_TOAST.error(e?.body?.detail ?? "保存に失敗しました");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <PlxModal title="仕入先を追加" onClose={onClose}>
+      <FormRow label="会社名 *">
+        <input value={form.company_name} onChange={(e) => update("company_name", e.target.value)}
+          style={formInput} placeholder="例：サンスター株式会社" />
+      </FormRow>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <FormRow label="担当者">
+          <input value={form.contact_name} onChange={(e) => update("contact_name", e.target.value)} style={formInput} />
+        </FormRow>
+        <FormRow label="電話">
+          <input value={form.phone} onChange={(e) => update("phone", e.target.value)} style={formInput} placeholder="03-1234-5678" />
+        </FormRow>
+        <FormRow label="メール">
+          <input value={form.email} onChange={(e) => update("email", e.target.value)} style={formInput} placeholder="contact@example.co.jp" />
+        </FormRow>
+        <FormRow label="支払条件">
+          <input value={form.payment_terms} onChange={(e) => update("payment_terms", e.target.value)} style={formInput} placeholder="例：月末締め翌月末払い" />
+        </FormRow>
+      </div>
+      <FormRow label="住所">
+        <input value={form.address} onChange={(e) => update("address", e.target.value)} style={formInput} />
+      </FormRow>
+      <FormRow label="サイト">
+        <input value={form.website} onChange={(e) => update("website", e.target.value)} style={formInput} placeholder="https://…" />
+      </FormRow>
+      <FormRow label="メモ">
+        <textarea value={form.notes} onChange={(e) => update("notes", e.target.value)}
+          style={{ ...formInput, height: 60, padding: "10px 14px", resize: "vertical" }} />
+      </FormRow>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16 }}>
+        <button onClick={onClose} style={btnSecondary}>キャンセル</button>
+        <button onClick={submit} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.5 : 1 }}>
+          {saving ? "保存中…" : "追加する"}
+        </button>
+      </div>
+    </PlxModal>
   );
 }
 

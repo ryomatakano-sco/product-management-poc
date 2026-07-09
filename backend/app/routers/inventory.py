@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
+import csv
+import io
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
@@ -15,21 +18,15 @@ from app.schemas.inventory import InventoryAdjustmentRead, InventoryAdjustReques
 router = APIRouter(tags=["inventory"])
 
 
-@router.get("/inventory", summary="在庫一覧（商品×拠点）を取得")
-async def list_inventory(
-    db: DB,
-    store_id: StoreId,
-    branch_id: int | None = Query(None, description="Filter by branch (optional)"),
-    item_type: ItemType | None = Query(None),
-    status_filter: str | None = Query(
-        None, alias="status",
-        description="normal | low_stock | expiring_soon | out_of_stock",
-    ),
-    q: str | None = Query(None, description="Search product name"),
-    limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0),
-):
-    """Aggregate inventory rows for the 在庫 page.
+async def _build_inventory_rows(
+    db,
+    store_id: int,
+    branch_id: int | None,
+    item_type: ItemType | None,
+    status_filter: str | None,
+    q: str | None,
+) -> list[dict]:
+    """Aggregate per-product inventory rows shared by the list endpoint and CSV export.
 
     PoC scope: stock is held on `product_variants.on_hand` and is NOT yet
     per-branch (no `branch_id` on the variant). The `branch_id` query
@@ -99,9 +96,81 @@ async def list_inventory(
             ),
             "last_adjusted_by": None,  # staff name denorm is future work
         })
+    return items
 
+
+@router.get("/inventory", summary="在庫一覧（商品×拠点）を取得")
+async def list_inventory(
+    db: DB,
+    store_id: StoreId,
+    branch_id: int | None = Query(None, description="Filter by branch (optional)"),
+    item_type: ItemType | None = Query(None),
+    status_filter: str | None = Query(
+        None, alias="status",
+        description="normal | low_stock | expiring_soon | out_of_stock",
+    ),
+    q: str | None = Query(None, description="Search product name"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    """Aggregate inventory rows for the 在庫 page. See `_build_inventory_rows`."""
+    items = await _build_inventory_rows(db, store_id, branch_id, item_type, status_filter, q)
     total = len(items)
     return {"items": items[offset:offset + limit], "total": total}
+
+
+_INV_STATUS_JA = {
+    "normal": "通常",
+    "low_stock": "在庫低下",
+    "expiring_soon": "期限間近",
+    "out_of_stock": "在庫切れ",
+}
+
+
+@router.get("/inventory/export.csv", summary="棚卸しCSVをダウンロード")
+async def export_inventory_csv(
+    db: DB,
+    store_id: StoreId,
+    branch_id: int | None = Query(None),
+    item_type: ItemType | None = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
+    q: str | None = Query(None),
+):
+    """棚卸し (stock-take) CSV: current system counts plus a blank 実地棚卸数
+    column staff fill in on the floor, and a 差異 column to note discrepancies.
+    """
+    items = await _build_inventory_rows(db, store_id, branch_id, item_type, status_filter, q)
+
+    buf = io.StringIO()
+    buf.write("﻿")  # UTF-8 BOM so Excel opens Japanese correctly
+    writer = csv.writer(buf)
+    writer.writerow([
+        "商品ID", "商品名", "SKU", "種別", "在庫 (システム)", "引当", "利用可能",
+        "使用期限", "状態", "実地棚卸数", "差異", "メモ",
+    ])
+    for r in items:
+        writer.writerow([
+            r["product"]["id"],
+            r["product"]["name"],
+            r["product"]["sku"] or "",
+            "消耗品" if r["product"]["item_type"] == "consumable" else "物販品",
+            r["on_hand"],
+            r["committed"],
+            r["available"],
+            r["earliest_expiry_date"] or "",
+            _INV_STATUS_JA.get(r["status"], r["status"]),
+            "",  # 実地棚卸数 — filled in by hand during the stock take
+            "",  # 差異
+            "",  # メモ
+        ])
+
+    jst = timezone(timedelta(hours=9))
+    filename = f"stocktake_{datetime.now(jst).strftime('%Y%m%d_%H%M')}.csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/variants/{variant_id}/inventory-adjust", response_model=InventoryAdjustmentRead, status_code=201)

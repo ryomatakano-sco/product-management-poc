@@ -216,6 +216,8 @@ function TaxRatesSettings() {
 function AiSettings() {
   const f = useSettingsForm("ai");
   const [keyInput, setKeyInput] = React.useState("");
+  const [testing, setTesting] = React.useState(false);
+  const [testResult, setTestResult] = React.useState(null); // null | {ok, message}
 
   if (f.loading) return <SettingsCard title="AI設定"><div style={{ color: T.PLX_INK_500 }}>読み込み中…</div></SettingsCard>;
 
@@ -224,6 +226,25 @@ function AiSettings() {
     if (keyInput.trim()) body.openai_api_key = keyInput.trim();
     f.save(body);
     setKeyInput("");
+  };
+
+  const testConnection = async () => {
+    if (testing) return;
+    if (keyInput.trim()) {
+      window.PLX_TOAST.warn("入力中のキーはまだ保存されていません。保存してからテストしてください。");
+      return;
+    }
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const r = await api.testAiConnection();
+      setTestResult(r);
+      if (r.ok) window.PLX_TOAST.success(r.message);
+      else window.PLX_TOAST.warn(r.message);
+    } catch (e) {
+      setTestResult({ ok: false, message: "接続テストに失敗しました" });
+      window.PLX_TOAST.error("接続テストに失敗しました");
+    } finally { setTesting(false); }
   };
 
   return (
@@ -238,8 +259,19 @@ function AiSettings() {
       <FormRow label="OpenAI APIキー" hint={f.form.openai_api_key_set
         ? "キーは設定済みです。変更する場合のみ新しい値を入力してください。"
         : "AI機能を有効にするにはキーを設定してください。空欄でも保存できます。"}>
-        <input type="password" value={keyInput} onChange={(e) => setKeyInput(e.target.value)}
-          placeholder={f.form.openai_api_key_set ? "••••••••（設定済み）" : "sk-..."} style={formInput} />
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input type="password" value={keyInput} onChange={(e) => setKeyInput(e.target.value)}
+            placeholder={f.form.openai_api_key_set ? "••••••••（設定済み）" : "sk-..."} style={formInput} />
+          <button onClick={testConnection} disabled={testing} style={{
+            ...btnSecondary, whiteSpace: "nowrap", height: 38, padding: "0 14px",
+            opacity: testing ? 0.6 : 1,
+          }}>{testing ? "テスト中…" : "接続テスト"}</button>
+          {testResult && (
+            testResult.ok
+              ? <Pill color={T.PLX_GREEN_700} bg={T.PLX_GREEN_100}>接続済み</Pill>
+              : <Pill color={T.PLX_RED_600} bg={T.PLX_RED_100}>失敗</Pill>
+          )}
+        </div>
       </FormRow>
       <FormRow label="モデル">
         <input value={f.form.model || "gpt-4o-mini"} onChange={(e) => f.update("model", e.target.value)} style={formInput} />

@@ -53,14 +53,29 @@ function Categories() {
     }
   };
 
+  const [exporting, setExporting] = React.useState(false);
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      await api.downloadCategoriesCsv();
+    } catch (e) {
+      window.PLX_TOAST.error("CSVエクスポートに失敗しました");
+    } finally { setExporting(false); }
+  };
+
   const headerRight = (
-    <button onClick={openCreate} style={{
-      height: 38, padding: "0 18px", borderRadius: 9999,
-      background: PLX_GREEN, color: "#fff", border: "none",
-      fontWeight: 700, fontSize: 13, cursor: "pointer",
-      display: "inline-flex", alignItems: "center", gap: 6,
-      boxShadow: "0 6px 16px rgba(22,163,108,.25)",
-    }}>＋ カテゴリを追加</button>
+    <div style={{ display: "inline-flex", gap: 8 }}>
+      <button onClick={handleExport} disabled={exporting}
+        style={{ ...btnSecondary, opacity: exporting ? 0.6 : 1 }}>⬇ エクスポート</button>
+      <button onClick={openCreate} style={{
+        height: 38, padding: "0 18px", borderRadius: 9999,
+        background: PLX_GREEN, color: "#fff", border: "none",
+        fontWeight: 700, fontSize: 13, cursor: "pointer",
+        display: "inline-flex", alignItems: "center", gap: 6,
+        boxShadow: "0 6px 16px rgba(22,163,108,.25)",
+      }}>＋ カテゴリを追加</button>
+    </div>
   );
 
   // Count leaves recursively for the subtitle.

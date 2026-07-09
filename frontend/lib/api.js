@@ -116,6 +116,7 @@ const api = {
 
   // Purchase orders (existing backend at /purchase-orders)
   listPurchaseOrders: (params) => request(`/purchase-orders${qs(params)}`),
+  createPurchaseOrder: (body) => request(`/purchase-orders`, { method: "POST", body: JSON.stringify(body) }),
   getPurchaseOrder:   (id) => request(`/purchase-orders/${id}`),
   submitPurchaseOrder: (id) => request(`/purchase-orders/${id}/submit`, { method: "POST" }),
   receivePurchaseOrder: (id, items) => request(`/purchase-orders/${id}/receive`, { method: "POST", body: JSON.stringify({ items }) }),
@@ -140,15 +141,16 @@ const api = {
       };
     throw e;
   }),
-  downloadSalesCsv: async (params) => {
-    // Direct anchor download can't send X-Store-Id header, so fetch + blob-trigger.
-    const res = await fetch(`/sales/export.csv${qs(params)}`, {
+  // Generic CSV download. Direct anchor download can't send the X-Store-Id
+  // header, so fetch + blob-trigger with the filename from Content-Disposition.
+  downloadCsv: async (path, params, fallbackName) => {
+    const res = await fetch(`${path}${qs(params)}`, {
       headers: { "X-Store-Id": String(getStoreId()) },
     });
     if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
     const cd = res.headers.get("Content-Disposition") || "";
     const m = cd.match(/filename="?([^"]+)"?/);
-    const filename = m ? m[1] : "sales.csv";
+    const filename = m ? m[1] : (fallbackName || "export.csv");
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -156,6 +158,11 @@ const api = {
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
   },
+  downloadSalesCsv:          (params) => api.downloadCsv(`/sales/export.csv`, params, "sales.csv"),
+  downloadPurchaseOrdersCsv: (params) => api.downloadCsv(`/purchase-orders/export.csv`, params, "purchase_orders.csv"),
+  downloadVendorsCsv:        (params) => api.downloadCsv(`/vendors/export.csv`, params, "vendors.csv"),
+  downloadCategoriesCsv:     ()       => api.downloadCsv(`/categories/export.csv`, null, "categories.csv"),
+  downloadInventoryCsv:      (params) => api.downloadCsv(`/inventory/export.csv`, params, "stocktake.csv"),
 
   // Vendors detail (already there) + sub-resources (graceful fallback)
   getVendor: (id) => request(`/vendors/${id}`),
@@ -174,6 +181,7 @@ const api = {
   // Settings (5 namespaces: general/notifications/tax_rates/ai/integrations)
   getSettings:    (ns) => request(`/settings/${ns}`),
   updateSettings: (ns, body) => request(`/settings/${ns}`, { method: "PUT", body: JSON.stringify(body) }),
+  testAiConnection: () => request(`/settings/ai/test`, { method: "POST" }),
 
   // Support
   getFaq:              () => request(`/support/faq`),

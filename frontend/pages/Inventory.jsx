@@ -7,33 +7,60 @@ function Inventory({ query }) {
   const [statusFilter, setStatusFilter] = React.useState(query?.status || "");
   const [itemTypeFilter, setItemTypeFilter] = React.useState("");
   const [q, setQ] = React.useState("");
+  const [exporting, setExporting] = React.useState(false);
+  // Client-side pagination — the fetch grabs up to 200 rows (PoC scale) and
+  // the pager slices locally so the KPI strip stays whole-dataset accurate.
+  const [page, setPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(25);
+  React.useEffect(() => { setPage(1); }, [statusFilter, itemTypeFilter, q, pageSize]);
 
   const inventoryQ = useFetch(
     () => api.listInventory({
       status: statusFilter || undefined,
       item_type: itemTypeFilter || undefined,
       q: q || undefined,
-      limit: 100,
+      limit: 200,
     }),
     [statusFilter, itemTypeFilter, q],
   );
 
-  const items = inventoryQ.data?.items ?? [];
+  const allItems = inventoryQ.data?.items ?? [];
+  const items = allItems.slice((page - 1) * pageSize, page * pageSize);
 
   // KPI strip — compute from the loaded rows (acceptable for PoC scale).
   const kpis = React.useMemo(() => {
-    const total = items.length;
-    const lowStock = items.filter((r) => r.status === "low_stock").length;
-    const expiring = items.filter((r) => r.status === "expiring_soon").length;
-    const outOfStock = items.filter((r) => r.status === "out_of_stock").length;
+    const total = allItems.length;
+    const lowStock = allItems.filter((r) => r.status === "low_stock").length;
+    const expiring = allItems.filter((r) => r.status === "expiring_soon").length;
+    const outOfStock = allItems.filter((r) => r.status === "out_of_stock").length;
     return { total, lowStock, expiring, outOfStock };
-  }, [items]);
+  }, [allItems]);
+
+  async function handleStocktakeCsv() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      await api.downloadInventoryCsv({
+        status: statusFilter || undefined,
+        item_type: itemTypeFilter || undefined,
+        q: q || undefined,
+      });
+    } catch (e) {
+      window.PLX_TOAST.error("棚卸しCSVのダウンロードに失敗しました");
+    } finally { setExporting(false); }
+  }
 
   const headerRight = (
-    <a href="#/products/new" style={{
-      ...btnPrimary, textDecoration: "none",
-      display: "inline-flex", alignItems: "center", gap: 6,
-    }}>＋ 在庫調整</a>
+    <div style={{ display: "inline-flex", gap: 8 }}>
+      <button onClick={handleStocktakeCsv} disabled={exporting} style={{
+        ...btnSecondary, display: "inline-flex", alignItems: "center", gap: 6,
+        opacity: exporting ? 0.6 : 1,
+      }}>⬇ 棚卸しCSVダウンロード</button>
+      <a href="#/products/new" style={{
+        ...btnPrimary, textDecoration: "none",
+        display: "inline-flex", alignItems: "center", gap: 6,
+      }}>＋ 在庫調整</a>
+    </div>
   );
 
   return (
@@ -42,7 +69,7 @@ function Inventory({ query }) {
 
       {/* KPI strip */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 16 }}>
-        <KpiTile label="総在庫点数" value={items.reduce((s, r) => s + (r.on_hand || 0), 0)} unit="点" tone="green"/>
+        <KpiTile label="総在庫点数" value={allItems.reduce((s, r) => s + (r.on_hand || 0), 0)} unit="点" tone="green"/>
         <KpiTile label="在庫低下" value={kpis.lowStock} unit="件"
           tone={kpis.lowStock > 0 ? "amber" : "muted"}
           onClick={() => setStatusFilter("low_stock")} clickable/>
@@ -119,7 +146,7 @@ function Inventory({ query }) {
         {inventoryQ.loading && (
           <div style={{ padding: 40, textAlign: "center", color: T.PLX_INK_500 }}>読み込み中…</div>
         )}
-        {!inventoryQ.loading && items.length === 0 && (
+        {!inventoryQ.loading && allItems.length === 0 && (
           <PlxEmptyState
             title="該当する在庫がありません"
             message="フィルタ条件を変更してお試しください。"
@@ -163,6 +190,44 @@ function Inventory({ query }) {
             </span>
           </div>
         ))}
+
+        {/* Pagination footer */}
+        {!inventoryQ.loading && allItems.length > 0 && (
+          <div style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            padding: "10px 14px", borderTop: `1px solid ${T.PLX_LINE_100}`,
+            fontSize: 11, color: T.PLX_INK_700,
+          }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, color: T.PLX_INK_500 }}>
+              <span>表示件数</span>
+              <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} style={{
+                height: 30, padding: "0 8px", fontSize: 12,
+                border: `1px solid ${T.PLX_LINE_200}`, borderRadius: T.RADIUS_MD, background: T.PLX_CARD_BG,
+              }}>
+                {[25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+              <span>{(page - 1) * pageSize + 1} - {Math.min(page * pageSize, allItems.length)} 件 / 全 {allItems.length} 件</span>
+              <button
+                type="button" onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                style={{ ...btnSecondary, height: 30, padding: "0 12px", opacity: page <= 1 ? 0.5 : 1 }}
+              >← 前へ</button>
+              <span style={{
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                minWidth: 30, height: 30, padding: "0 10px", borderRadius: T.RADIUS_MD,
+                background: T.PLX_GREEN_100, color: T.PLX_GREEN_700, fontWeight: 700,
+              }}>{page}</span>
+              <button
+                type="button" onClick={() => setPage((p) => p + 1)}
+                disabled={page * pageSize >= allItems.length}
+                style={{ ...btnSecondary, height: 30, padding: "0 12px",
+                  opacity: page * pageSize >= allItems.length ? 0.5 : 1 }}
+              >次へ →</button>
+            </div>
+          </div>
+        )}
       </div>
     </AdminShell>
   );
