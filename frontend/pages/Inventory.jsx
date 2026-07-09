@@ -50,16 +50,21 @@ function Inventory({ query }) {
     } finally { setExporting(false); }
   }
 
+  // 在庫調整 flow: pick product/variant → reuse ProductDetail's adjust modal.
+  // (The old button linked to /products/new — a product-create page, not an
+  // adjustment — so this also fixes a broken affordance.)
+  const [adjustFlow, setAdjustFlow] = React.useState(null); // null | {stage:"pick"} | {stage:"adjust", variant}
+  const [histKey, setHistKey] = React.useState(0);
+
   const headerRight = (
     <div style={{ display: "inline-flex", gap: 8 }}>
       <button onClick={handleStocktakeCsv} disabled={exporting} style={{
         ...btnSecondary, display: "inline-flex", alignItems: "center", gap: 6,
         opacity: exporting ? 0.6 : 1,
       }}>⬇ 棚卸しCSVダウンロード</button>
-      <a href="#/products/new" style={{
-        ...btnPrimary, textDecoration: "none",
-        display: "inline-flex", alignItems: "center", gap: 6,
-      }}>＋ 在庫調整</a>
+      <button onClick={() => setAdjustFlow({ stage: "pick" })} style={{
+        ...btnPrimary, display: "inline-flex", alignItems: "center", gap: 6,
+      }}>＋ 在庫調整</button>
     </div>
   );
 
@@ -232,8 +237,90 @@ function Inventory({ query }) {
       </div>
 
       {/* 最近の調整履歴 — cross-variant audit trail (mockup bottom section) */}
-      <RecentAdjustments />
+      <RecentAdjustments refreshKey={histKey} />
+
+      {adjustFlow?.stage === "pick" && (
+        <AdjustProductPicker
+          onClose={() => setAdjustFlow(null)}
+          onPicked={(variant) => setAdjustFlow({ stage: "adjust", variant })}
+        />
+      )}
+      {adjustFlow?.stage === "adjust" && (
+        <PlxInventoryAdjustModal
+          variant={adjustFlow.variant}
+          onClose={() => setAdjustFlow(null)}
+          onApplied={() => {
+            setAdjustFlow(null);
+            window.PLX_TOAST.success("在庫を調整しました");
+            inventoryQ.refetch();
+            setHistKey((k) => k + 1);
+          }}
+        />
+      )}
     </AdminShell>
+  );
+}
+
+// Step 1 of the 在庫調整 flow: choose product (and variant when several),
+// then hand the full variant object to the shared adjust modal.
+function AdjustProductPicker({ onClose, onPicked }) {
+  const productsQ = useFetch(() => api.listProducts({ status: "active", limit: 100 }), []);
+  const products = (productsQ.data?.items || []).filter((p) => p.default_variant_id);
+  const [productId, setProductId] = React.useState("");
+  const detailQ = useFetch(
+    () => productId ? api.getProduct(Number(productId)) : Promise.resolve(null),
+    [productId],
+  );
+  const variants = detailQ.data?.variants || [];
+  const [variantId, setVariantId] = React.useState("");
+  React.useEffect(() => {
+    if (variants.length > 0) {
+      const def = variants.find((v) => v.is_default) || variants[0];
+      setVariantId(String(def.id));
+    } else setVariantId("");
+  }, [detailQ.data]);
+  const variant = variants.find((v) => String(v.id) === variantId);
+
+  return (
+    <PlxModal title="在庫調整 — 商品を選択" onClose={onClose}>
+      <FormRow label="商品">
+        <select value={productId} onChange={(e) => setProductId(e.target.value)} style={formInput}>
+          <option value="" disabled>選択してください…</option>
+          {products.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name} {p.default_sku ? `（${p.default_sku}）` : ""}
+            </option>
+          ))}
+        </select>
+      </FormRow>
+      {variants.length > 1 && (
+        <FormRow label="バリアント">
+          <select value={variantId} onChange={(e) => setVariantId(e.target.value)} style={formInput}>
+            {variants.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.sku || `#${v.id}`}{v.option1_value ? ` — ${v.option1_value}` : ""}（在庫 {v.on_hand}）
+              </option>
+            ))}
+          </select>
+        </FormRow>
+      )}
+      {variant && (
+        <div style={{
+          padding: 10, background: T.PLX_SURFACE_50, borderRadius: T.RADIUS_MD,
+          fontSize: 12, color: T.PLX_INK_700, marginBottom: 8,
+        }}>
+          現在の在庫: <b>{variant.on_hand}</b>　引当: {variant.committed}　使用不可: {variant.unavailable}
+        </div>
+      )}
+      {productId && detailQ.loading && (
+        <div style={{ fontSize: 12, color: T.PLX_INK_500, marginBottom: 8 }}>読み込み中…</div>
+      )}
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 12 }}>
+        <button onClick={onClose} style={btnSecondary}>キャンセル</button>
+        <button onClick={() => variant && onPicked(variant)} disabled={!variant}
+          style={{ ...btnPrimary, opacity: variant ? 1 : 0.5 }}>次へ →</button>
+      </div>
+    </PlxModal>
   );
 }
 
@@ -247,8 +334,8 @@ const ADJ_REASON_JA = {
   other: "その他",
 };
 
-function RecentAdjustments() {
-  const q = useFetch(() => api.listRecentAdjustments({ limit: 10 }), []);
+function RecentAdjustments({ refreshKey }) {
+  const q = useFetch(() => api.listRecentAdjustments({ limit: 10 }), [refreshKey]);
   const rows = q.data?.items ?? [];
   return (
     <div style={{

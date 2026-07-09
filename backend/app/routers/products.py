@@ -258,6 +258,55 @@ async def search_products(
     return results
 
 
+@router.get("/{product_id}/sales-weekly", summary="過去N週の週次販売実績")
+async def product_sales_weekly(
+    product_id: int,
+    db: DB,
+    store_id: StoreId,
+    weeks: int = Query(12, ge=1, le=52),
+):
+    """Real weekly sales buckets for the detail-page chart (JST weeks, Monday
+    start, oldest first, refunds included as negative quantities).
+    """
+    jst = timezone(timedelta(hours=9))
+    now_jst = datetime.now(jst)
+    this_monday = (now_jst - timedelta(days=now_jst.weekday())).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    start_jst = this_monday - timedelta(weeks=weeks - 1)
+    # sold_at is stored as naive UTC — compare in that space.
+    start_utc_naive = start_jst.astimezone(timezone.utc).replace(tzinfo=None)
+
+    rows = (await db.execute(
+        select(SalesRecord.sold_at, SalesRecord.quantity, SalesRecord.unit_price)
+        .join(ProductVariant, ProductVariant.id == SalesRecord.variant_id)
+        .where(
+            SalesRecord.store_id == store_id,
+            ProductVariant.product_id == product_id,
+            SalesRecord.sold_at >= start_utc_naive,
+        )
+    )).all()
+
+    buckets = [{"units": 0, "revenue": Decimal("0")} for _ in range(weeks)]
+    for sold_at, quantity, unit_price in rows:
+        sold_jst = sold_at.replace(tzinfo=timezone.utc).astimezone(jst)
+        idx = (sold_jst.date() - start_jst.date()).days // 7
+        if 0 <= idx < weeks:
+            buckets[idx]["units"] += quantity
+            buckets[idx]["revenue"] += (unit_price or 0) * quantity
+
+    return {
+        "weeks": [
+            {
+                "week_start": (start_jst + timedelta(weeks=i)).date().isoformat(),
+                "units": b["units"],
+                "revenue": str(b["revenue"]),
+            }
+            for i, b in enumerate(buckets)
+        ]
+    }
+
+
 @router.get("/{product_id}", response_model=ProductDetail)
 async def get_product(product_id: int, db: DB, store_id: StoreId):
     stmt = (

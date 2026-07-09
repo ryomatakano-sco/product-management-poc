@@ -255,3 +255,23 @@ Every route was checked for inbound links (sidebar, buttons, row clicks). One or
 1. 仕入先 → any vendor → 取扱商品 / 発注履歴 tabs show that vendor's products and POs; rows click through.
 2. 在庫 → second KPI tile shows 在庫金額 (税抜); scroll down for 最近の調整履歴 (record a sale or adjustment to see it update).
 3. Type `#/sales/1` in the URL → sales page opens with the 販売詳細 modal for that sale.
+
+---
+
+## クイック改善バッチ 3 (Quick wins batch 3)
+
+Branch: `feature/sales-records`
+
+Three more medium items.
+
+| Feature | Where |
+|---|---|
+| 在庫調整モーダル (在庫ページ) | The 在庫 page's ＋在庫調整 button used to link to the **product-create page** (a broken affordance). Now a two-step flow: `AdjustProductPicker` (product → variant, shows current counters) → the shared adjust modal from ProductDetail (`window.PlxInventoryAdjustModal`). On save: toast + list & 調整履歴 refetch. |
+| 実データの12週販売チャート | New `GET /products/{id}/sales-weekly` (JST weeks, Monday start, refunds negative). `SalesChart` in [ProductDetail.jsx](frontend/pages/ProductDetail.jsx) now renders real buckets with week labels + hover tooltips (was a hard-coded fake shape — Category E item 13 in the gap doc). |
+| 発注書の印刷 / PDF | 🖨 印刷 / PDF button on PO detail. Off-screen `POPrintSheet` (発注書 layout: issuer block from 設定›一般, 御中 header, bordered items table, totals, 備考) printed via the same clone-to-body pattern as the receipt page. Monochrome regardless of dark mode. |
+
+### How to test
+
+1. 在庫 → ＋在庫調整 → pick 商品/バリアント → 次へ → set ±数量/理由 → 調整を確定 → history section updates.
+2. 商品詳細 → 売上推移 tab → bars are real weekly sales (hover a bar for units + revenue). Record a sale and refresh to see the current week move.
+3. 発注書詳細 → 🖨 印刷 / PDF → print preview shows only the 発注書 sheet; choose "Save as PDF".

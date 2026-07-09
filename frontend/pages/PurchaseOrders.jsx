@@ -289,6 +289,28 @@ function PurchaseOrderDetail({ id }) {
   const [showReceiveModal, setShowReceiveModal] = React.useState(false);
   const [editMode, setEditMode] = React.useState(false);
   const [form, setForm] = React.useState(null);
+  // Issuer block on the printable 発注書 — company info from Settings › 一般.
+  const companyQ = useFetch(() => api.getSettings("general").catch(() => null), []);
+  const company = companyQ.data?.data || {};
+
+  // Same clone-to-body pattern as ReceiptIssue: clone the off-screen sheet
+  // into <body>, hide everything else via .plx-printing, print, clean up.
+  const printPO = () => {
+    const src = document.querySelector(".plx-po-print-src");
+    if (!src) { window.print(); return; }
+    const clone = src.cloneNode(true);
+    clone.classList.add("plx-print-clone");
+    document.body.appendChild(clone);
+    document.body.classList.add("plx-printing");
+    const cleanup = () => {
+      document.body.classList.remove("plx-printing");
+      if (clone.parentNode) clone.parentNode.removeChild(clone);
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+    window.print();
+    setTimeout(cleanup, 5000);
+  };
   const vendorsQ  = useFetch(() => editMode ? api.listVendors()  : Promise.resolve(null), [editMode]);
   const branchesQ = useFetch(() => editMode ? api.listBranches() : Promise.resolve(null), [editMode]);
   const productsQ = useFetch(() => editMode ? api.listProducts({ status: "active", limit: 100 }) : Promise.resolve(null), [editMode]);
@@ -499,6 +521,11 @@ function PurchaseOrderDetail({ id }) {
                   color: T.PLX_INK_700, opacity: busy ? 0.6 : 1, display: "inline-flex", alignItems: "center", gap: 5,
                 }}>✎ 編集</button>
               )}
+              <button onClick={printPO} disabled={busy} style={{
+                padding: "5px 12px", borderRadius: T.RADIUS_MD, border: `1px solid ${T.PLX_LINE_200}`,
+                background: T.PLX_CARD_BG, fontSize: 12, fontWeight: 600, cursor: busy ? "not-allowed" : "pointer",
+                color: T.PLX_INK_700, opacity: busy ? 0.6 : 1, display: "inline-flex", alignItems: "center", gap: 5,
+              }}>🖨 印刷 / PDF</button>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               {canReceive && (
@@ -604,9 +631,130 @@ function PurchaseOrderDetail({ id }) {
             <POReceiveModal po={po} onClose={() => setShowReceiveModal(false)} onDone={() => { setShowReceiveModal(false); poQ.refetch(); }} />
           )}
 
+          {/* Off-screen printable 発注書 + print stylesheet (clone-to-body pattern) */}
+          <div style={{ position: "fixed", left: -10000, top: 0, width: 720 }} aria-hidden="true">
+            <POPrintSheet po={po} company={company} />
+          </div>
+          <style>{`
+            @media print {
+              @page { margin: 14mm; }
+              html, body { background: #fff !important; }
+              body.plx-printing > *:not(.plx-print-clone) { display: none !important; }
+              .plx-print-clone {
+                display: block !important;
+                width: 100% !important; max-width: 100% !important;
+                margin: 0 !important; padding: 0 !important;
+                border: none !important; box-shadow: none !important;
+                background: #fff !important;
+                page-break-inside: avoid;
+              }
+            }
+            body.plx-printing .plx-print-clone { position: static; }
+            .plx-print-clone { display: none; }
+            @media print { .plx-print-clone { display: block !important; } }
+          `}</style>
         </>
       )}
     </AdminShell>
+  );
+}
+
+// Print-friendly 発注書 sheet. Fixed monochrome styling (independent of the
+// app theme — dark mode must not produce a dark PDF).
+function POPrintSheet({ po, company }) {
+  const ink = "#111827", muted = "#6b7280", line = "#d1d5db";
+  const yen = (v) => `¥${formatYen(v)}`;
+  return (
+    <div className="plx-po-print-src" style={{
+      background: "#fff", color: ink, width: 720, padding: "28px 32px",
+      fontFamily: "'Inter','Noto Sans JP',sans-serif", fontSize: 12, lineHeight: 1.6,
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
+        <div>
+          <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: "0.2em" }}>発 注 書</div>
+          <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>
+            発注番号: <span style={{ fontFamily: "ui-monospace,monospace", fontWeight: 700, color: ink }}>PO-{String(po.id).padStart(6, "0")}</span>
+          </div>
+          <div style={{ fontSize: 11, color: muted }}>
+            発注日: {po.ordered_at ? formatJpDate(po.ordered_at) : formatJpDate(po.created_at)}
+            {po.estimated_arrival && <>　／　納品希望日: {formatJpDate(po.estimated_arrival)}</>}
+          </div>
+        </div>
+        <div style={{ textAlign: "right", fontSize: 11 }}>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>{company.company_name || "ペイライト歯科クリニック"}</div>
+          {company.address && <div style={{ color: muted }}>{company.address}</div>}
+          {company.phone && <div style={{ color: muted }}>TEL: {company.phone}</div>}
+          {company.email && <div style={{ color: muted }}>{company.email}</div>}
+        </div>
+      </div>
+
+      <div style={{ borderBottom: `2px solid ${ink}`, marginBottom: 14 }} />
+
+      <div style={{ marginBottom: 16 }}>
+        <span style={{ fontSize: 15, fontWeight: 700, borderBottom: `1px solid ${ink}`, paddingBottom: 2 }}>
+          {po.supplier_name || "—"} 御中
+        </span>
+        <div style={{ fontSize: 11, color: muted, marginTop: 6 }}>
+          下記の通り発注いたします。　納品先: {po.branch_name || "—"}
+        </div>
+      </div>
+
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12 }}>
+        <thead>
+          <tr>
+            {["#", "商品名", "SKU", "単価", "数量", "金額"].map((h, i) => (
+              <th key={h} style={{
+                border: `1px solid ${line}`, background: "#f3f4f6", padding: "6px 8px",
+                fontSize: 11, fontWeight: 700, textAlign: i >= 3 ? "right" : "left",
+              }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {(po.items || []).map((it, i) => (
+            <tr key={it.id}>
+              <td style={{ border: `1px solid ${line}`, padding: "6px 8px", color: muted }}>{i + 1}</td>
+              <td style={{ border: `1px solid ${line}`, padding: "6px 8px", fontWeight: 600 }}>{it.product_name || `商品 ID: ${it.variant_id}`}</td>
+              <td style={{ border: `1px solid ${line}`, padding: "6px 8px", fontFamily: "ui-monospace,monospace", fontSize: 10 }}>{it.sku || "—"}</td>
+              <td style={{ border: `1px solid ${line}`, padding: "6px 8px", textAlign: "right" }}>{yen(it.unit_cost)}</td>
+              <td style={{ border: `1px solid ${line}`, padding: "6px 8px", textAlign: "right" }}>{it.quantity_ordered}</td>
+              <td style={{ border: `1px solid ${line}`, padding: "6px 8px", textAlign: "right", fontWeight: 700 }}>{yen(it.line_total)}</td>
+            </tr>
+          ))}
+          {(po.items || []).length === 0 && (
+            <tr><td colSpan={6} style={{ border: `1px solid ${line}`, padding: 12, textAlign: "center", color: muted }}>明細なし</td></tr>
+          )}
+        </tbody>
+      </table>
+
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
+        <table style={{ borderCollapse: "collapse", minWidth: 220 }}>
+          <tbody>
+            <tr>
+              <td style={{ padding: "3px 12px", color: muted }}>小計</td>
+              <td style={{ padding: "3px 0", textAlign: "right" }}>{yen(po.subtotal)}</td>
+            </tr>
+            {Number(po.shipping_cost) > 0 && (
+              <tr>
+                <td style={{ padding: "3px 12px", color: muted }}>送料</td>
+                <td style={{ padding: "3px 0", textAlign: "right" }}>{yen(po.shipping_cost)}</td>
+              </tr>
+            )}
+            <tr>
+              <td style={{ padding: "6px 12px", fontWeight: 800, fontSize: 14, borderTop: `2px solid ${ink}` }}>合計 (税込)</td>
+              <td style={{ padding: "6px 0", textAlign: "right", fontWeight: 800, fontSize: 14, borderTop: `2px solid ${ink}` }}>{yen(po.total)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {po.note && (
+        <div style={{ border: `1px solid ${line}`, borderRadius: 4, padding: "8px 10px", fontSize: 11 }}>
+          <div style={{ fontWeight: 700, marginBottom: 2 }}>備考</div>
+          {po.note}
+        </div>
+      )}
+    </div>
   );
 }
 
