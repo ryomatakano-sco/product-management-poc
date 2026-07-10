@@ -48,6 +48,14 @@ function qs(params) {
 }
 
 const api = {
+  // --- auth (PoC session cookie; see backend routers/auth.py) ---
+  login:  (email, password) => request(`/auth/login`, { method: "POST", body: JSON.stringify({ email, password }) }),
+  logout: () => request(`/auth/logout`, { method: "POST" }),
+  me:     () => request(`/auth/me`),
+  listUsers:  () => request(`/auth/users`),
+  createUser: (body) => request(`/auth/users`, { method: "POST", body: JSON.stringify(body) }),
+  updateUser: (id, body) => request(`/auth/users/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+
   // --- products ---
   listProducts: (params) => request(`/products${qs(params)}`),
   searchProducts: (q, opts) => request(`/products/search${qs({ q, ...opts })}`),

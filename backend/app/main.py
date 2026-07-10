@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.routers import (
     ai_suggestions,
+    auth,
     branches,
     categories,
     dashboard,
@@ -54,6 +55,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(stores.router)
 app.include_router(branches.router)
 app.include_router(vendors.router)

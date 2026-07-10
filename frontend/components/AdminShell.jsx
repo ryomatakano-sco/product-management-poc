@@ -118,7 +118,7 @@ function PlxSidebar({ current }) {
         ))}
       </div>
 
-      {/* Footer — user */}
+      {/* Footer — logged-in user (window.PLX_ME set by the app.jsx auth gate) */}
       <div style={{
         height: 56, padding: "0 16px", display: "flex", alignItems: "center", gap: 10,
         borderTop: "1px solid rgba(255,255,255,0.06)",
@@ -127,11 +127,30 @@ function PlxSidebar({ current }) {
           width: 32, height: 32, borderRadius: "50%", background: "#F4D4B8",
           color: "#1F2937", fontWeight: 700, fontSize: 13,
           display: "flex", alignItems: "center", justifyContent: "center",
-        }}>山</div>
+        }}>{(window.PLX_ME?.display_name || "山田 花子").charAt(0)}</div>
         <div style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#fff" }}>山田 花子</div>
-          <div style={{ fontSize: 10, color: T.PLX_SIDEBAR_INK_DIM }}>本院 / 管理者</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {window.PLX_ME?.display_name || "山田 花子"}
+          </div>
+          <div style={{ fontSize: 10, color: T.PLX_SIDEBAR_INK_DIM }}>
+            {window.PLX_ME?.role === "admin" ? "管理者" : "スタッフ"}
+          </div>
         </div>
+        <button
+          onClick={async () => {
+            try { await api.logout(); } catch (_) {}
+            window.location.reload();
+          }}
+          title="ログアウト"
+          style={{
+            background: "none", border: "1px solid rgba(255,255,255,0.18)",
+            color: T.PLX_SIDEBAR_INK_DIM, borderRadius: 8, width: 28, height: 28,
+            cursor: "pointer", fontSize: 13, display: "inline-flex",
+            alignItems: "center", justifyContent: "center", flexShrink: 0,
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = "#fff"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.45)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = T.PLX_SIDEBAR_INK_DIM; e.currentTarget.style.borderColor = "rgba(255,255,255,0.18)"; }}
+        >⎋</button>
       </div>
 
       {/* Version badge — shows "Alpha v0.4.0" so users (and demo viewers)

@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     mock_ai: str = ""  # "1" forces mock mode even when OPENAI_API_KEY is set
 
+    # Signs session cookies (services/auth.py). Fixed dev default so --reload
+    # restarts don't log everyone out; override via AUTH_SECRET in production.
+    auth_secret: str = "plx-poc-dev-secret-change-in-prod"
+
     model_config = {"env_file": [str(p) for p in ENV_FILES], "extra": "ignore"}
 
     @property

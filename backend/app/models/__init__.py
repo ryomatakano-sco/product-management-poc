@@ -13,3 +13,4 @@ from app.models.purchase_order import PurchaseOrder, PurchaseOrderItem, Purchase
 from app.models.ai_session import AiSuggestionSession, AiSuggestionFieldOption  # noqa: F401
 from app.models.support import SupportTicket  # noqa: F401
 from app.models.settings_kv import SettingsKV  # noqa: F401
+from app.models.user import User  # noqa: F401

@@ -10,7 +10,7 @@ const SETTINGS_SECTIONS = [
   { id: "tax_rates",     label: "税率",          icon: "calc" },
   { id: "ai",            label: "AI設定",        icon: "sparkles" },
   { id: "integrations",  label: "統合",          icon: "link" },
-  { id: "users",         label: "ユーザー管理",  icon: "users", placeholder: true },
+  { id: "users",         label: "ユーザー管理",  icon: "users" },
   { id: "api",           label: "API・Webhooks", icon: "key",   placeholder: true },
 ];
 
@@ -56,7 +56,8 @@ function Settings({ query }) {
           {ns === "tax_rates" && <TaxRatesSettings />}
           {ns === "ai" && <AiSettings />}
           {ns === "integrations" && <IntegrationsSettings />}
-          {(ns === "users" || ns === "api") && (
+          {ns === "users" && <UsersSettings />}
+          {ns === "api" && (
             <div style={{
               background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
               padding: 48, textAlign: "center", color: T.PLX_INK_500,
@@ -400,6 +401,177 @@ function IntegrationTile({ name, extra, connected }) {
         ...btnSecondary, marginTop: 10, height: 32, padding: "0 14px", fontSize: 12,
       }}>{connected ? "再認証" : "接続する"}</button>
     </div>
+  );
+}
+
+// ユーザー管理 — backed by /auth/users (admin only; staff see a 403 notice).
+function UsersSettings() {
+  const [refreshKey, setRefreshKey] = React.useState(0);
+  const usersQ = useFetch(() => api.listUsers(), [refreshKey]);
+  const [showAdd, setShowAdd] = React.useState(false);
+  const me = window.PLX_ME || {};
+  const isForbidden = usersQ.error && (usersQ.error.status === 403 || usersQ.error.status === 401);
+
+  const toggleStatus = async (u) => {
+    const next = u.status === "active" ? "inactive" : "active";
+    if (next === "inactive" && !window.confirm(`「${u.display_name}」を無効化しますか？ログインできなくなります。`)) return;
+    try {
+      await api.updateUser(u.id, { status: next });
+      window.PLX_TOAST.success(next === "active" ? "有効化しました" : "無効化しました");
+      setRefreshKey((k) => k + 1);
+    } catch (e) {
+      window.PLX_TOAST.error(e?.body?.detail || "更新に失敗しました");
+    }
+  };
+
+  const toggleRole = async (u) => {
+    const next = u.role === "admin" ? "staff" : "admin";
+    try {
+      await api.updateUser(u.id, { role: next });
+      window.PLX_TOAST.success(`権限を${next === "admin" ? "管理者" : "スタッフ"}に変更しました`);
+      setRefreshKey((k) => k + 1);
+    } catch (e) {
+      window.PLX_TOAST.error(e?.body?.detail || "更新に失敗しました");
+    }
+  };
+
+  if (isForbidden) {
+    return (
+      <div style={{
+        background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+        padding: 48, textAlign: "center", color: T.PLX_INK_500,
+      }}>ユーザー管理は管理者のみ利用できます。</div>
+    );
+  }
+
+  return (
+    <div style={{
+      background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+      boxShadow: T.SHADOW_SM, padding: 24,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>ユーザー管理</h3>
+        <button onClick={() => setShowAdd(true)} style={btnPrimary}>＋ ユーザーを追加</button>
+      </div>
+
+      {usersQ.loading && <div style={{ color: T.PLX_INK_500, fontSize: 13 }}>読み込み中…</div>}
+      {(usersQ.data || []).map((u, i, arr) => (
+        <div key={u.id} style={{
+          display: "grid", gridTemplateColumns: "36px 1.4fr 1.6fr 0.8fr 0.8fr auto",
+          gap: 12, alignItems: "center", padding: "12px 0",
+          borderBottom: i < arr.length - 1 ? `1px solid ${T.PLX_LINE_100}` : "none",
+        }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: "50%", background: T.PLX_GREEN_100,
+            color: T.PLX_GREEN_700, fontWeight: 700, fontSize: 13,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>{u.display_name.charAt(0)}</div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>
+              {u.display_name}{u.id === me.id && <span style={{ fontSize: 10, color: T.PLX_INK_400, marginLeft: 6 }}>(自分)</span>}
+            </div>
+          </div>
+          <div style={{ fontSize: 12, color: T.PLX_INK_500, fontFamily: T.FONT_MONO }}>{u.email}</div>
+          <div>
+            {u.role === "admin"
+              ? <Pill color={T.PLX_GREEN_700} bg={T.PLX_GREEN_100}>管理者</Pill>
+              : <Pill color={T.PLX_BLUE_600} bg={T.PLX_BLUE_100}>スタッフ</Pill>}
+          </div>
+          <div>
+            {u.status === "active"
+              ? <Pill color={T.PLX_GREEN_700} bg={T.PLX_GREEN_100}>有効</Pill>
+              : <Pill color={T.PLX_INK_500} bg={T.PLX_SURFACE_100}>無効</Pill>}
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {u.id !== me.id && (
+              <>
+                <button onClick={() => toggleRole(u)} style={{ ...btnSecondary, height: 30, padding: "0 10px", fontSize: 11 }}>
+                  {u.role === "admin" ? "スタッフにする" : "管理者にする"}
+                </button>
+                <button onClick={() => toggleStatus(u)} style={{
+                  ...btnSecondary, height: 30, padding: "0 10px", fontSize: 11,
+                  color: u.status === "active" ? T.PLX_RED_600 : T.PLX_GREEN_700,
+                }}>
+                  {u.status === "active" ? "無効化" : "有効化"}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      ))}
+
+      <div style={{
+        marginTop: 16, padding: 12, background: T.PLX_SURFACE_50,
+        borderRadius: T.RADIUS_MD, fontSize: 11, color: T.PLX_INK_500,
+      }}>
+        PoC 認証です。パスワードは scrypt でハッシュ化され、セッションは HttpOnly クッキーで管理されます。
+      </div>
+
+      {showAdd && (
+        <UserAddModal
+          onClose={() => setShowAdd(false)}
+          onSaved={(u) => {
+            setShowAdd(false);
+            window.PLX_TOAST.success(`ユーザー「${u.display_name}」を追加しました`);
+            setRefreshKey((k) => k + 1);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function UserAddModal({ onClose, onSaved }) {
+  const [form, setForm] = React.useState({ display_name: "", email: "", password: "", role: "staff" });
+  const [saving, setSaving] = React.useState(false);
+  const update = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+
+  const submit = async () => {
+    if (!form.display_name.trim() || !form.email.trim() || form.password.length < 4) {
+      window.PLX_TOAST.warn("氏名・メール・パスワード（4文字以上）を入力してください"); return;
+    }
+    setSaving(true);
+    try {
+      const u = await api.createUser({
+        display_name: form.display_name.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        role: form.role,
+      });
+      onSaved(u);
+    } catch (e) {
+      window.PLX_TOAST.error(e?.body?.detail || "追加に失敗しました");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <PlxModal title="ユーザーを追加" onClose={onClose}>
+      <FormRow label="氏名 *">
+        <input value={form.display_name} onChange={(e) => update("display_name", e.target.value)}
+          style={formInput} placeholder="例：佐藤 太郎" />
+      </FormRow>
+      <FormRow label="メールアドレス *">
+        <input type="email" value={form.email} onChange={(e) => update("email", e.target.value)}
+          style={formInput} placeholder="taro@example.com" />
+      </FormRow>
+      <FormRow label="初期パスワード *（4文字以上）">
+        <input type="password" value={form.password} onChange={(e) => update("password", e.target.value)}
+          style={formInput} placeholder="••••••" />
+      </FormRow>
+      <FormRow label="権限">
+        <SegmentedControl value={form.role} onChange={(v) => update("role", v)} options={[
+          { value: "staff", label: "スタッフ" },
+          { value: "admin", label: "管理者" },
+        ]}/>
+      </FormRow>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16 }}>
+        <button onClick={onClose} style={btnSecondary}>キャンセル</button>
+        <button onClick={submit} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.5 : 1 }}>
+          {saving ? "追加中…" : "追加する"}
+        </button>
+      </div>
+    </PlxModal>
   );
 }
 

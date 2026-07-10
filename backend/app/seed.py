@@ -47,6 +47,19 @@ async def seed() -> None:
         sid = store.id
         print(f"Created store: {store.name} (id={sid})")
 
+        # --- Dev admin user (PoC auth) — admin@example.com / admin ---
+        # Existing DBs get the same user via migration 011's INSERT..SELECT.
+        from app.models.user import User, UserRole
+        from app.services.auth import hash_password
+        db.add(User(
+            store_id=sid,
+            email="admin@example.com",
+            password_hash=hash_password("admin"),
+            display_name="山田 花子",
+            role=UserRole.admin,
+        ))
+        print("Created dev admin: admin@example.com / admin")
+
         # --- Branches: 本院 + 分院 (brief §4.2/§4.10) ---
         # Two branches so the 院・店舗 list and the inventory branch filter
         # have something to render.
