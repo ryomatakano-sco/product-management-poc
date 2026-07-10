@@ -18,6 +18,7 @@ from app.models.product import Product, ProductVariant
 from app.models.purchase_order import POStatus, PurchaseOrder, PurchaseOrderItem, PurchaseOrderTag
 from app.models.tag import Tag
 from sqlalchemy import insert as sa_insert
+from app.services.stock import StockError, apply_stock_delta
 from app.schemas.base import PaginatedResponse
 from app.schemas.purchase_order import (
     POItemRead,
@@ -276,6 +277,31 @@ async def get_purchase_order(po_id: int, db: DB, store_id: StoreId):
 
 @router.post("", response_model=PurchaseOrderRead, status_code=201)
 async def create_purchase_order(body: PurchaseOrderCreate, db: DB, store_id: StoreId):
+    # Tenancy validation (audit M3): vendor, branch and every line-item
+    # variant must belong to this store.
+    from app.models.branch import Branch
+    from app.models.vendor import Vendor
+    vendor_ok = (await db.execute(
+        select(Vendor.id).where(Vendor.id == body.supplier_vendor_id, Vendor.store_id == store_id)
+    )).scalar_one_or_none()
+    if vendor_ok is None:
+        raise HTTPException(400, detail="指定された仕入先がこの店舗に存在しません")
+    branch_ok = (await db.execute(
+        select(Branch.id).where(Branch.id == body.destination_branch_id, Branch.store_id == store_id)
+    )).scalar_one_or_none()
+    if branch_ok is None:
+        raise HTTPException(400, detail="指定された拠点がこの店舗に存在しません")
+    if body.items:
+        wanted = {i.variant_id for i in body.items}
+        found = set((await db.execute(
+            select(ProductVariant.id).where(
+                ProductVariant.id.in_(wanted), ProductVariant.store_id == store_id
+            )
+        )).scalars().all())
+        missing = wanted - found
+        if missing:
+            raise HTTPException(400, detail=f"この店舗に存在しない商品が含まれています (variant {sorted(missing)})")
+
     po = PurchaseOrder(
         store_id=store_id,
         supplier_vendor_id=body.supplier_vendor_id,
@@ -432,19 +458,36 @@ async def receive_purchase_order(po_id: int, body: PurchaseOrderReceive, db: DB,
 
         item.quantity_received += recv.quantity_received
 
-        # Bump on_hand on the variant
+        # Bump on_hand at the PO's destination branch — atomic + store-scoped
+        # (services/stock.py; fixes the audit's M4 cross-tenant receive).
         variant = (
             await db.execute(
-                select(ProductVariant).where(ProductVariant.id == item.variant_id)
+                select(ProductVariant).where(
+                    ProductVariant.id == item.variant_id,
+                    ProductVariant.store_id == store_id,
+                )
             )
-        ).scalar_one()
-        variant.on_hand += recv.quantity_received
+        ).scalar_one_or_none()
+        if variant is None:
+            raise HTTPException(400, detail=f"明細の商品がこの店舗に存在しません (variant {item.variant_id})")
+        try:
+            recv_branch = await apply_stock_delta(
+                db, store_id=store_id, variant_id=item.variant_id,
+                branch_id=po.destination_branch_id, field=InventoryField.on_hand,
+                delta=recv.quantity_received,
+            )
+        except StockError as e:
+            await db.rollback()
+            raise HTTPException(400, detail=e.message)
 
         # The reorder is fulfilled — clear the product's 再発注済 flag so the
         # 商品一覧 chip stops surfacing it.
         product = (
             await db.execute(
-                select(Product).where(Product.id == variant.product_id)
+                select(Product).where(
+                    Product.id == variant.product_id,
+                    Product.store_id == store_id,
+                )
             )
         ).scalar_one_or_none()
         if product is not None and product.reorder_requested_at is not None:
@@ -454,6 +497,7 @@ async def receive_purchase_order(po_id: int, body: PurchaseOrderReceive, db: DB,
         adj = InventoryAdjustment(
             store_id=store_id,
             variant_id=item.variant_id,
+            branch_id=recv_branch,
             field=InventoryField.on_hand,
             delta=recv.quantity_received,
             reason=AdjustmentReason.purchase_order_received,

@@ -1,10 +1,8 @@
 """Branches CRUD + per-branch inventory snapshot.
 
 The snapshot endpoint feeds the 院・店舗 card on the list page ("在庫スナップショット:
-2,847 点 / ¥1,684,200") and the 在庫 tab of the detail page. It aggregates
-across all variants of all active products belonging to the store; per-branch
-allocation is approximated by even split (the PoC has no per-branch on_hand
-column on variants — that's deferred work).
+2,847 点 / ¥1,684,200") and the 在庫 tab of the detail page. Since migration
+012 it aggregates from ``variant_branch_stock`` — true per-branch counters.
 """
 
 from __future__ import annotations
@@ -114,11 +112,12 @@ async def delete_branch(branch_id: int, db: DB, store_id: StoreId):
 async def branch_inventory_snapshot(branch_id: int, db: DB, store_id: StoreId):
     """Aggregate inventory KPIs scoped to this branch.
 
-    `total_items` = sum of on_hand across all variants (store-wide; per-branch
-    apportionment is future scope).
-    `total_value_jpy` = sum(on_hand * price) using each variant's price.
-    `low_stock_count` = variants with available <= branch.low_stock_threshold.
-    `expiring_soon_count` = consumable products with expiry <= today+30d.
+    Per-branch inventory (migration 012): counters come from
+    ``variant_branch_stock`` for THIS branch — no longer the store-wide totals.
+    `total_value_jpy` = sum(branch on_hand * variant price).
+    `low_stock_count` = distinct products with a branch-row available <= threshold.
+    `expiring_soon_count` = consumable products with expiry <= today+30d
+    (product-level; lots are future scope).
     """
     branch = (await db.execute(
         select(Branch).where(Branch.id == branch_id, Branch.store_id == store_id)
@@ -128,31 +127,37 @@ async def branch_inventory_snapshot(branch_id: int, db: DB, store_id: StoreId):
 
     threshold = branch.low_stock_threshold
 
-    # Sum on_hand and on_hand*price across all variants of active products.
+    from app.models.inventory import VariantBranchStock
+
+    # Sum this branch's on_hand and on_hand*price across active products.
     totals_row = (await db.execute(
         select(
-            func.coalesce(func.sum(ProductVariant.on_hand), 0),
+            func.coalesce(func.sum(VariantBranchStock.on_hand), 0),
             func.coalesce(
-                func.sum(ProductVariant.on_hand * func.coalesce(ProductVariant.price, 0)),
+                func.sum(VariantBranchStock.on_hand * func.coalesce(ProductVariant.price, 0)),
                 0,
             ),
         )
+        .join(ProductVariant, ProductVariant.id == VariantBranchStock.variant_id)
         .join(Product, Product.id == ProductVariant.product_id)
         .where(
-            ProductVariant.store_id == store_id,
+            VariantBranchStock.store_id == store_id,
+            VariantBranchStock.branch_id == branch_id,
             Product.status == ProductStatus.active,
         )
     )).one()
     total_items, total_value = int(totals_row[0]), Decimal(str(totals_row[1]))
 
-    # Low-stock count (distinct products with at least one variant below threshold).
+    # Low-stock count (distinct products with a branch row below threshold).
     low_stock = (await db.execute(
         select(func.count(func.distinct(Product.id)))
         .join(ProductVariant, ProductVariant.product_id == Product.id)
+        .join(VariantBranchStock, VariantBranchStock.variant_id == ProductVariant.id)
         .where(
             Product.store_id == store_id,
             Product.status == ProductStatus.active,
-            (ProductVariant.on_hand - ProductVariant.committed - ProductVariant.unavailable) <= threshold,
+            VariantBranchStock.branch_id == branch_id,
+            (VariantBranchStock.on_hand - VariantBranchStock.committed - VariantBranchStock.unavailable) <= threshold,
         )
     )).scalar_one()
 

@@ -344,3 +344,64 @@ The last medium item — and the app's **first real file-upload plumbing** (ever
 3. Try a non-image or >2MB file → Japanese validation error toast.
 
 The logo is stored and served; wiring it into the receipt/PO print headers is a natural follow-up.
+
+---
+
+## 認証・ユーザー管理 (Auth & user management) — heavy tier 1
+
+Branch: `feature/sales-records` · Migration **011**
+
+PoC-grade session auth: the app now has a real login. Unauthenticated visitors see a
+paylight X login page; sessions are HttpOnly HMAC-signed cookies (7 days, stateless — they
+survive server restarts). Passwords are hashed with stdlib **scrypt** (no new dependency).
+
+| Piece | Where |
+|---|---|
+| `users` table + dev admin | Migration `011_users_auth.py` inserts **admin@example.com / admin** for existing DBs; `seed.py` creates the same on fresh installs |
+| Token/hash primitives | `backend/app/services/auth.py` (secret: `AUTH_SECRET` env, fixed dev default) |
+| Endpoints | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`, admin-only `GET/POST /auth/users` + `PATCH /auth/users/{id}` (duplicate email → 409; self-demotion/deactivation → 400) |
+| Store resolution | `deps.get_store_id`: session cookie wins; **`X-Store-Id` header kept as dev fallback** so curl/DevPanel keep working (remove in production) |
+| UI | `pages/Login.jsx` + auth gate in `app.jsx` (the `#/scan` phone page stays ungated); AdminShell footer shows the real user + ⎋ logout; 設定 › ユーザー管理 is now a real pane (list / add / role / enable-disable; staff see a polite notice) |
+
+**How to test:** log out via the sidebar ⎋ → login page appears → sign in with
+admin/admin → footer shows your name; 設定 › ユーザー管理 → add a staff user, log in as
+them in an incognito window → ユーザー管理 shows "管理者のみ".
+
+---
+
+## 拠点別在庫 (Per-branch inventory) — heavy tier 2
+
+Branch: `feature/sales-records` · Migration **012**
+
+Stock is now tracked **per branch**. New table `variant_branch_stock` holds one row per
+(variant, branch); existing stock was backfilled to each store's 本院. The variant's old
+counters remain as **denormalized store-wide totals**, so every existing read kept working.
+
+The new `services/stock.py` is the single choke point for ALL stock movement — it validates
+the branch belongs to the store, upserts the branch row, and applies the delta **atomically
+in SQL with a non-negative guard** at both the branch and total level. This also fixes three
+audit findings in one stroke: the C3 oversell race, M2/M4 cross-tenant branch/variant writes,
+and per-path negative-stock gaps.
+
+| Rewired path | Behavior now |
+|---|---|
+| `POST /sales` | decrements at the sale's 拠点 (validated); oversell at that branch → 400 「この拠点の在庫が不足しています」 |
+| `POST /sales/:id/refund` | restores stock at the original sale's branch |
+| `POST /variants/:id/inventory-adjust` | accepts optional `branch_id` (default = 本院); rejects archived products (audit M8) |
+| `POST /purchase-orders/:id/receive` | stock lands at the PO's 納品先拠点; variant/product lookups store-scoped |
+| `POST /purchase-orders` | validates vendor / branch / every line variant belong to the store (audit M3) → 400 |
+| `GET /inventory?branch_id=` | **finally real** — counters come from that branch's rows (0 when absent); 棚卸しCSV follows |
+| `GET /branches/:id/inventory-snapshot` | true per-branch numbers (was store-wide duplicated on every card) |
+| `inventory_adjustments.branch_id` | audit trail records WHERE stock moved |
+
+UI: 在庫 page gains a 拠点 filter select; the shared 在庫調整 modal gains a 拠点 select
+(hidden for single-branch stores, defaults to 本院).
+
+**Verified end-to-end:** backfill (本院 348 items / 梅田 0) → +3 adjust at 梅田 → oversell 5
+blocked with per-branch message → sell 2 → 梅田 1・本院 unchanged・total consistent → refund
+restores 3 → PO received into 梅田 → 4; foreign-variant PO → 400; invalid branch → 400.
+Totals remained exactly equal to branch-row sums throughout — including during concurrent
+real edits from the product edit screen.
+
+**Unlocked next (cheap now):** branch-to-branch transfer = one endpoint creating a paired
+±delta via `apply_stock_delta` with a new `transfer` reason.

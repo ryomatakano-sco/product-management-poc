@@ -6,22 +6,27 @@
 function Inventory({ query }) {
   const [statusFilter, setStatusFilter] = React.useState(query?.status || "");
   const [itemTypeFilter, setItemTypeFilter] = React.useState("");
+  const [branchFilter, setBranchFilter] = React.useState(""); // per-branch (migration 012)
   const [q, setQ] = React.useState("");
   const [exporting, setExporting] = React.useState(false);
   // Client-side pagination — the fetch grabs up to 200 rows (PoC scale) and
   // the pager slices locally so the KPI strip stays whole-dataset accurate.
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(25);
-  React.useEffect(() => { setPage(1); }, [statusFilter, itemTypeFilter, q, pageSize]);
+  React.useEffect(() => { setPage(1); }, [statusFilter, itemTypeFilter, branchFilter, q, pageSize]);
+
+  const branchesQ = useFetch(() => api.listBranches(), []);
+  const branches = branchesQ.data?.items ?? [];
 
   const inventoryQ = useFetch(
     () => api.listInventory({
       status: statusFilter || undefined,
       item_type: itemTypeFilter || undefined,
+      branch_id: branchFilter || undefined,
       q: q || undefined,
       limit: 200,
     }),
-    [statusFilter, itemTypeFilter, q],
+    [statusFilter, itemTypeFilter, branchFilter, q],
   );
 
   const allItems = inventoryQ.data?.items ?? [];
@@ -43,6 +48,7 @@ function Inventory({ query }) {
       await api.downloadInventoryCsv({
         status: statusFilter || undefined,
         item_type: itemTypeFilter || undefined,
+        branch_id: branchFilter || undefined,
         q: q || undefined,
       });
     } catch (e) {
@@ -93,6 +99,10 @@ function Inventory({ query }) {
       }}>
         <input value={q} onChange={(e) => setQ(e.target.value)}
           placeholder="商品名・SKUで検索…" style={{ ...formInput, maxWidth: 280, flex: 1 }} />
+        <Select value={branchFilter} onChange={setBranchFilter} options={[
+          { value: "", label: "拠点: 全拠点" },
+          ...branches.map((b) => ({ value: String(b.id), label: b.name })),
+        ]} />
         <Select value={itemTypeFilter} onChange={setItemTypeFilter} options={[
           { value: "", label: "すべての種別" },
           { value: "product", label: "物販品" },

@@ -10,10 +10,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.deps import DB, StoreId
-from app.models.inventory import InventoryAdjustment
+from app.models.inventory import InventoryAdjustment, VariantBranchStock
 from app.models.product import ItemType, Product, ProductStatus, ProductVariant
 from app.schemas.base import PaginatedResponse
 from app.schemas.inventory import InventoryAdjustmentRead, InventoryAdjustRequest
+from app.services.stock import StockError, apply_stock_delta
 
 router = APIRouter(tags=["inventory"])
 
@@ -28,15 +29,42 @@ async def _build_inventory_rows(
 ) -> list[dict]:
     """Aggregate per-product inventory rows shared by the list endpoint and CSV export.
 
-    PoC scope: stock is held on `product_variants.on_hand` and is NOT yet
-    per-branch (no `branch_id` on the variant). The `branch_id` query
-    parameter is accepted for forward-compat but currently returns the
-    same numbers regardless. A future migration will introduce a
-    `variant_branch_stock` table; until then, the 院・店舗 page reads
-    the same denormalized totals.
+    Per-branch inventory (migration 012): when ``branch_id`` is given the
+    counters come from ``variant_branch_stock`` for that branch (missing rows
+    count as 0); otherwise the variant's store-wide denormalized totals are
+    used, exactly as before.
     """
     today = date.today()
     in_30 = today + timedelta(days=30)
+
+    # Branch scope: resolve name + per-variant counters up front.
+    branch_name = "全拠点"
+    branch_stock: dict[int, tuple[int, int, int]] = {}
+    if branch_id is not None:
+        from app.models.branch import Branch
+        branch = (await db.execute(
+            select(Branch).where(Branch.id == branch_id, Branch.store_id == store_id)
+        )).scalar_one_or_none()
+        if branch is None:
+            raise HTTPException(404, detail="拠点が見つかりません")
+        branch_name = branch.name
+        vbs_rows = (await db.execute(
+            select(
+                VariantBranchStock.variant_id,
+                VariantBranchStock.on_hand,
+                VariantBranchStock.committed,
+                VariantBranchStock.unavailable,
+            ).where(
+                VariantBranchStock.store_id == store_id,
+                VariantBranchStock.branch_id == branch_id,
+            )
+        )).all()
+        branch_stock = {vid: (oh, c, u) for vid, oh, c, u in vbs_rows}
+
+    def counters(v) -> tuple[int, int, int]:
+        if branch_id is None:
+            return (v.on_hand, v.committed, v.unavailable)
+        return branch_stock.get(v.id, (0, 0, 0))
 
     stmt = (
         select(Product)
@@ -52,9 +80,10 @@ async def _build_inventory_rows(
 
     items = []
     for p in rows:
-        on_hand = sum(v.on_hand for v in p.variants)
-        committed = sum(v.committed for v in p.variants)
-        unavailable = sum(v.unavailable for v in p.variants)
+        triples = [counters(v) for v in p.variants]
+        on_hand = sum(t[0] for t in triples)
+        committed = sum(t[1] for t in triples)
+        unavailable = sum(t[2] for t in triples)
         available = on_hand - committed - unavailable
         is_expiring = bool(p.expiry_date and today <= p.expiry_date <= in_30)
         if on_hand == 0:
@@ -85,13 +114,13 @@ async def _build_inventory_rows(
                 "sku": default_v.sku if default_v else None,
                 "item_type": p.item_type.value if hasattr(p.item_type, "value") else str(p.item_type),
             },
-            "branch": {"id": branch_id or 0, "name": "全拠点"},
+            "branch": {"id": branch_id or 0, "name": branch_name},
             "on_hand": on_hand,
             "committed": committed,
             "available": available,
             # on_hand × price per variant — same rule as the branch snapshot's
             # total_value_jpy, so the two pages' 在庫金額 figures agree.
-            "value_jpy": int(sum(v.on_hand * (v.price or 0) for v in p.variants)),
+            "value_jpy": int(sum(counters(v)[0] * (v.price or 0) for v in p.variants)),
             "status": status,
             "earliest_expiry_date": p.expiry_date.isoformat() if p.expiry_date else None,
             "last_adjusted_at": (
@@ -218,31 +247,36 @@ async def export_inventory_csv(
 
 @router.post("/variants/{variant_id}/inventory-adjust", response_model=InventoryAdjustmentRead, status_code=201)
 async def adjust_inventory(variant_id: int, body: InventoryAdjustRequest, db: DB, store_id: StoreId):
-    """Atomically adjust a variant's inventory counter and log the adjustment."""
+    """Atomically adjust a variant's inventory counter (per-branch) and log it."""
     variant = (
         await db.execute(
-            select(ProductVariant).where(
-                ProductVariant.id == variant_id, ProductVariant.store_id == store_id
-            )
+            select(ProductVariant)
+            .where(ProductVariant.id == variant_id, ProductVariant.store_id == store_id)
+            .options(selectinload(ProductVariant.product))
         )
     ).scalar_one_or_none()
     if not variant:
         raise HTTPException(404, detail="Variant not found")
+    # Archived products are out of catalog — no further stock movements (audit M8).
+    if variant.product is not None and variant.product.status == ProductStatus.archived:
+        raise HTTPException(400, detail="アーカイブ済み商品の在庫は調整できません")
 
-    # Update counter — reject if the result would go negative.
-    current = getattr(variant, body.field.value)
-    new_value = current + body.delta
-    if new_value < 0:
-        raise HTTPException(
-            status_code=400,
-            detail=f"在庫が不足しています（現在: {current}, 調整後: {new_value}）",
+    # Atomic per-branch delta + denormalized total (services/stock.py;
+    # branch_id=None targets the store's main branch).
+    try:
+        branch_id = await apply_stock_delta(
+            db, store_id=store_id, variant_id=variant_id,
+            branch_id=body.branch_id, field=body.field, delta=body.delta,
         )
-    setattr(variant, body.field.value, new_value)
+    except StockError as e:
+        await db.rollback()
+        raise HTTPException(400, detail=e.message)
 
     # Log adjustment
     adj = InventoryAdjustment(
         store_id=store_id,
         variant_id=variant_id,
+        branch_id=branch_id,
         field=body.field,
         delta=body.delta,
         reason=body.reason,

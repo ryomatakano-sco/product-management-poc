@@ -12,6 +12,9 @@ class InventoryAdjustRequest(BaseModel):
     delta: int
     reason: AdjustmentReason
     note: str | None = None
+    # Per-branch inventory (migration 012). None = the store's main branch,
+    # so every pre-existing caller keeps working unchanged.
+    branch_id: int | None = None
 
 
 class InventoryAdjustmentRead(BaseModel):
@@ -20,6 +23,7 @@ class InventoryAdjustmentRead(BaseModel):
     id: int
     store_id: int
     variant_id: int
+    branch_id: int | None = None
     field: InventoryField
     delta: int
     reason: AdjustmentReason

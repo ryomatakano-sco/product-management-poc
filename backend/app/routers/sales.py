@@ -15,6 +15,7 @@ from app.models.inventory import AdjustmentReason, InventoryAdjustment, Inventor
 from app.models.product import Product, ProductStatus, ProductVariant, TaxRate
 from app.models.sale import PaymentMethod, SalesRecord
 from app.models.settings_kv import SettingsKV
+from app.services.stock import StockError, apply_stock_delta
 from app.schemas.sale import (
     ReceiptData, ReceiptLine, ReceiptStore,
     SaleCreate, SaleListResponse, SaleRead, SalesSummary,
@@ -402,9 +403,20 @@ async def refund_sale(sale_id: int, db: DB, store_id: StoreId):
     now = datetime.now(timezone.utc)
     transaction_id = await _next_transaction_id(db, store_id, now)
 
+    # Restore stock at the branch the sale happened at (atomic; services/stock.py).
+    try:
+        refund_branch = await apply_stock_delta(
+            db, store_id=store_id, variant_id=original.variant_id,
+            branch_id=original.branch_id, field=InventoryField.on_hand,
+            delta=original.quantity,
+        )
+    except StockError as e:
+        await db.rollback()
+        raise HTTPException(400, detail=e.message)
+
     refund = SalesRecord(
         store_id=store_id,
-        branch_id=original.branch_id,
+        branch_id=refund_branch,
         variant_id=original.variant_id,
         transaction_id=transaction_id,
         quantity=-original.quantity,
@@ -419,11 +431,11 @@ async def refund_sale(sale_id: int, db: DB, store_id: StoreId):
     db.add(refund)
 
     original.refunded_at = now
-    variant.on_hand += original.quantity
 
     db.add(InventoryAdjustment(
         store_id=store_id,
         variant_id=original.variant_id,
+        branch_id=refund_branch,
         field=InventoryField.on_hand,
         delta=original.quantity,
         reason=AdjustmentReason.refund,
@@ -455,30 +467,32 @@ async def create_sale(body: SaleCreate, db: DB, store_id: StoreId):
     if not variant:
         raise HTTPException(404, detail="Variant not found")
 
-    # Only active products are sellable. Draft items are still being onboarded
-    # (invisible on the inventory page); archived items are out of catalog.
-    if variant.product and variant.product.status != ProductStatus.active:
+    # Only active products are sellable — fail CLOSED when the variant has no
+    # product (orphaned variant; audit M7).
+    if variant.product is None or variant.product.status != ProductStatus.active:
         raise HTTPException(
             status_code=400,
             detail="この商品はまだ販売可能ではありません（商品ステータスが「公開中」ではありません）",
         )
 
-    if body.quantity > variant.on_hand:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"在庫が不足しています（残り {variant.on_hand}個）"
-                if variant.on_hand > 0
-                else "在庫切れのため販売できません"
-            ),
-        )
-
     sold_at = body.sold_at or datetime.now(timezone.utc)
     transaction_id = await _next_transaction_id(db, store_id, sold_at)
 
+    # Decrement stock at the sale's branch — atomic, branch-validated
+    # (services/stock.py; fixes the C3 oversell race and M2 branch tenancy).
+    try:
+        branch_id = await apply_stock_delta(
+            db, store_id=store_id, variant_id=body.variant_id,
+            branch_id=body.branch_id, field=InventoryField.on_hand,
+            delta=-body.quantity,
+        )
+    except StockError as e:
+        await db.rollback()
+        raise HTTPException(400, detail=e.message)
+
     sale = SalesRecord(
         store_id=store_id,
-        branch_id=body.branch_id,
+        branch_id=branch_id,
         variant_id=body.variant_id,
         transaction_id=transaction_id,
         quantity=body.quantity,
@@ -492,13 +506,11 @@ async def create_sale(body: SaleCreate, db: DB, store_id: StoreId):
     db.add(sale)
     await db.flush()
 
-    # Decrement on_hand
-    variant.on_hand -= body.quantity
-
     # Log inventory adjustment
     adj = InventoryAdjustment(
         store_id=store_id,
         variant_id=body.variant_id,
+        branch_id=branch_id,
         field=InventoryField.on_hand,
         delta=-body.quantity,
         reason=AdjustmentReason.sale,

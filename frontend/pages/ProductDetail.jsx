@@ -634,11 +634,25 @@ function InventoryAdjustModal({ variant, onClose, onApplied }) {
   const [note, setNote]     = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError]   = React.useState(null);
+  // Per-branch inventory (migration 012): pick which branch the stock moves
+  // at. Defaults to the main branch; hidden when the store has one branch.
+  const branchesQ = useFetch(() => api.listBranches(), []);
+  const branches = branchesQ.data?.items ?? [];
+  const [branchId, setBranchId] = React.useState("");
+  React.useEffect(() => {
+    if (branches.length > 0 && !branchId) {
+      const main = branches.find((b) => b.branch_type === "main") || branches[0];
+      setBranchId(String(main.id));
+    }
+  }, [branchesQ.data]);
 
   const submit = async () => {
     setSubmitting(true); setError(null);
     try {
-      await api.adjustInventory(variant.id, { field, delta, reason, note: note || null });
+      await api.adjustInventory(variant.id, {
+        field, delta, reason, note: note || null,
+        branch_id: branchId ? Number(branchId) : null,
+      });
       onApplied();
     } catch (e) {
       setError(e.body?.detail || e.message);
@@ -668,6 +682,14 @@ function InventoryAdjustModal({ variant, onClose, onApplied }) {
         <div style={{ fontSize: 12, color: PLX_MUTED, marginBottom: 18 }}>
           {variant.sku ?? "—"} · {variant.option1_value ?? "標準"}
         </div>
+
+        {branches.length > 1 && (
+          <FormRow label="拠点">
+            <select value={branchId} onChange={(e) => setBranchId(e.target.value)} style={formInput}>
+              {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </FormRow>
+        )}
 
         <FormRow label="項目">
           <SegmentedControl value={field} onChange={setField} options={[
