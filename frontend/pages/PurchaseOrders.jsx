@@ -634,6 +634,15 @@ function PurchaseOrderDetail({ id }) {
             </div>
           </div>
 
+          {po.status === "draft" && (
+            <div style={{
+              padding: "9px 14px", borderRadius: T.RADIUS_MD, marginBottom: 10,
+              background: T.PLX_AMBER_100, border: `1px solid ${T.PLX_AMBER_300 || "#fcd34d"}`,
+              color: T.PLX_AMBER_700 || "#b45309", fontSize: 12, lineHeight: 1.6,
+            }}>
+              {"下書きの発注書は入荷を記録できません。「📤 送信」で発注済みにすると、部分入荷（一部だけ届いた場合）も含めて入荷を記録できます。"}
+            </div>
+          )}
           {/* Line items */}
           <div style={{
             background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,

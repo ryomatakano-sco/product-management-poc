@@ -22,6 +22,7 @@ from app.services.tz import any_to_utc_naive, jst_to_utc_naive
 from app.schemas.sale import (
     ReceiptData, ReceiptLine, ReceiptStore,
     SaleCreate, SaleListResponse, SaleRead, SalesSummary,
+    RefundRequest,
 )
 
 router = APIRouter(prefix="/sales", tags=["sales"])
@@ -396,7 +397,7 @@ async def get_sale(sale_id: int, db: DB, store_id: StoreId):
 
 
 @router.post("/{sale_id}/refund", response_model=SaleRead, status_code=201)
-async def refund_sale(sale_id: int, db: DB, store_id: StoreId):
+async def refund_sale(sale_id: int, db: DB, store_id: StoreId, body: RefundRequest | None = None):
     """Reverse a sale: create a negative-quantity refund row, mark the original
     as refunded, add the stock back on the variant, and log an audit adjustment.
     """
@@ -452,7 +453,10 @@ async def refund_sale(sale_id: int, db: DB, store_id: StoreId):
         sold_at=now,
         sold_by=original.sold_by,
         patient_ref=original.patient_ref,
-        note=f"返品: {original.transaction_id}",
+        note=(
+            f"返品: {original.transaction_id}"
+            + (f"｜理由: {reason}" if (reason := (body.reason or "").strip() if body else "") else "")
+        ),
         refund_of_sale_id=original.id,
     )
     db.add(refund)
@@ -468,6 +472,7 @@ async def refund_sale(sale_id: int, db: DB, store_id: StoreId):
         reason=AdjustmentReason.refund,
         reference_type="sales_record",
         reference_id=original.id,
+        note=(f"理由: {reason}" if reason else None),
     ))
 
     await db.commit()

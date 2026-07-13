@@ -580,7 +580,7 @@ function InventoryHistory({ variantId, refreshKey }) {
           <span style={{
             textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums",
             color: h.delta > 0 ? PLX_GREEN : PLX_WARN,
-          }}>{h.delta > 0 ? "+" : ""}{h.delta}</span>
+          }}>{h.delta > 0 ? `▲ +${h.delta}` : h.delta < 0 ? `▼ ${Math.abs(h.delta)}` : h.delta}</span>
           <span>{reasonLabels[h.reason]}</span>
           <span style={{ color: PLX_MUTED }}>{h.note ?? ""}</span>
         </div>

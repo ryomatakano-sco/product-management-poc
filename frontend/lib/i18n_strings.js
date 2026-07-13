@@ -762,4 +762,14 @@ window._PLX_DICT_EN = {
   "デフォルト": "Default",
   "在庫を調整": "Adjust stock",
   "直近 ${a} 件 / 全 ${b} 件": "Last ${a} of ${b} total",
+
+  // ---- Feedback batch A: refund reason / searchable pickers / partial-receive hint ----
+  "返品を記録": "Record refund",
+  "返品理由（任意）": "Refund reason (optional)",
+  "例: 未開封のまま患者様より返品": "e.g. Returned unopened by the patient",
+  "返品を確定する": "Confirm refund",
+  "${label} を返品します。在庫が元に戻り、返品行として記録されます。": "${label} will be refunded. Stock is restored and a refund row is recorded.",
+  "商品名・SKUで絞り込み…": "Filter by product name / SKU…",
+  "下書きの発注書は入荷を記録できません。「📤 送信」で発注済みにすると、部分入荷（一部だけ届いた場合）も含めて入荷を記録できます。":
+    "A draft PO can't receive stock yet. Press 「📤 送信」 to mark it ordered — then you can record receipts, including partial shipments.",
 };

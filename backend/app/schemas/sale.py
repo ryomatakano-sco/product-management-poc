@@ -21,6 +21,11 @@ def _utc_iso(v: datetime) -> str:
     return v.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+class RefundRequest(BaseModel):
+    """Optional body for POST /sales/{id}/refund."""
+    reason: str | None = Field(None, max_length=500, description="返品理由（任意）")
+
+
 class SaleCreate(BaseModel):
     branch_id: int
     variant_id: int

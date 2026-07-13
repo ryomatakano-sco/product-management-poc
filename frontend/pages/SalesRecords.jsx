@@ -132,18 +132,12 @@ function SalesRecords({ query, initialSaleId }) {
     return d.toLocaleString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
   };
 
-  const onRefund = async (sale) => {
-    const label = sale.transaction_id ?? `#${sale.id}`;
-    if (!window.confirm(`${label} を返品しますか？\n在庫が元に戻り、返品行として記録されます。`)) return;
-    try {
-      await api.refundSale(sale.id);
-      window.PLX_TOAST?.success("返品を記録しました");
-      salesQ.refetch();
-      summaryQ.refetch();
-    } catch (err) {
-      const msg = err?.body?.detail || err?.message || "返品に失敗しました";
-      window.PLX_TOAST?.error(typeof msg === "string" ? msg : "返品に失敗しました");
-    }
+  const [refundTarget, setRefundTarget] = React.useState(null);
+  const onRefund = (sale) => setRefundTarget(sale);
+  const onRefunded = () => {
+    setRefundTarget(null);
+    salesQ.refetch();
+    summaryQ.refetch();
   };
 
   const onExport = async () => {
@@ -379,6 +373,13 @@ function SalesRecords({ query, initialSaleId }) {
             summaryQ.refetch();
             staffQ.refetch();
           }}
+        />
+      )}
+      {refundTarget && (
+        <RefundReasonModal
+          sale={refundTarget}
+          onClose={() => setRefundTarget(null)}
+          onDone={onRefunded}
         />
       )}
       {detailId != null && (
@@ -810,22 +811,8 @@ function SaleDetailModal({ saleId, onClose, onRefunded }) {
   const isRefunded = s && s.refunded_at != null;
   const canRefund  = s && !isRefund && !isRefunded && s.quantity > 0;
 
-  const doRefund = async () => {
-    if (!s || refunding) return;
-    if (!window.confirm(`${s.transaction_id} を返品しますか？\n在庫が元に戻り、返品行として記録されます。`)) return;
-    setRefunding(true);
-    try {
-      await api.refundSale(s.id);
-      window.PLX_TOAST?.success("返品を記録しました");
-      onRefunded?.();
-      onClose?.();
-    } catch (err) {
-      const msg = err?.body?.detail || err?.message || "返品に失敗しました";
-      window.PLX_TOAST?.error(typeof msg === "string" ? msg : "返品に失敗しました");
-    } finally {
-      setRefunding(false);
-    }
-  };
+  const [showRefundModal, setShowRefundModal] = React.useState(false);
+  const doRefund = () => { if (s && !refunding) setShowRefundModal(true); };
 
   const Row = ({ label, value, mono }) => (
     <div style={{
@@ -914,6 +901,13 @@ function SaleDetailModal({ saleId, onClose, onRefunded }) {
           </div>
         </>
       )}
+      {showRefundModal && (
+        <RefundReasonModal
+          sale={s}
+          onClose={() => setShowRefundModal(false)}
+          onDone={() => { setShowRefundModal(false); onRefunded?.(); onClose?.(); }}
+        />
+      )}
     </PlxModal>
   );
 }
@@ -970,4 +964,55 @@ function SalesFilterSelect({ label, value, onChange, options, disabled }) {
 }
 
 window.SalesRecords = SalesRecords;
+// 返品理由 — optional reason captured with every refund (recorded on the
+// refund row's note and the audit adjustment).
+function RefundReasonModal({ sale, onClose, onDone }) {
+  const [reason, setReason] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const label = sale.transaction_id ?? `#${sale.id}`;
+  const submit = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await api.refundSale(sale.id, reason.trim() || null);
+      window.PLX_TOAST?.success("返品を記録しました");
+      onDone?.();
+    } catch (err) {
+      const msg = err?.body?.detail || err?.message || "返品に失敗しました";
+      window.PLX_TOAST?.error(typeof msg === "string" ? msg : "返品に失敗しました");
+      setBusy(false);
+    }
+  };
+  return (
+    <PlxModal title="返品を記録" onClose={onClose}>
+      <div style={{ fontSize: 13, color: T.PLX_INK_700, marginBottom: 12, lineHeight: 1.7 }}>
+        {`${label} を返品します。在庫が元に戻り、返品行として記録されます。`}
+      </div>
+      <div style={{ fontSize: 12, fontWeight: 700, color: T.PLX_INK_700, marginBottom: 6 }}>返品理由（任意）</div>
+      <textarea
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        placeholder="例: 未開封のまま患者様より返品"
+        rows={3}
+        style={{
+          width: "100%", boxSizing: "border-box", padding: "8px 10px",
+          borderRadius: T.RADIUS_MD, border: `1px solid ${T.PLX_LINE_200}`,
+          fontSize: 13, resize: "vertical", background: T.PLX_CARD_BG, color: T.PLX_INK_900,
+        }}
+      />
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16 }}>
+        <button onClick={onClose} disabled={busy} style={{
+          padding: "8px 18px", borderRadius: T.RADIUS_MD, border: `1px solid ${T.PLX_LINE_200}`,
+          background: T.PLX_CARD_BG, fontSize: 13, cursor: "pointer", color: T.PLX_INK_700,
+        }}>キャンセル</button>
+        <button onClick={submit} disabled={busy} style={{
+          padding: "8px 18px", borderRadius: T.RADIUS_MD, border: "none",
+          background: T.PLX_RED_600, color: "#fff", fontSize: 13, fontWeight: 700,
+          cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.6 : 1,
+        }}>{busy ? "記録中…" : "返品を確定する"}</button>
+      </div>
+    </PlxModal>
+  );
+}
+
 window.PlxManualSaleModal = ManualSaleModal;  // reused by ProductDetail's quick-sale button

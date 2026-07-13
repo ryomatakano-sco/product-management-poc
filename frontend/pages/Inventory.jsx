@@ -315,7 +315,11 @@ function Inventory({ query }) {
 // 拠点間移動 — POST /inventory/transfer: −qty at 移動元, +qty at 移動先,
 // atomic with a paired reason='transfer' audit trail (migration 015).
 function BranchTransferModal({ branches, onClose, onDone }) {
-  const productsQ = useFetch(() => api.listProducts({ status: "active", limit: 100 }), []);
+  const [search, setSearch] = React.useState("");
+  const productsQ = useFetch(
+    () => api.listProducts({ status: "active", limit: 100, q: search.trim() || undefined }),
+    [search],
+  );
   const products = (productsQ.data?.items || []).filter((p) => p.default_variant_id);
   const [productId, setProductId] = React.useState("");
   const detailQ = useFetch(
@@ -372,6 +376,11 @@ function BranchTransferModal({ branches, onClose, onDone }) {
   return (
     <PlxModal title="拠点間で在庫を移動" onClose={onClose}>
       <FormRow label="商品">
+        <input
+          type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+          placeholder="商品名・SKUで絞り込み…"
+          style={{ ...formInput, marginBottom: 6 }}
+        />
         <select value={productId} onChange={(e) => setProductId(e.target.value)} style={formInput}>
           <option value="" disabled>選択してください…</option>
           {products.map((p) => (
@@ -415,7 +424,11 @@ function BranchTransferModal({ branches, onClose, onDone }) {
 // Step 1 of the 在庫調整 flow: choose product (and variant when several),
 // then hand the full variant object to the shared adjust modal.
 function AdjustProductPicker({ onClose, onPicked }) {
-  const productsQ = useFetch(() => api.listProducts({ status: "active", limit: 100 }), []);
+  const [search, setSearch] = React.useState("");
+  const productsQ = useFetch(
+    () => api.listProducts({ status: "active", limit: 100, q: search.trim() || undefined }),
+    [search],
+  );
   const products = (productsQ.data?.items || []).filter((p) => p.default_variant_id);
   const [productId, setProductId] = React.useState("");
   const detailQ = useFetch(
@@ -435,7 +448,12 @@ function AdjustProductPicker({ onClose, onPicked }) {
   return (
     <PlxModal title="在庫調整 — 商品を選択" onClose={onClose}>
       <FormRow label="商品">
-        <select value={productId} onChange={(e) => setProductId(e.target.value)} style={formInput}>
+        <input
+          type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+          placeholder="商品名・SKUで絞り込み…"
+          style={{ ...formInput, marginBottom: 6 }}
+        />
+        <select value={productId} onChange={(e) => setProductId(e.target.value)} style={formInput} size={products.length > 8 ? 6 : undefined}>
           <option value="" disabled>選択してください…</option>
           {products.map((p) => (
             <option key={p.id} value={p.id}>
@@ -534,7 +552,7 @@ function RecentAdjustments({ refreshKey }) {
           <span style={{
             textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700,
             color: a.delta > 0 ? T.PLX_GREEN_700 : a.delta < 0 ? T.PLX_RED_600 : T.PLX_INK_500,
-          }}>{a.delta > 0 ? `+${a.delta}` : a.delta}</span>
+          }}>{a.delta > 0 ? `▲ +${a.delta}` : a.delta < 0 ? `▼ ${Math.abs(a.delta)}` : a.delta}</span>
           <span style={{ fontSize: 11, color: T.PLX_INK_500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {a.note || "—"}
           </span>
