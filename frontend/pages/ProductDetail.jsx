@@ -336,7 +336,11 @@ function ProductDetail({ productId }) {
         <InventoryAdjustModal
           variant={adjustVariant}
           onClose={() => setAdjustVariant(null)}
-          onApplied={() => { setAdjustVariant(null); productQ.refetch(); setHistKey((k) => k + 1); }}
+          onApplied={(res) => {
+            setAdjustVariant(null);
+            if (res?.pending_approval) window.PLX_TOAST?.warn("管理者の承認待ちになりました（在庫はまだ変更されていません）");
+            productQ.refetch(); setHistKey((k) => k + 1);
+          }}
         />
       )}
 
@@ -687,11 +691,11 @@ function InventoryAdjustModal({ variant, onClose, onApplied }) {
   const submit = async () => {
     setSubmitting(true); setError(null);
     try {
-      await api.adjustInventory(variant.id, {
+      const res = await api.adjustInventory(variant.id, {
         field, delta, reason, note: note || null,
         branch_id: branchId ? Number(branchId) : null,
       });
-      onApplied();
+      onApplied(res);
     } catch (e) {
       setError(e.body?.detail || e.message);
     } finally {

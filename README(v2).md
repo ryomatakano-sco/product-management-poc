@@ -585,3 +585,23 @@ Branch: `feature/sales-records`（migration 017）
 | KPI ローテーション | ダッシュボードの KPI 4 枚が 7 秒ごとに第2セットとクロスフェード：登録商品数↔総在庫点数、在庫低下↔要対応件数、期限間近↔今月の入荷点数、今月の販売額↔今月の販売点数。在庫・PO ページの KPI は保有情報を既に全て表示しているため対象外（追加データができたら同パターンを適用）。 |
 
 検証: 画像アップロード→ /media 配信 200 →削除 204、コメント投稿（author=山田 花子）+空ガード 400、monthly-flow が 2026-02〜07 の連続軸で 7月 = 入荷66/販売15、KPI が 7 秒後に第2セットへ切替。
+
+
+## フィードバック改善 D — 権限管理 + 承認ワークフロー（heavy）
+
+Branch: `feature/sales-records`（migration 018）
+
+**権限（ロールベース）**
+- `deps.CurrentUser`（セッションの User 行）+ `ensure_admin()`：ログイン中の非管理者が管理者専用の書き込みを叩くと 403「この操作には管理者権限が必要です」。
+- 管理者専用: 設定 PUT（全 namespace・税率含む）・ロゴ、カテゴリ/仕入先/拠点の作成・更新・削除、ユーザー管理（既存）。スタッフは閲覧 + 販売記録 + PO 操作 + （承認制の）在庫調整。
+- `X-Store-Id` 開発ヘッダー経由（ユーザーなし）は従来どおり素通し（curl テスト用、PoC 限定）。
+
+**承認ワークフロー（mig 018 `approval_requests`）**
+- スタッフが手動在庫調整を送信 → **在庫は変更されず** pending の承認リクエストになり、管理者へ通知（ベル）。
+- 在庫ページに「⏳ 承認待ちの在庫調整」パネル：管理者は ✓承認 / ✕却下、スタッフは自分の申請状態を確認。
+- 承認 = 保存済みペイロードを通常の `apply_stock_delta` 経路で再生 → ガード（マイナス在庫等）が承認時点でも効く。調整行の created_by は**申請者**、note に「｜承認: <管理者>」を追記。却下は在庫に触れない（任意の却下理由を保存）。
+- 監査ログに approval_approved / approval_rejected を記録。
+
+**重要な学び（CONTEXT.md にも追記）**: `from __future__ import annotations` 下では、未 import の型を FastAPI パラメータ注釈に使っても **ImportError にならず silently Any 扱い**になり依存が解決されない（`CurrentUser` を import し忘れて承認分岐が動かなかった）。新しい deps 型を使うときは import を必ず確認。
+
+検証: スタッフ調整→pending（在庫不変）→スタッフ approve 403→管理者 approve 200 → +5 / created_by=佐藤 太郎 / note に承認者、reject は在庫不変、通知 kind=approval_request、UI で却下ボタン→キュー消滅。

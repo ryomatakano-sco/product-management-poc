@@ -54,6 +54,9 @@ const api = {
   me:     () => request(`/auth/me`),
   listUsers:  () => request(`/auth/users`),
   listAuditEvents: (params) => request(`/auth/audit-events${qs(params)}`),
+  listApprovals: (params) => request(`/approvals${qs(params)}`),
+  approveRequest: (id) => request(`/approvals/${id}/approve`, { method: "POST" }),
+  rejectRequest: (id, note) => request(`/approvals/${id}/reject`, { method: "POST", body: JSON.stringify({ note: note || null }) }),
   createUser: (body) => request(`/auth/users`, { method: "POST", body: JSON.stringify(body) }),
   updateUser: (id, body) => request(`/auth/users/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
 

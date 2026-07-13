@@ -37,6 +37,7 @@ from app.routers import (
     tags,
     variants,
     vendors,
+    approvals,
 )
 
 app = FastAPI(
@@ -75,6 +76,7 @@ app.include_router(settings_router.router)
 app.include_router(support.router)
 app.include_router(search.router)
 app.include_router(notifications.router)
+app.include_router(approvals.router)
 app.include_router(dev.router)
 
 

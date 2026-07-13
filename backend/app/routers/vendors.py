@@ -16,7 +16,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 
-from app.deps import DB, StoreId
+from app.deps import DB, StoreId, CurrentUser, ensure_admin
 from app.models.product import Product
 from app.models.purchase_order import POStatus, PurchaseOrder
 from app.models.vendor import Vendor, VendorStatus
@@ -91,7 +91,8 @@ async def list_vendors(
 
 
 @router.post("", response_model=VendorRead, status_code=201, summary="仕入先を作成")
-async def create_vendor(body: VendorCreate, db: DB, store_id: StoreId):
+async def create_vendor(body: VendorCreate, db: DB, store_id: StoreId, user: CurrentUser = None):
+    ensure_admin(user)
     vendor = Vendor(store_id=store_id, **body.model_dump())
     db.add(vendor)
     await db.commit()
@@ -154,7 +155,8 @@ async def get_vendor(vendor_id: int, db: DB, store_id: StoreId):
 
 
 @router.patch("/{vendor_id}", response_model=VendorRead, summary="仕入先を更新")
-async def update_vendor(vendor_id: int, body: VendorUpdate, db: DB, store_id: StoreId):
+async def update_vendor(vendor_id: int, body: VendorUpdate, db: DB, store_id: StoreId, user: CurrentUser = None):
+    ensure_admin(user)
     vendor = (await db.execute(
         select(Vendor).where(Vendor.id == vendor_id, Vendor.store_id == store_id)
     )).scalar_one_or_none()
@@ -169,7 +171,8 @@ async def update_vendor(vendor_id: int, body: VendorUpdate, db: DB, store_id: St
 
 
 @router.delete("/{vendor_id}", status_code=204, summary="仕入先を削除（取扱商品があれば inactive 化）")
-async def delete_vendor(vendor_id: int, db: DB, store_id: StoreId):
+async def delete_vendor(vendor_id: int, db: DB, store_id: StoreId, user: CurrentUser = None):
+    ensure_admin(user)
     """Soft-delete pattern (brief §3.7).
 
     If any product still references this vendor, we flip `status` to

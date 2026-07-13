@@ -17,3 +17,4 @@ from app.models.user import User  # noqa: F401
 from app.models.notification import Notification  # noqa: F401
 from app.models.lot import ProductLot  # noqa: F401
 from app.models.audit import AuditEvent  # noqa: F401
+from app.models.approval import ApprovalRequest  # noqa: F401

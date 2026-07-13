@@ -13,7 +13,7 @@ from decimal import Decimal
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, select
 
-from app.deps import DB, StoreId
+from app.deps import DB, StoreId, CurrentUser, ensure_admin
 from app.models.branch import Branch, BranchStatus
 from app.models.inventory import InventoryAdjustment
 from app.models.product import ItemType, Product, ProductStatus, ProductVariant
@@ -48,7 +48,8 @@ async def list_branches(
 
 
 @router.post("", response_model=BranchRead, status_code=201, summary="拠点を作成")
-async def create_branch(body: BranchCreate, db: DB, store_id: StoreId):
+async def create_branch(body: BranchCreate, db: DB, store_id: StoreId, user: CurrentUser = None):
+    ensure_admin(user)
     branch = Branch(store_id=store_id, **body.model_dump())
     db.add(branch)
     await db.commit()
@@ -67,7 +68,8 @@ async def get_branch(branch_id: int, db: DB, store_id: StoreId):
 
 
 @router.patch("/{branch_id}", response_model=BranchRead, summary="拠点を更新")
-async def update_branch(branch_id: int, body: BranchUpdate, db: DB, store_id: StoreId):
+async def update_branch(branch_id: int, body: BranchUpdate, db: DB, store_id: StoreId, user: CurrentUser = None):
+    ensure_admin(user)
     branch = (await db.execute(
         select(Branch).where(Branch.id == branch_id, Branch.store_id == store_id)
     )).scalar_one_or_none()
@@ -81,7 +83,8 @@ async def update_branch(branch_id: int, body: BranchUpdate, db: DB, store_id: St
 
 
 @router.delete("/{branch_id}", status_code=204, summary="拠点を削除（在庫履歴があれば inactive 化）")
-async def delete_branch(branch_id: int, db: DB, store_id: StoreId):
+async def delete_branch(branch_id: int, db: DB, store_id: StoreId, user: CurrentUser = None):
+    ensure_admin(user)
     branch = (await db.execute(
         select(Branch).where(Branch.id == branch_id, Branch.store_id == store_id)
     )).scalar_one_or_none()

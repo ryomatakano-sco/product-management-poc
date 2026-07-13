@@ -60,6 +60,35 @@ async def get_current_user_name(
     )).scalar_one_or_none()
 
 
+async def get_current_user(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Full User row for the session cookie, or None on the X-Store-Id dev
+    path. The dev path is treated as admin by role checks (curl testing)."""
+    from sqlalchemy import select
+
+    from app.models.user import User
+    from app.services.auth import COOKIE_NAME, parse_session_token
+
+    tok = parse_session_token(request.cookies.get(COOKIE_NAME))
+    if tok is None:
+        return None
+    return (await db.execute(
+        select(User).where(User.id == tok["user_id"])
+    )).scalar_one_or_none()
+
+
 DB = Annotated[AsyncSession, Depends(get_db)]
 StoreId = Annotated[int, Depends(get_store_id)]
 CurrentUserName = Annotated[str | None, Depends(get_current_user_name)]
+CurrentUser = Annotated[object | None, Depends(get_current_user)]
+
+
+def ensure_admin(user) -> None:
+    """403 when a logged-in non-admin hits an admin-only write.
+    None (X-Store-Id dev path) passes — it has no user to check."""
+    from app.models.user import UserRole
+
+    if user is not None and user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="この操作には管理者権限が必要です")

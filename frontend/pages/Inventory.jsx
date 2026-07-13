@@ -276,6 +276,7 @@ function Inventory({ query }) {
       </div>
 
       {/* 最近の調整履歴 — cross-variant audit trail (mockup bottom section) */}
+      <ApprovalQueue refreshKey={histKey} onDecided={() => { inventoryQ.refetch(); setHistKey((k) => k + 1); }} />
       <RecentAdjustments refreshKey={histKey} />
 
       {adjustFlow?.stage === "pick" && (
@@ -300,9 +301,13 @@ function Inventory({ query }) {
         <PlxInventoryAdjustModal
           variant={adjustFlow.variant}
           onClose={() => setAdjustFlow(null)}
-          onApplied={() => {
+          onApplied={(res) => {
             setAdjustFlow(null);
-            window.PLX_TOAST.success("在庫を調整しました");
+            if (res?.pending_approval) {
+              window.PLX_TOAST.warn("管理者の承認待ちになりました（在庫はまだ変更されていません）");
+            } else {
+              window.PLX_TOAST.success("在庫を調整しました");
+            }
             inventoryQ.refetch();
             setHistKey((k) => k + 1);
           }}
@@ -632,3 +637,67 @@ window.Inventory = Inventory;
 window.PlxKpiTile = KpiTile;
 window.PlxChip = Chip;
 window.formatJpDateTime = formatJpDateTime;
+
+// 承認待ちキュー (mig 018) — スタッフ発の在庫調整。管理者には 承認/却下
+// ボタン、スタッフには自分のリクエストの状態が見える。
+function ApprovalQueue({ refreshKey, onDecided }) {
+  const q = useFetch(() => api.listApprovals({ limit: 10 }), [refreshKey]);
+  const isAdmin = window.PLX_ME?.role === "admin";
+  const [busyId, setBusyId] = React.useState(null);
+  const items = (q.data?.items || []).filter((r) => r.status === "pending");
+  if (q.error || items.length === 0) return null;
+  const decide = async (r, ok) => {
+    if (busyId) return;
+    setBusyId(r.id);
+    try {
+      if (ok) await api.approveRequest(r.id);
+      else await api.rejectRequest(r.id);
+      window.PLX_TOAST.success(ok ? "承認して適用しました" : "却下しました");
+      q.refetch();
+      onDecided?.();
+    } catch (e) {
+      window.PLX_TOAST.error(e?.body?.detail || "処理に失敗しました");
+    } finally { setBusyId(null); }
+  };
+  return (
+    <div style={{
+      background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG,
+      border: `1px solid ${T.PLX_AMBER_300 || "#fcd34d"}`,
+      boxShadow: T.SHADOW_SM, overflow: "hidden", marginTop: 18,
+    }}>
+      <div style={{ padding: "10px 16px", fontSize: 13, fontWeight: 700, borderBottom: `1px solid ${T.PLX_LINE_200}`, color: T.PLX_AMBER_700 || "#b45309" }}>
+        {`⏳ 承認待ちの在庫調整 (${items.length})`}
+      </div>
+      {items.map((r) => (
+        <div key={r.id} style={{
+          display: "grid", gridTemplateColumns: "130px 1fr 140px auto",
+          gap: 12, padding: "9px 16px", alignItems: "center",
+          borderBottom: `1px solid ${T.PLX_LINE_100}`, fontSize: 12,
+        }}>
+          <span style={{ color: T.PLX_INK_500, fontFamily: T.FONT_MONO, fontSize: 11 }}>
+            {r.created_at ? new Date(r.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}
+          </span>
+          <span style={{ color: T.PLX_INK_900, fontWeight: 600 }}>{r.summary || r.kind}</span>
+          <span style={{ color: T.PLX_INK_500 }}>{`申請: ${r.requested_by || "—"}`}</span>
+          {isAdmin ? (
+            <span style={{ display: "flex", gap: 8 }}>
+              <button disabled={busyId === r.id} onClick={() => decide(r, true)} style={{
+                padding: "5px 12px", borderRadius: T.RADIUS_MD, border: "none",
+                background: T.PLX_GREEN_600, color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer",
+                opacity: busyId === r.id ? 0.6 : 1,
+              }}>✓ 承認</button>
+              <button disabled={busyId === r.id} onClick={() => decide(r, false)} style={{
+                padding: "5px 12px", borderRadius: T.RADIUS_MD, border: `1px solid ${T.PLX_RED_300 || "#fca5a5"}`,
+                background: "transparent", color: T.PLX_RED_600, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                opacity: busyId === r.id ? 0.6 : 1,
+              }}>✕ 却下</button>
+            </span>
+          ) : (
+            <span style={{ color: T.PLX_AMBER_600, fontWeight: 700, fontSize: 11 }}>承認待ち</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+

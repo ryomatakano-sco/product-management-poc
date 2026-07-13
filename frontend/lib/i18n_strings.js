@@ -817,4 +817,17 @@ window._PLX_DICT_EN = {
   "要対応の商品": "Action needed",
   "今月の入荷点数": "Units received this month",
   "今月の販売点数": "Units sold this month",
+
+  // ---- Feedback heavy: roles/permissions + approval workflow ----
+  "管理者の承認待ちになりました（在庫はまだ変更されていません）": "Waiting for admin approval (stock has not changed yet)",
+  "この操作には管理者権限が必要です": "This action requires admin permissions",
+  "⏳ 承認待ちの在庫調整 (${n})": "⏳ Adjustments awaiting approval (${n})",
+  "申請: ${name}": "Requested by: ${name}",
+  "✓ 承認": "✓ Approve",
+  "✕ 却下": "✕ Reject",
+  "承認待ち": "Pending approval",
+  "承認して適用しました": "Approved and applied",
+  "却下しました": "Rejected",
+  "処理に失敗しました": "Operation failed",
+  "在庫調整の承認リクエスト": "Stock adjustment approval request",
 };

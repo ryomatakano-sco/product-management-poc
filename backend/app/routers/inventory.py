@@ -9,7 +9,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from app.deps import DB, StoreId, CurrentUserName
+from app.deps import DB, StoreId, CurrentUser, CurrentUserName
 from app.models.inventory import AdjustmentReason, InventoryAdjustment, InventoryField, VariantBranchStock
 from app.models.product import ItemType, Product, ProductStatus, ProductVariant
 from app.schemas.base import PaginatedResponse
@@ -398,9 +398,17 @@ async def export_inventory_csv(
     )
 
 
-@router.post("/variants/{variant_id}/inventory-adjust", response_model=InventoryAdjustmentRead, status_code=201)
-async def adjust_inventory(variant_id: int, body: InventoryAdjustRequest, db: DB, store_id: StoreId, user_name: CurrentUserName = None):
-    """Atomically adjust a variant's inventory counter (per-branch) and log it."""
+@router.post("/variants/{variant_id}/inventory-adjust", status_code=201)
+async def adjust_inventory(variant_id: int, body: InventoryAdjustRequest, db: DB, store_id: StoreId, user: CurrentUser = None):
+    """Atomically adjust a variant's inventory counter (per-branch) and log it.
+
+    Approval workflow (mig 018): a STAFF-initiated manual adjustment does NOT
+    touch stock — it becomes a pending approval_request an admin must approve
+    (the payload is then replayed through this same service path).
+    """
+    from app.models.user import UserRole
+
+    user_name = user.display_name if user is not None else None
     variant = (
         await db.execute(
             select(ProductVariant)
@@ -413,6 +421,39 @@ async def adjust_inventory(variant_id: int, body: InventoryAdjustRequest, db: DB
     # Archived products are out of catalog — no further stock movements (audit M8).
     if variant.product is not None and variant.product.status == ProductStatus.archived:
         raise HTTPException(400, detail="アーカイブ済み商品の在庫は調整できません")
+
+    if user is not None and user.role == UserRole.staff:
+        from app.models.approval import ApprovalRequest
+        from app.services.notifier import notify
+
+        req = ApprovalRequest(
+            store_id=store_id,
+            kind="inventory_adjust",
+            payload_json={
+                "variant_id": variant_id,
+                "branch_id": body.branch_id,
+                "field": body.field.value,
+                "delta": body.delta,
+                "reason": body.reason.value,
+                "note": body.note,
+            },
+            summary=(
+                f"{variant.product.name if variant.product else f'variant {variant_id}'}"
+                f" {body.field.value} {'+' if body.delta >= 0 else ''}{body.delta}"
+            ),
+            requested_by=user_name,
+        )
+        db.add(req)
+        await notify(
+            db, store_id=store_id, kind="approval_request",
+            title="在庫調整の承認リクエスト",
+            body=f"{user_name} さんが在庫調整の承認を求めています: {req.summary}",
+            link_path="/inventory",
+        )
+        await db.commit()
+        await db.refresh(req)
+        return {"pending_approval": True, "request_id": req.id,
+                "detail": "管理者の承認待ちになりました（在庫はまだ変更されていません）"}
 
     # Atomic per-branch delta + denormalized total (services/stock.py;
     # branch_id=None targets the store's main branch).
