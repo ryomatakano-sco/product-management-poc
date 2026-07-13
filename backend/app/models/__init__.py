@@ -14,3 +14,4 @@ from app.models.ai_session import AiSuggestionSession, AiSuggestionFieldOption  
 from app.models.support import SupportTicket  # noqa: F401
 from app.models.settings_kv import SettingsKV  # noqa: F401
 from app.models.user import User  # noqa: F401
+from app.models.notification import Notification  # noqa: F401

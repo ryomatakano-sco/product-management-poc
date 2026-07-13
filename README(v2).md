@@ -405,3 +405,33 @@ real edits from the product edit screen.
 
 **Unlocked next (cheap now):** branch-to-branch transfer = one endpoint creating a paired
 ±delta via `apply_stock_delta` with a new `transfer` reason.
+
+---
+
+## 通知配信 (Notification delivery) — heavy tier 3
+
+Branch: `feature/sales-records` · Migration **013**
+
+The 設定 › 通知 toggles finally DO something. Notifications are real: an in-app feed behind
+the topbar bell, plus optional email when SMTP is configured.
+
+| Piece | Where |
+|---|---|
+| `notifications` table | Migration `013_notifications.py` — kind / title / body / link_path / read_at, per-store |
+| Dispatch service | `backend/app/services/notifier.py` — `notify()` writes the row and (when `email_enabled` + SMTP configured) fires a plain-text email in a background thread. **Never raises** — a notification failure can't break a sale. Unread duplicates (same kind + link) are suppressed, so a product below threshold doesn't spam a row per sale |
+| Emitters | Sales create + downward inventory adjust → `check_low_stock` (re-reads counters post-atomic-update; fires when available ≤ per-variant threshold). PO submit / receive / cancel → `po_status`. Daily loop in `main.py` fires a 日次サマリー (low-stock + expiring counts) at each store's `daily_summary_time` (JST, deduped per day) |
+| Endpoints | `GET /notifications` (items + unread_count), `POST /notifications/{id}/read`, `POST /notifications/read-all` |
+| Bell UI | `AdminShell.jsx` `NotificationBell` — 30s poll, unread count badge, dropdown with kind icons + relative time, click = mark read + navigate, すべて既読 |
+| SMTP settings | New fields in the notifications namespace (`notify_email`, `smtp_host/port/user/password/from`) + inputs in 設定 › 通知. Empty = in-app only |
+
+**Honored toggles:** `low_stock`, `expiring_soon`, `po_status_change` gate their kinds;
+`email_enabled` gates email. PoC notes: read state is per-store (not per-user); SMTP
+password sits in the settings blob like other PoC secrets.
+
+**Verified:** low-stock fires on a threshold-crossing sale (「在庫低下: test 6 — 利用可能在庫が
+4 個…」) with dedupe (second sale → still one unread row); PO cancel/submit/receive rows with
+correct titles + links; read / read-all → unread_count 0; stock-affecting test sales refunded.
+
+**How to test:** sell a low-stock product → bell shows a badge within 30s → click the row →
+lands on the product page, row marked read. Configure SMTP + 宛先 in 設定 › 通知 to also
+receive emails.

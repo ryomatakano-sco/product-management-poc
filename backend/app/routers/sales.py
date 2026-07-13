@@ -15,6 +15,7 @@ from app.models.inventory import AdjustmentReason, InventoryAdjustment, Inventor
 from app.models.product import Product, ProductStatus, ProductVariant, TaxRate
 from app.models.sale import PaymentMethod, SalesRecord
 from app.models.settings_kv import SettingsKV
+from app.services.notifier import check_low_stock
 from app.services.stock import StockError, apply_stock_delta
 from app.schemas.sale import (
     ReceiptData, ReceiptLine, ReceiptStore,
@@ -518,6 +519,11 @@ async def create_sale(body: SaleCreate, db: DB, store_id: StoreId):
         reference_id=sale.id,
     )
     db.add(adj)
+
+    # Low-stock notification when the sale drops available below the threshold
+    # (rides in the same transaction; never raises).
+    await check_low_stock(db, store_id, body.variant_id, variant.product)
+
     await db.commit()
     await db.refresh(sale)
     return sale

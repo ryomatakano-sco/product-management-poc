@@ -14,6 +14,7 @@ from app.models.inventory import InventoryAdjustment, VariantBranchStock
 from app.models.product import ItemType, Product, ProductStatus, ProductVariant
 from app.schemas.base import PaginatedResponse
 from app.schemas.inventory import InventoryAdjustmentRead, InventoryAdjustRequest
+from app.services.notifier import check_low_stock
 from app.services.stock import StockError, apply_stock_delta
 
 router = APIRouter(tags=["inventory"])
@@ -283,6 +284,11 @@ async def adjust_inventory(variant_id: int, body: InventoryAdjustRequest, db: DB
         note=body.note,
     )
     db.add(adj)
+
+    # Downward on_hand moves can cross the low-stock threshold.
+    if body.field == InventoryField.on_hand and body.delta < 0:
+        await check_low_stock(db, store_id, variant_id, variant.product)
+
     await db.commit()
     await db.refresh(adj)
     return adj

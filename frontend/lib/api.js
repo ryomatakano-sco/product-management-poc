@@ -103,6 +103,11 @@ const api = {
       method: "POST", body: JSON.stringify({ code }),
     }),
 
+  // --- notifications (heavy-tier item 3: real bell) ---
+  listNotifications: (params) => request(`/notifications${qs(params)}`),
+  markNotificationRead: (id) => request(`/notifications/${id}/read`, { method: "POST" }),
+  markAllNotificationsRead: () => request(`/notifications/read-all`, { method: "POST" }),
+
   // --- dashboard (Yoshioka 2026-05-11) ---
   getDashboardSummary:        () => request(`/dashboard/summary`),
   regenerateDashboardSummary: () => request(`/dashboard/summary/regenerate`, { method: "POST" }),

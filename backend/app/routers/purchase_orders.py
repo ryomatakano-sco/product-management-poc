@@ -18,6 +18,7 @@ from app.models.product import Product, ProductVariant
 from app.models.purchase_order import POStatus, PurchaseOrder, PurchaseOrderItem, PurchaseOrderTag
 from app.models.tag import Tag
 from sqlalchemy import insert as sa_insert
+from app.services.notifier import notify
 from app.services.stock import StockError, apply_stock_delta
 from app.schemas.base import PaginatedResponse
 from app.schemas.purchase_order import (
@@ -434,6 +435,12 @@ async def submit_purchase_order(po_id: int, db: DB, store_id: StoreId):
         raise HTTPException(400, detail=f"Can only submit draft orders, current status: {po.status.value}")
     po.status = POStatus.ordered
     po.ordered_at = datetime.now(timezone.utc)
+    await notify(
+        db, store_id, "po_status",
+        f"発注書 PO-{po.id:06d} を送信しました",
+        f"仕入先: {po.supplier.company_name if po.supplier else '—'}　合計 ¥{po.total}",
+        link_path=f"/purchase-orders/{po.id}",
+    )
     await db.commit()
     return _po_to_read(await _get_po(po.id, store_id, db))
 
@@ -514,6 +521,12 @@ async def receive_purchase_order(po_id: int, body: PurchaseOrderReceive, db: DB,
     else:
         po.status = POStatus.partially_received
 
+    await notify(
+        db, store_id, "po_status",
+        f"発注書 PO-{po.id:06d} が{'入荷済み' if all_received else '一部入荷'}になりました",
+        f"納品先: {po.destination_branch.name if po.destination_branch else '—'}",
+        link_path=f"/purchase-orders/{po.id}",
+    )
     await db.commit()
     return _po_to_read(await _get_po(po.id, store_id, db))
 
@@ -526,5 +539,11 @@ async def cancel_purchase_order(po_id: int, db: DB, store_id: StoreId):
     if po.status == POStatus.cancelled:
         raise HTTPException(400, detail="Purchase order is already cancelled")
     po.status = POStatus.cancelled
+    await notify(
+        db, store_id, "po_status",
+        f"発注書 PO-{po.id:06d} をキャンセルしました",
+        None,
+        link_path=f"/purchase-orders/{po.id}",
+    )
     await db.commit()
     return _po_to_read(await _get_po(po.id, store_id, db))

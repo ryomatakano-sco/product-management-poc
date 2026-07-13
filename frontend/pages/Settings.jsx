@@ -235,6 +235,42 @@ function NotificationsSettings() {
         <input value={f.form.daily_summary_time || "08:00"} onChange={(e) => f.update("daily_summary_time", e.target.value)}
           placeholder="HH:MM" style={{ ...formInput, maxWidth: 120, fontFamily: T.FONT_MONO }} />
       </FormRow>
+
+      {/* Email delivery (heavy-tier item 3). In-app notifications always work;
+          email additionally fires when SMTP + 宛先 are configured. */}
+      <div style={{
+        marginTop: 18, paddingTop: 14, borderTop: `1px solid ${T.PLX_LINE_200}`,
+      }}>
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>メール配信 (SMTP)</div>
+        <div style={{ fontSize: 11, color: T.PLX_INK_500, marginBottom: 12 }}>
+          未設定の場合はアプリ内通知（ベル）のみ動作します。設定するとベルと同じ内容がメールでも届きます。
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <FormRow label="通知の宛先メール">
+            <input value={f.form.notify_email || ""} onChange={(e) => f.update("notify_email", e.target.value)}
+              placeholder="alerts@example.co.jp" style={formInput} />
+          </FormRow>
+          <FormRow label="SMTPホスト">
+            <input value={f.form.smtp_host || ""} onChange={(e) => f.update("smtp_host", e.target.value)}
+              placeholder="smtp.example.com" style={formInput} />
+          </FormRow>
+          <FormRow label="SMTPポート">
+            <input type="number" value={f.form.smtp_port ?? 587} onChange={(e) => f.update("smtp_port", Number(e.target.value) || 587)}
+              style={{ ...formInput, maxWidth: 120 }} />
+          </FormRow>
+          <FormRow label="送信元 (From)">
+            <input value={f.form.smtp_from || ""} onChange={(e) => f.update("smtp_from", e.target.value)}
+              placeholder="noreply@example.co.jp" style={formInput} />
+          </FormRow>
+          <FormRow label="SMTPユーザー">
+            <input value={f.form.smtp_user || ""} onChange={(e) => f.update("smtp_user", e.target.value)} style={formInput} />
+          </FormRow>
+          <FormRow label="SMTPパスワード">
+            <input type="password" value={f.form.smtp_password || ""} onChange={(e) => f.update("smtp_password", e.target.value)}
+              placeholder="••••••" style={formInput} />
+          </FormRow>
+        </div>
+      </div>
     </SettingsCard>
   );
 }
