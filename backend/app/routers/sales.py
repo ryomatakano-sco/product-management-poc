@@ -15,6 +15,7 @@ from app.models.inventory import AdjustmentReason, InventoryAdjustment, Inventor
 from app.models.product import Product, ProductStatus, ProductVariant, TaxRate
 from app.models.sale import PaymentMethod, SalesRecord
 from app.models.settings_kv import SettingsKV
+from app.services.lots import consume_fefo, restock_newest
 from app.services.notifier import check_low_stock
 from app.services.stock import StockError, apply_stock_delta
 from app.schemas.sale import (
@@ -415,6 +416,12 @@ async def refund_sale(sale_id: int, db: DB, store_id: StoreId):
         await db.rollback()
         raise HTTPException(400, detail=e.message)
 
+    # Return the stock to the newest known lot at that branch (tracking layer).
+    await restock_newest(
+        db, store_id=store_id, variant_id=original.variant_id,
+        branch_id=refund_branch, qty=original.quantity,
+    )
+
     refund = SalesRecord(
         store_id=store_id,
         branch_id=refund_branch,
@@ -490,6 +497,12 @@ async def create_sale(body: SaleCreate, db: DB, store_id: StoreId):
     except StockError as e:
         await db.rollback()
         raise HTTPException(400, detail=e.message)
+
+    # FEFO lot consumption (tracking layer; never raises).
+    await consume_fefo(
+        db, store_id=store_id, variant_id=body.variant_id,
+        branch_id=branch_id, qty=body.quantity,
+    )
 
     sale = SalesRecord(
         store_id=store_id,

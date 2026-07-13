@@ -435,3 +435,48 @@ correct titles + links; read / read-all → unread_count 0; stock-affecting test
 **How to test:** sell a low-stock product → bell shows a badge within 30s → click the row →
 lands on the product page, row marked read. Configure SMTP + 宛先 in 設定 › 通知 to also
 receive emails.
+
+---
+
+## ロット管理 (FEFO lot tracking) — heavy tier 4
+
+Branch: `feature/sales-records` · Migration **014**
+
+The ロット履歴 tab shows **real data** now — the fabricated LOT-2026A-012 sample rows are gone
+(the last "mock data" item from the gap analysis).
+
+- `product_lots`: one row per received lot of a variant at a branch. Lots are a **tracking
+  layer** — `variant_branch_stock` remains the stock source of truth, and all lot movement
+  helpers (`services/lots.py`) are best-effort: a lot hiccup can never break a sale.
+- **Capture:** the PO 入荷を記録 modal gains optional ロット番号 + 使用期限 per line →
+  creates/merges a lot at the PO's 納品先拠点. Existing consumables with lot/expiry data were
+  backfilled (one lot per stocked branch).
+- **FEFO:** sales consume lots earliest-expiry-first (NULL expiry last) at the sale's branch;
+  refunds restock the newest lot. Manual adjustments deliberately don't touch lots
+  (documented PoC gap — the tab footer explains 未追跡分).
+- `GET /products/{id}/lots` → rows with status (使用中/期限切れ/使い切り), branch, received date.
+
+**Verified:** backfill created lots for the 4 seeded consumables (expired one correctly
+flagged); receive with LOT-TEST-A + expiry → appears in the tab; sale dropped it 3→2 (FEFO);
+refund restored 3.
+
+---
+
+## 実AIサマリー (Real AI dashboard summary) — heavy tier 5
+
+Branch: `feature/sales-records`
+
+The dashboard's 再生成 button now calls a **real LLM** (gpt-4.1-nano via the OpenAI API).
+
+- Cost design: **only the 再生成 click spends tokens** (~¥0.1–0.2). The narrative is cached
+  per (store, JST-day); plain GETs serve the cached text — or the free deterministic
+  template when nothing was generated today. No key / `MOCK_AI=1` / API failure → silent
+  template fallback, so the dashboard always renders.
+- The prompt receives **aggregates only** (KPI counts, top-5 attention names, month sales) —
+  no raw rows leave the DB.
+- Response gains `ai_generated: bool`; the card shows a **✨ AI生成** badge when the narrative
+  is live-generated.
+
+**Verified with a real call:** regenerate produced a coherent Japanese morning-brief
+(「…**4 件**が在庫低下のため早急な対応が必要です…」), and the follow-up GET served it from
+cache with `ai_generated: true`.

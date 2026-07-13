@@ -27,6 +27,11 @@ from app.models.sale import SalesRecord
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
+# Real-LLM summary cache: store_id -> (JST date iso, narrative text).
+# Populated ONLY by POST /summary/regenerate (which costs tokens); plain GETs
+# serve today's cached narrative or fall back to the free template.
+_AI_SUMMARY_CACHE: dict[int, tuple[str, str]] = {}
+
 
 @router.get("/summary", summary="ダッシュボードサマリーを取得")
 async def get_dashboard_summary(db: DB, store_id: StoreId) -> dict:
@@ -185,6 +190,14 @@ async def get_dashboard_summary(db: DB, store_id: StoreId) -> dict:
         ai_summary = "\n\n".join(sentences)
         ai_status = "alert"
 
+    # Serve today's REAL LLM narrative when 再生成 produced one (never spend
+    # tokens on a plain GET).
+    ai_generated = False
+    _cached = _AI_SUMMARY_CACHE.get(store_id)
+    if _cached is not None and _cached[0] == datetime.now(timezone(timedelta(hours=9))).date().isoformat():
+        ai_summary = _cached[1]
+        ai_generated = True
+
     # Asia/Tokyo offset for the demo's expected timezone.
     jst = timezone(timedelta(hours=9))
     return {
@@ -193,6 +206,8 @@ async def get_dashboard_summary(db: DB, store_id: StoreId) -> dict:
         # Keep both spellings so old + new frontend code paths work.
         "ai_status": ai_status,
         "ai_summary_status": ai_status,
+        # True when ai_summary is a real LLM narrative (再生成), not the template.
+        "ai_generated": ai_generated,
         "kpis": {
             "total_products": total_products,
             "low_stock": low_stock,
@@ -207,13 +222,63 @@ async def get_dashboard_summary(db: DB, store_id: StoreId) -> dict:
     }
 
 
-@router.post("/summary/regenerate", summary="AIサマリーを再生成する")
+@router.post("/summary/regenerate", summary="AIサマリーを再生成する（実LLM）")
 async def regenerate_summary(db: DB, store_id: StoreId):
-    """Re-runs the deterministic summary right now.
+    """REAL LLM narrative (heavy-tier item 5).
 
-    The GET endpoint already returns a fresh snapshot every call, so this
-    POST is currently a thin alias. It exists so the frontend can express
-    the user's intent ("再生成") with a real action and so a future
-    LLM-driven summary has a place to land without breaking the contract.
+    Gathers today's aggregates, asks gpt-4.1-nano for a 2–3 sentence Japanese
+    clinic-morning-brief, caches it per (store, JST-day), and returns the full
+    summary payload. Cost control: only THIS endpoint spends tokens (≈¥0.1 per
+    click); GETs serve the cached narrative. Falls back to the template when
+    no API key is configured / MOCK_AI=1 / the call fails.
     """
-    return await get_dashboard_summary(db, store_id)
+    from app.config import settings as app_settings
+
+    base = await get_dashboard_summary(db, store_id)
+
+    key = (app_settings.openai_api_key or "").strip()
+    if not key or app_settings.mock_ai == "1":
+        return base  # template fallback — same contract, ai_generated stays False
+
+    # Compact context from the already-computed payload (aggregates only —
+    # no raw rows leave the DB).
+    kpis = base["kpis"]
+    attention = ", ".join(
+        f"{a['name']}(残{a.get('stock_qty', '?')})"
+        for a in base.get("needs_attention", [])[:5]
+    ) or "なし"
+    jst_now = datetime.now(timezone(timedelta(hours=9)))
+    prompt = (
+        f"あなたは歯科クリニックの物品管理アシスタントです。本日 {jst_now.strftime('%m月%d日')} の"
+        f"朝会向けに、以下のデータから日本語で2〜3文の簡潔なサマリーを書いてください。"
+        f"数字は太字(**N 件**のように)で強調し、最後に一言だけ前向きな行動提案を添えてください。"
+        f"箇条書きや見出しは使わないでください。\n\n"
+        f"- 登録商品数: {kpis['total_products']} 件\n"
+        f"- 在庫低下: {kpis['low_stock']} 件（要対応: {attention}）\n"
+        f"- 期限間近(30日以内)の消耗品: {kpis['expiring_soon']} 件\n"
+        f"- 今月の売上: ¥{int(float(kpis['monthly_sales_jpy'])):,}\n"
+    )
+
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=25.0) as client:
+            res = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {key}"},
+                json={
+                    "model": "gpt-4.1-nano",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 220,
+                    "temperature": 0.5,
+                },
+            )
+        if res.status_code == 200:
+            text = (res.json()["choices"][0]["message"]["content"] or "").strip()
+            if text:
+                _AI_SUMMARY_CACHE[store_id] = (jst_now.date().isoformat(), text)
+                base["ai_summary"] = text
+                base["ai_generated"] = True
+    except (httpx.HTTPError, KeyError, ValueError):
+        pass  # keep the template — the dashboard must always render
+
+    return base

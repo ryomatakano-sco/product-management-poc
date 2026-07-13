@@ -317,6 +317,49 @@ async def product_sales_weekly(
     }
 
 
+@router.get("/{product_id}/lots", summary="ロット一覧（実データ・migration 014）")
+async def product_lots(product_id: int, db: DB, store_id: StoreId):
+    """Real per-lot rows for the detail page's ロット履歴 tab, newest first.
+
+    status: current (qty>0, not expired) / expired (qty>0, past expiry) /
+    depleted (qty==0).
+    """
+    from app.models.branch import Branch
+    from app.models.lot import ProductLot
+
+    rows = (await db.execute(
+        select(ProductLot, Branch.name)
+        .join(ProductVariant, ProductVariant.id == ProductLot.variant_id)
+        .join(Branch, Branch.id == ProductLot.branch_id)
+        .where(
+            ProductLot.store_id == store_id,
+            ProductVariant.product_id == product_id,
+        )
+        .order_by(ProductLot.qty_on_hand == 0,  # active lots first
+                  ProductLot.expiry_date.is_(None), ProductLot.expiry_date)
+    )).all()
+
+    today = date.today()
+    items = []
+    for lot, branch_name in rows:
+        if lot.qty_on_hand <= 0:
+            status = "depleted"
+        elif lot.expiry_date is not None and lot.expiry_date < today:
+            status = "expired"
+        else:
+            status = "current"
+        items.append({
+            "id": lot.id,
+            "lot_number": lot.lot_number,
+            "expiry_date": lot.expiry_date.isoformat() if lot.expiry_date else None,
+            "qty_on_hand": lot.qty_on_hand,
+            "status": status,
+            "branch_name": branch_name,
+            "received_at": lot.received_at.isoformat() if lot.received_at else None,
+        })
+    return {"items": items}
+
+
 @router.get("/{product_id}", response_model=ProductDetail)
 async def get_product(product_id: int, db: DB, store_id: StoreId):
     stmt = (

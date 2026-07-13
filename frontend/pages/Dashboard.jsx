@@ -186,6 +186,12 @@ function AiSummaryCard({ summary, onRegenerate }) {
         <span style={{
           fontSize: 12, fontWeight: 600, color: T.PLX_INK_500, letterSpacing: "0.02em",
         }}>AIサマリー — 1日1回 朝6:00 更新</span>
+        {summary.ai_generated && (
+          <span title="OpenAI により生成された本日のサマリーです" style={{
+            fontSize: 10, fontWeight: 800, padding: "2px 9px", borderRadius: 9999,
+            background: T.PLX_GREEN_600, color: "#fff", letterSpacing: "0.04em",
+          }}>✨ AI生成</span>
+        )}
         <div style={{ flex: 1 }} />
         <button
           onClick={regen}

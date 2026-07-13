@@ -15,3 +15,4 @@ from app.models.support import SupportTicket  # noqa: F401
 from app.models.settings_kv import SettingsKV  # noqa: F401
 from app.models.user import User  # noqa: F401
 from app.models.notification import Notification  # noqa: F401
+from app.models.lot import ProductLot  # noqa: F401

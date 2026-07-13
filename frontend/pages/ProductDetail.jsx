@@ -744,25 +744,16 @@ function InventoryAdjustModal({ variant, onClose, onApplied }) {
   );
 }
 
-// Lot history tab (Yoshioka 2026-05-11). The PoC tracks one expiry per product;
-// real per-lot tracking is future scope. We synthesize a current/depleted/expired
-// row set from the product's current expiry + lot number so the tab isn't empty.
+// Lot history tab — REAL per-lot rows since migration 014 (GET /products/:id/lots).
+// Lots are created on PO receive (optional ロット番号/使用期限 per line) and
+// consumed FEFO by sales. Unlotted stock is possible — noted in the footer.
 function LotHistory({ product }) {
-  const rows = [
-    {
-      lot: product.lot_number || "—",
-      date: product.expiry_date,
-      qty: product.variants.reduce((s, v) => s + v.on_hand, 0),
-      status: "current",
-      arrived: null,
-    },
-    { lot: "LOT-2026A-012", date: "2026-04-02", qty: 0, status: "depleted", arrived: "2025-12-08" },
-    { lot: "LOT-2025D-091", date: "2025-12-20", qty: 0, status: "expired",  arrived: "2025-08-15" },
-  ];
+  const lotsQ = useFetch(() => api.getProductLots(product.id), [product.id]);
+  const rows = lotsQ.data?.items ?? [];
   return (
     <div>
       <div style={{
-        display: "grid", gridTemplateColumns: "160px 140px 100px 1fr 140px",
+        display: "grid", gridTemplateColumns: "160px 130px 90px 1fr 120px 130px",
         padding: "12px 22px", fontSize: 11, fontWeight: 700, color: PLX_MUTED,
         background: PLX_GREEN_50, letterSpacing: ".03em",
         borderBottom: `1px solid ${PLX_BORDER}`, gap: 10,
@@ -771,29 +762,41 @@ function LotHistory({ product }) {
         <span>使用期限</span>
         <span style={{ textAlign: "right" }}>残数</span>
         <span>ステータス</span>
+        <span>拠点</span>
         <span>入荷日</span>
       </div>
+      {lotsQ.loading && (
+        <div style={{ padding: 30, textAlign: "center", color: PLX_MUTED, fontSize: 12 }}>読み込み中…</div>
+      )}
+      {!lotsQ.loading && rows.length === 0 && (
+        <div style={{ padding: "30px 22px", textAlign: "center", color: PLX_MUTED, fontSize: 12 }}>
+          この商品のロットはまだ登録されていません。<br/>
+          発注書の「入荷を記録」でロット番号・使用期限を入力すると、ここに実データが表示されます。
+        </div>
+      )}
       {rows.map((r, i) => (
-        <div key={i} style={{
-          display: "grid", gridTemplateColumns: "160px 140px 100px 1fr 140px",
+        <div key={r.id} style={{
+          display: "grid", gridTemplateColumns: "160px 130px 90px 1fr 120px 130px",
           padding: "12px 22px", alignItems: "center", fontSize: 12, gap: 10,
           borderBottom: i < rows.length - 1 ? `1px solid ${PLX_BORDER}` : "none",
         }}>
-          <span style={{ fontFamily: "ui-monospace,SFMono-Regular,monospace", fontSize: 11, fontWeight: 700 }}>{r.lot}</span>
-          <span style={{ fontFamily: "ui-monospace,SFMono-Regular,monospace" }}>{formatJpDate(r.date)}</span>
-          <span style={{ textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums", color: r.qty === 0 ? PLX_MUTED : PLX_TEXT }}>{r.qty}</span>
+          <span style={{ fontFamily: "ui-monospace,SFMono-Regular,monospace", fontSize: 11, fontWeight: 700 }}>{r.lot_number}</span>
+          <span style={{ fontFamily: "ui-monospace,SFMono-Regular,monospace" }}>{r.expiry_date ? formatJpDate(r.expiry_date) : "—"}</span>
+          <span style={{ textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums", color: r.qty_on_hand === 0 ? PLX_MUTED : PLX_TEXT }}>{r.qty_on_hand}</span>
           <span>
             {r.status === "current"  && <Pill color={PLX_GREEN} bg={PLX_GREEN_LIGHT}>● 使用中</Pill>}
             {r.status === "depleted" && <Pill color={PLX_MUTED} bg="#F3F4F6">使い切り</Pill>}
             {r.status === "expired"  && <Pill color={PLX_RED} bg={PLX_RED_LIGHT}>期限切れ</Pill>}
           </span>
+          <span style={{ fontSize: 11, color: PLX_MUTED }}>{r.branch_name}</span>
           <span style={{ fontSize: 11, color: PLX_MUTED, fontFamily: "ui-monospace,SFMono-Regular,monospace" }}>
-            {r.arrived ? formatJpDate(r.arrived) : "—"}
+            {r.received_at ? formatJpDate(r.received_at) : "—"}
           </span>
         </div>
       ))}
       <div style={{ padding: "14px 22px", fontSize: 11, color: PLX_MUTED, lineHeight: 1.6 }}>
-        ※ ロット単位の在庫追跡は今後対応予定です（FUTURE SCOPE — see CHANGES.md）。現状は商品単位の使用期限のみ管理しています。
+        ※ 販売は使用期限の近いロットから消費されます（FEFO）。手動在庫調整はロットに反映されないため、
+        ロット合計が拠点在庫より少ないことがあります（未追跡分）。
       </div>
     </div>
   );

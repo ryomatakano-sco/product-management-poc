@@ -18,6 +18,7 @@ from app.models.product import Product, ProductVariant
 from app.models.purchase_order import POStatus, PurchaseOrder, PurchaseOrderItem, PurchaseOrderTag
 from app.models.tag import Tag
 from sqlalchemy import insert as sa_insert
+from app.services.lots import receive_into_lot
 from app.services.notifier import notify
 from app.services.stock import StockError, apply_stock_delta
 from app.schemas.base import PaginatedResponse
@@ -486,6 +487,14 @@ async def receive_purchase_order(po_id: int, body: PurchaseOrderReceive, db: DB,
         except StockError as e:
             await db.rollback()
             raise HTTPException(400, detail=e.message)
+
+        # Per-lot capture (migration 014) — only when the receiver typed a
+        # lot number or expiry for this line.
+        await receive_into_lot(
+            db, store_id=store_id, variant_id=item.variant_id, branch_id=recv_branch,
+            qty=recv.quantity_received, lot_number=recv.lot_number,
+            expiry_date=recv.expiry_date, po_id=po.id,
+        )
 
         # The reorder is fulfilled — clear the product's 再発注済 flag so the
         # 商品一覧 chip stops surfacing it.

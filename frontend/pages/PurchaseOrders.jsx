@@ -1299,20 +1299,28 @@ function POReceiveModal({ po, onClose, onDone }) {
   const [qtys, setQtys] = React.useState(() =>
     Object.fromEntries(items.map((it) => [it.id, it.quantity_ordered - it.quantity_received]))
   );
+  // Optional per-line lot capture (migration 014) — creates a real lot row.
+  const [lots, setLots] = React.useState({});     // item_id -> lot number string
+  const [expiries, setExpiries] = React.useState({}); // item_id -> YYYY-MM-DD
   const [busy, setBusy] = React.useState(false);
 
   async function handleReceive() {
     setBusy(true);
     try {
       const payload = items
-        .map((it) => ({ item_id: it.id, quantity_received: Number(qtys[it.id] ?? 0) }))
+        .map((it) => ({
+          item_id: it.id,
+          quantity_received: Number(qtys[it.id] ?? 0),
+          lot_number: (lots[it.id] || "").trim() || null,
+          expiry_date: expiries[it.id] || null,
+        }))
         .filter((x) => x.quantity_received > 0);
       if (payload.length === 0) { window.PLX_TOAST.warn("入荷数を1以上入力してください"); setBusy(false); return; }
       await api.receivePurchaseOrder(po.id, payload);
       window.PLX_TOAST.success("入荷を記録しました");
       onDone();
     } catch (e) {
-      window.PLX_TOAST.error(e?.detail ?? "入荷記録に失敗しました");
+      window.PLX_TOAST.error(e?.body?.detail ?? "入荷記録に失敗しました");
     } finally { setBusy(false); }
   }
 
@@ -1333,28 +1341,55 @@ function POReceiveModal({ po, onClose, onDone }) {
         {items.map((it) => {
           const remaining = it.quantity_ordered - it.quantity_received;
           return (
-            <div key={it.id} style={{
-              display: "grid", gridTemplateColumns: "1fr 100px 100px", gap: 12, alignItems: "center",
-              padding: "10px 0", borderBottom: `1px solid ${T.PLX_LINE_100}`,
-            }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{it.product_name || `商品 ID: ${it.variant_id}`}</div>
-                <div style={{ fontSize: 11, color: T.PLX_INK_400 }}>
-                  {it.sku && <span style={{ fontFamily: T.FONT_MONO, marginRight: 8 }}>{it.sku}</span>}
-                  発注数: {it.quantity_ordered}　入荷済: {it.quantity_received}　残: {remaining}
+            <div key={it.id} style={{ padding: "10px 0", borderBottom: `1px solid ${T.PLX_LINE_100}` }}>
+              <div style={{
+                display: "grid", gridTemplateColumns: "1fr 100px 100px", gap: 12, alignItems: "center",
+              }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{it.product_name || `商品 ID: ${it.variant_id}`}</div>
+                  <div style={{ fontSize: 11, color: T.PLX_INK_400 }}>
+                    {it.sku && <span style={{ fontFamily: T.FONT_MONO, marginRight: 8 }}>{it.sku}</span>}
+                    発注数: {it.quantity_ordered}　入荷済: {it.quantity_received}　残: {remaining}
+                  </div>
                 </div>
+                <div style={{ fontSize: 11, color: T.PLX_INK_500, textAlign: "center" }}>今回の入荷数</div>
+                <input
+                  type="number" min={0} max={remaining}
+                  value={qtys[it.id] ?? 0}
+                  onChange={(e) => setQtys((prev) => ({ ...prev, [it.id]: e.target.value }))}
+                  style={{
+                    width: "100%", height: 34, padding: "0 10px", borderRadius: T.RADIUS_MD,
+                    border: `1px solid ${T.PLX_LINE_200}`, fontSize: 13, textAlign: "right",
+                    boxSizing: "border-box",
+                  }}
+                />
               </div>
-              <div style={{ fontSize: 11, color: T.PLX_INK_500, textAlign: "center" }}>今回の入荷数</div>
-              <input
-                type="number" min={0} max={remaining}
-                value={qtys[it.id] ?? 0}
-                onChange={(e) => setQtys((prev) => ({ ...prev, [it.id]: e.target.value }))}
-                style={{
-                  width: "100%", height: 34, padding: "0 10px", borderRadius: T.RADIUS_MD,
-                  border: `1px solid ${T.PLX_LINE_200}`, fontSize: 13, textAlign: "right",
-                  boxSizing: "border-box",
-                }}
-              />
+              {/* Optional lot capture — fills the real ロット履歴 tab (migration 014) */}
+              <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
+                <span style={{ fontSize: 10, color: T.PLX_INK_400, flexShrink: 0 }}>ロット (任意)</span>
+                <input
+                  type="text" placeholder="LOT-2026-001"
+                  value={lots[it.id] || ""}
+                  onChange={(e) => setLots((p) => ({ ...p, [it.id]: e.target.value }))}
+                  style={{
+                    flex: 1, height: 30, padding: "0 10px", borderRadius: T.RADIUS_MD,
+                    border: `1px solid ${T.PLX_LINE_200}`, fontSize: 11,
+                    fontFamily: T.FONT_MONO, boxSizing: "border-box", background: T.PLX_CARD_BG,
+                    color: T.PLX_INK_900,
+                  }}
+                />
+                <input
+                  type="date"
+                  value={expiries[it.id] || ""}
+                  onChange={(e) => setExpiries((p) => ({ ...p, [it.id]: e.target.value }))}
+                  title="使用期限 (任意)"
+                  style={{
+                    height: 30, padding: "0 8px", borderRadius: T.RADIUS_MD,
+                    border: `1px solid ${T.PLX_LINE_200}`, fontSize: 11,
+                    boxSizing: "border-box", background: T.PLX_CARD_BG, color: T.PLX_INK_900,
+                  }}
+                />
+              </div>
             </div>
           );
         })}
