@@ -4,6 +4,8 @@ function ProductDetail({ productId }) {
   const productQ = useFetch(() => api.getProduct(productId), [productId]);
   const [tab, setTab] = React.useState("variants");
   const [adjustVariant, setAdjustVariant] = React.useState(null);
+  // Bumped after each adjustment so the 在庫履歴 tab refetches (audit F5).
+  const [histKey, setHistKey] = React.useState(0);
   const [publishing, setPublishing] = React.useState(false);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
@@ -287,7 +289,12 @@ function ProductDetail({ productId }) {
           <VariantsTable variants={variants} onAdjust={setAdjustVariant}
             onEdit={() => navigate(`/products/${p.id}/edit`)} />
         )}
-        {tab === "history" && variants[0] && <InventoryHistory variantId={variants[0].id} />}
+        {tab === "history" && variants.length > 0 && (
+          <InventoryHistory
+            variantId={(variants.find((v) => v.is_default) || variants[0]).id}
+            refreshKey={histKey}
+          />
+        )}
         {tab === "lots" && p.item_type === "consumable" && <LotHistory product={p} />}
         {tab === "sales" && sales && (
           <SalesChart productId={p.id} quantity={sales.last_90_days_quantity} revenue={sales.last_90_days_revenue} />
@@ -298,7 +305,7 @@ function ProductDetail({ productId }) {
         <InventoryAdjustModal
           variant={adjustVariant}
           onClose={() => setAdjustVariant(null)}
-          onApplied={() => { setAdjustVariant(null); productQ.refetch(); }}
+          onApplied={() => { setAdjustVariant(null); productQ.refetch(); setHistKey((k) => k + 1); }}
         />
       )}
 
@@ -506,8 +513,8 @@ function VariantsTable({ variants, onAdjust, onEdit }) {
   );
 }
 
-function InventoryHistory({ variantId }) {
-  const q = useFetch(() => api.inventoryHistory(variantId, 50, 0), [variantId]);
+function InventoryHistory({ variantId, refreshKey }) {
+  const q = useFetch(() => api.inventoryHistory(variantId, 50, 0), [variantId, refreshKey]);
   const reasonLabels = {
     manual: "手動", sale: "販売", purchase_order_received: "仕入",
     correction: "修正", damage: "破損", other: "その他",

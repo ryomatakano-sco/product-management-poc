@@ -75,11 +75,15 @@ async def get_dashboard_summary(db: DB, store_id: StoreId) -> dict:
     )).scalar_one()
 
     # ── KPI 4: this-month sales total (sum of qty * unit_price for the month) ──
+    # Month boundary = JST calendar month start converted to UTC-naive to
+    # match sold_at storage (audit C2 — was treated as UTC midnight).
+    from app.services.tz import JST as _JST, jst_to_utc_naive as _jst2utc
+    month_start_utc = _jst2utc(datetime.combine(month_start, datetime.min.time(), tzinfo=_JST))
     sales_row = (await db.execute(
         select(func.coalesce(func.sum(SalesRecord.quantity * SalesRecord.unit_price), 0))
         .where(
             SalesRecord.store_id == store_id,
-            SalesRecord.sold_at >= datetime.combine(month_start, datetime.min.time(), tzinfo=timezone.utc),
+            SalesRecord.sold_at >= month_start_utc,
         )
     )).scalar_one()
     monthly_sales = Decimal(str(sales_row))

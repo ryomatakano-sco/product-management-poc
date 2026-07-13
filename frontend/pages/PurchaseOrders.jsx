@@ -462,7 +462,7 @@ function PurchaseOrderDetail({ id }) {
       cancelEdit();
       poQ.refetch();
     } catch (e) {
-      window.PLX_TOAST.error(e?.detail ?? "更新に失敗しました");
+      window.PLX_TOAST.error(e?.body?.detail ?? "更新に失敗しました");
     } finally { setBusy(false); }
   }
 
@@ -474,7 +474,7 @@ function PurchaseOrderDetail({ id }) {
       window.PLX_TOAST.success("発注書を送信しました");
       poQ.refetch();
     } catch (e) {
-      window.PLX_TOAST.error(e?.detail ?? "送信に失敗しました");
+      window.PLX_TOAST.error(e?.body?.detail ?? "送信に失敗しました");
     } finally { setBusy(false); }
   }
 
@@ -487,7 +487,7 @@ function PurchaseOrderDetail({ id }) {
       window.PLX_TOAST.success("発注書をキャンセルしました");
       poQ.refetch();
     } catch (e) {
-      window.PLX_TOAST.error(e?.detail ?? "キャンセルに失敗しました");
+      window.PLX_TOAST.error(e?.body?.detail ?? "キャンセルに失敗しました");
     } finally { setBusy(false); }
   }
 

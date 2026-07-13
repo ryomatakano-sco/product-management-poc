@@ -498,12 +498,15 @@ async def create_product(body: ProductCreate, db: DB, store_id: StoreId):
 
     # Variants — ensure at least one default
     has_default = False
+    first_variant: ProductVariant | None = None
     for vdata in body.variants:
         v = ProductVariant(
             product_id=product.id,
             store_id=store_id,
             **vdata.model_dump(),
         )
+        if first_variant is None:
+            first_variant = v
         if v.is_default:
             has_default = True
         db.add(v)
@@ -516,9 +519,11 @@ async def create_product(body: ProductCreate, db: DB, store_id: StoreId):
             is_default=True,
             price=body.default_amount_at_payment,
         ))
-    elif not has_default:
-        # Mark first variant as default
-        pass  # already added, first one will be default in practice
+    elif not has_default and first_variant is not None:
+        # Mark the first variant as default for real (audit m1 — the old
+        # `pass` left multi-variant API creates with NO default variant,
+        # blanking SKU/price in every list view).
+        first_variant.is_default = True
 
     # Images
     for idata in body.images:

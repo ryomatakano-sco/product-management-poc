@@ -18,6 +18,7 @@ from app.models.settings_kv import SettingsKV
 from app.services.lots import consume_fefo, restock_newest
 from app.services.notifier import check_low_stock
 from app.services.stock import StockError, apply_stock_delta
+from app.services.tz import any_to_utc_naive, jst_to_utc_naive
 from app.schemas.sale import (
     ReceiptData, ReceiptLine, ReceiptStore,
     SaleCreate, SaleListResponse, SaleRead, SalesSummary,
@@ -46,10 +47,11 @@ def _apply_sale_filters(
         stmt = stmt.where(SalesRecord.payment_method == payment_method)
     if sold_by:
         stmt = stmt.where(SalesRecord.sold_by == sold_by)
+    # sold_at is stored UTC-naive — normalize aware inputs (audit M9).
     if date_from is not None:
-        stmt = stmt.where(SalesRecord.sold_at >= date_from)
+        stmt = stmt.where(SalesRecord.sold_at >= any_to_utc_naive(date_from))
     if date_to is not None:
-        stmt = stmt.where(SalesRecord.sold_at <= date_to)
+        stmt = stmt.where(SalesRecord.sold_at <= any_to_utc_naive(date_to))
     if has_patient is True:
         stmt = stmt.where(SalesRecord.patient_ref.is_not(None))
     elif has_patient is False:
@@ -71,9 +73,11 @@ def _apply_sale_filters(
 async def _next_transaction_id(db, store_id: int, sold_at_utc: datetime) -> str:
     """Generate SL-YYYYMMDD-#### for the given sale.
 
-    Counter is per (store_id, JST-date). Race under high concurrency is
-    theoretically possible; the unique index will surface a duplicate as an
-    IntegrityError which the caller could retry (not implemented — PoC).
+    Counter starts at (day's row count + 1) but then PROBES for a free id
+    (audit C4): counts drift from the real max whenever rows are deleted or
+    refunds inflate the day, which previously produced duplicate ids and an
+    unhandled IntegrityError 500. Single-worker PoC — a cross-process race
+    remains theoretical; a real build would use a DB sequence.
     """
     sold_at_jst = sold_at_utc.astimezone(JST) if sold_at_utc.tzinfo else sold_at_utc.replace(tzinfo=timezone.utc).astimezone(JST)
     ymd = sold_at_jst.strftime("%Y%m%d")
@@ -85,7 +89,17 @@ async def _next_transaction_id(db, store_id: int, sold_at_utc: datetime) -> str:
         .where(SalesRecord.sold_at >= day_start_utc)
         .where(SalesRecord.sold_at < next_day_start_utc)
     )).scalar_one()
-    return f"SL-{ymd}-{count + 1:04d}"
+
+    n = count + 1
+    for _ in range(200):  # generous headroom; bails to a 409 below
+        candidate = f"SL-{ymd}-{n:04d}"
+        exists = (await db.execute(
+            select(SalesRecord.id).where(SalesRecord.transaction_id == candidate).limit(1)
+        )).scalar_one_or_none()
+        if exists is None:
+            return candidate
+        n += 1
+    raise HTTPException(409, detail="取引IDの採番に失敗しました。もう一度お試しください。")
 
 
 @router.get("", response_model=SaleListResponse)
@@ -162,9 +176,11 @@ async def sales_summary(db: DB, store_id: StoreId):
     base = select(count_expr, revenue_expr).where(SalesRecord.store_id == store_id)
 
     async def in_range(start, end=None):
-        stmt = base.where(SalesRecord.sold_at >= start)
+        # sold_at is UTC-naive; the JST boundaries must be converted or every
+        # KPI is skewed by 9 hours at day/month edges (audit C1).
+        stmt = base.where(SalesRecord.sold_at >= jst_to_utc_naive(start))
         if end is not None:
-            stmt = stmt.where(SalesRecord.sold_at < end)
+            stmt = stmt.where(SalesRecord.sold_at < jst_to_utc_naive(end))
         return (await db.execute(stmt)).one()
 
     today_count, today_revenue         = await in_range(today_start, tomorrow_start)
@@ -401,6 +417,9 @@ async def refund_sale(sale_id: int, db: DB, store_id: StoreId):
     variant = original.variant
     if not variant:
         raise HTTPException(400, detail="商品バリアントが見つかりません")
+    # Fail closed when the product record is gone (orphaned variant — audit C5).
+    if variant.product is None:
+        raise HTTPException(400, detail="商品情報が見つからないため返品できません")
 
     now = datetime.now(timezone.utc)
     transaction_id = await _next_transaction_id(db, store_id, now)

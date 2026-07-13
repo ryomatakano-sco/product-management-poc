@@ -263,7 +263,9 @@ function ProductList({ initialQuery }) {
           <div style={{ width: 1, height: 20, background: "rgba(255,255,255,.35)" }} />
           <select value={bulkCategory} onChange={(e) => setBulkCategory(e.target.value)} style={{
             height: 32, padding: "0 10px", borderRadius: 8, border: "none",
-            fontSize: 12, color: PLX_TEXT, background: "#fff",
+            // Fixed pair — the bar behind is always green, and PLX_TEXT goes
+            // near-white in dark mode which made this white-on-white (audit F3).
+            fontSize: 12, color: "#111827", background: "#fff",
           }}>
             <option value="">カテゴリを選択…</option>
             {(categoriesQ.data?.items ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -508,7 +510,9 @@ function ExpiryIndicator({ days }) {
       justifyContent: "flex-end", width: "100%",
     }}>
       <span style={{ width: 6, height: 6, borderRadius: "50%", background: color }} />
-      あと {days} 日
+      {/* Single template child so the EN auto-translator can match the whole
+          phrase — as three children the bare "日" mistranslated to "Sun". */}
+      {`あと ${days} 日`}
     </div>
   );
 }

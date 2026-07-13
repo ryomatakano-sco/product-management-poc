@@ -480,3 +480,40 @@ The dashboard's 再生成 button now calls a **real LLM** (gpt-4.1-nano via the 
 **Verified with a real call:** regenerate produced a coherent Japanese morning-brief
 (「…**4 件**が在庫低下のため早急な対応が必要です…」), and the follow-up GET served it from
 cache with `ai_generated: true`.
+
+---
+
+## Phase 0 — 監査指摘の修正 + EN翻訳カバレッジ
+
+Branch: `feature/sales-records`
+
+The remaining fixes from `docs/audits/full_system_audit_2026-07-09.md`, plus an EN-mode
+translation pass.
+
+**Backend**
+| Fix | What changed |
+|---|---|
+| C1/C2/M9 timezone skew | New `services/tz.py` (`jst_to_utc_naive` / `any_to_utc_naive`). Applied to sales summary boundaries, sales list/CSV `date_from/date_to`, and the dashboard 今月の売上 month start. **Verified:** a sale at 01:00 JST now counts toward *today* (pre-fix it landed in yesterday). PO endpoints untouched — their `created_at` is JST-naive and was already correct. |
+| C4 transaction-id 500 | `_next_transaction_id` now probes for a free id (counts drift when rows are deleted / refunds inflate the day) instead of blindly using count+1; bails to a 409 after 200 probes. |
+| M6 cross-field invariant | `apply_stock_delta` rejects committed/unavailable moves that would push branch *available* negative (verified: `利用可能: -99994` → 400 + rollback). |
+| M8 receive guard | PO receive rejects archived products. |
+| m1 default variant | Multi-variant API create with no `is_default` now really marks the first variant default (was a `pass`). |
+| C5 refund fail-closed | Refund 400s when the variant's product record is missing. |
+
+**Frontend (F1–F6)**
+- F1: EN dashboard date no longer leaks `${["Sun",…]}` — the date is built locale-aware in
+  Dashboard.jsx; the fragile dictionary template was removed. Verified: "Today is Mon, July 13, 2026".
+- F2: `T.PLX_INK_050` (nonexistent token) → `T.PLX_SURFACE_50` in SalesRecords (stock badge + 小計 box).
+- F3: bulk-bar category select now readable in dark mode (fixed dark-on-white pair).
+- F4: PO submit/cancel/save-edit toasts now show the real server message (`e.body.detail`).
+- F5/F6: 在庫履歴 tab refetches after an adjustment and follows the *default* variant.
+
+**EN translation coverage**
+- ~110 new dictionary entries covering everything shipped since May: login page, notification
+  bell, users pane, SMTP section, per-branch filters/adjust flow, PO create modal + lot
+  capture, lots tab, bulk bar, duplicate-detection banners, AI badge, CSV/export buttons.
+- Fixed a live mistranslation: 「あと 17 日」 rendered as "あと 17 **Sun**" (the bare 日 counter
+  hit the weekday entry). The indicator is now a single template child with its own entry →
+  "17 days left". **Pattern note for future strings:** keep counter phrases as ONE template
+  child (`{\`あと ${days} 日\`}`), never `あと {days} 日` split across children.
+- Data values (category/vendor/product names) intentionally stay Japanese in EN mode.

@@ -115,4 +115,24 @@ async def apply_stock_delta(
         # raising (→ rollback) keeps them consistent if they ever drift.
         raise StockError("在庫の更新に失敗しました（合計在庫が不足）")
 
+    # Cross-field invariant (audit M6): moves on committed/unavailable must
+    # not push the branch's AVAILABLE (= on_hand - committed - unavailable)
+    # negative — a per-field non-negative guard alone can't catch that.
+    if fname != "on_hand":
+        avail = (await db.execute(
+            select(
+                VariantBranchStock.on_hand
+                - VariantBranchStock.committed
+                - VariantBranchStock.unavailable
+            ).where(
+                VariantBranchStock.store_id == store_id,
+                VariantBranchStock.variant_id == variant_id,
+                VariantBranchStock.branch_id == resolved_branch,
+            )
+        )).scalar_one_or_none()
+        if avail is not None and avail < 0:
+            raise StockError(
+                f"この調整で利用可能在庫がマイナスになります（利用可能: {avail}）"
+            )
+
     return resolved_branch

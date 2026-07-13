@@ -473,11 +473,14 @@ async def receive_purchase_order(po_id: int, body: PurchaseOrderReceive, db: DB,
                 select(ProductVariant).where(
                     ProductVariant.id == item.variant_id,
                     ProductVariant.store_id == store_id,
-                )
+                ).options(selectinload(ProductVariant.product))
             )
         ).scalar_one_or_none()
         if variant is None:
             raise HTTPException(400, detail=f"明細の商品がこの店舗に存在しません (variant {item.variant_id})")
+        # Archived products are out of catalog — no stock movements (audit M8).
+        if variant.product is not None and str(variant.product.status.value) == "archived":
+            raise HTTPException(400, detail=f"アーカイブ済み商品には入荷できません: {variant.product.name}")
         try:
             recv_branch = await apply_stock_delta(
                 db, store_id=store_id, variant_id=item.variant_id,

@@ -29,8 +29,14 @@ function Dashboard() {
 
   // Brief §4.4: friendly greeting (おはようございます…) + today's date in JP,
   // with a date-range pill in the top-right of the page (not the topbar).
+  // The date is built LOCALE-AWARE here rather than via the auto-translator —
+  // its template substitution can't remap the day-of-week slot and leaked a
+  // raw `${["Sun",…]}` literal in EN mode (audit F1).
   const today = new Date();
-  const jpDate = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日（${"日月火水木金土"[today.getDay()]}）`;
+  const isEn = (window.PLX_I18N?.get?.() || "ja") === "en";
+  const jpDate = isEn
+    ? today.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", weekday: "short" })
+    : `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日（${"日月火水木金土"[today.getDay()]}）`;
   const hour = today.getHours();
   const greet = hour < 11 ? "おはようございます" : hour < 18 ? "こんにちは" : "こんばんは";
 

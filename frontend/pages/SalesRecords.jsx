@@ -527,7 +527,7 @@ function ManualSaleModal({ onClose, onSaved }) {
     return (
       <span style={{
         fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 9999,
-        background: isLow ? "#FEF3C7" : T.PLX_INK_050,
+        background: isLow ? "#FEF3C7" : T.PLX_SURFACE_50,
         color: isLow ? "#B45309" : T.PLX_INK_700,
         whiteSpace: "nowrap",
       }}>在庫 {n}</span>
@@ -677,7 +677,7 @@ function ManualSaleModal({ onClose, onSaved }) {
       {/* 小計 */}
       <div style={{
         display: "flex", justifyContent: "space-between", alignItems: "center",
-        padding: "14px 18px", background: T.PLX_INK_050,
+        padding: "14px 18px", background: T.PLX_SURFACE_50,
         borderRadius: T.RADIUS_MD, marginBottom: 18,
       }}>
         <span style={{ fontSize: 13, color: T.PLX_INK_700, fontWeight: 600 }}>小計</span>
