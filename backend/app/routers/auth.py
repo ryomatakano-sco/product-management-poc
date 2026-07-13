@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy import select
 
 from app.deps import DB, StoreId
+from app.services.audit import log_event
 from app.models.user import User, UserRole, UserStatus
 from app.schemas.user import LoginRequest, UserCreate, UserRead, UserUpdate
 from app.services.auth import (
@@ -98,7 +99,7 @@ async def list_users(request: Request, db: DB, store_id: StoreId):
 
 @router.post("/users", response_model=UserRead, status_code=201, summary="ユーザーを追加（管理者）")
 async def create_user(body: UserCreate, request: Request, db: DB, store_id: StoreId):
-    await _require_admin(request, db, store_id)
+    admin_user = await _require_admin(request, db, store_id)
     email = body.email.strip().lower()
     existing = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
     if existing:
@@ -111,6 +112,10 @@ async def create_user(body: UserCreate, request: Request, db: DB, store_id: Stor
         role=body.role,
     )
     db.add(user)
+    await db.flush()
+    log_event(db, store_id=store_id, user_name=admin_user.display_name,
+              action="user_created", entity_type="user", entity_id=user.id,
+              detail=f"{user.display_name} <{email}> role={user.role.value}")
     await db.commit()
     await db.refresh(user)
     return user
@@ -132,8 +137,54 @@ async def update_user(user_id: int, body: UserUpdate, request: Request, db: DB, 
         pw = data.pop("password")
         if pw:
             user.password_hash = hash_password(pw)
+            log_event(db, store_id=store_id, user_name=admin.display_name,
+                      action="user_password_reset", entity_type="user",
+                      entity_id=user.id, detail=user.display_name)
+    if "status" in data and data["status"] != user.status:
+        log_event(db, store_id=store_id, user_name=admin.display_name,
+                  action=("user_disabled" if data["status"] == UserStatus.inactive else "user_enabled"),
+                  entity_type="user", entity_id=user.id, detail=user.display_name)
+    if "role" in data and data["role"] != user.role:
+        log_event(db, store_id=store_id, user_name=admin.display_name,
+                  action="user_role_changed", entity_type="user", entity_id=user.id,
+                  detail=f"{user.display_name} → {data['role'].value}")
     for k, v in data.items():
         setattr(user, k, v)
     await db.commit()
     await db.refresh(user)
     return user
+
+
+# ── Audit log (admin only, mig 016) ─────────────────────────────────
+
+@router.get("/audit-events", summary="監査ログ（管理者）")
+async def list_audit_events(
+    request: Request, db: DB, store_id: StoreId,
+    limit: int = 30, offset: int = 0,
+):
+    from sqlalchemy import func as _func
+
+    from app.models.audit import AuditEvent
+
+    await _require_admin(request, db, store_id)
+    limit = max(1, min(limit, 100))
+    total = (await db.execute(
+        select(_func.count()).select_from(AuditEvent).where(AuditEvent.store_id == store_id)
+    )).scalar_one()
+    rows = (await db.execute(
+        select(AuditEvent).where(AuditEvent.store_id == store_id)
+        .order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
+        .limit(limit).offset(offset)
+    )).scalars().all()
+    return {
+        "total": total,
+        "items": [{
+            "id": e.id,
+            "created_at": e.created_at.isoformat() if e.created_at else None,
+            "user_name": e.user_name,
+            "action": e.action,
+            "entity_type": e.entity_type,
+            "entity_id": e.entity_id,
+            "detail": e.detail,
+        } for e in rows],
+    }

@@ -159,6 +159,7 @@ function ProductDetail({ productId }) {
             display: "flex", flexDirection: "column", gap: 9,
           }}>
             <BasicRow k="仕入先" v={p.vendor_name ?? "—"} />
+            <BasicRow k="社内コード" v={p.internal_code ?? "—"} mono />
             <BasicRow k="主要 SKU" v={heroVariant?.sku ?? "—"} mono />
             <BasicRow k="JAN" v={heroVariant?.barcode ?? "—"} mono />
             <BasicRow

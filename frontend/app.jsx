@@ -18,6 +18,23 @@ function App() {
   const meQ = useFetch(() => api.me(), []);
   window.PLX_ME = meQ.data || null;
 
+  // Category EN names (mig 016): merge each category's optional name_en into
+  // the live EN dictionary so every render site (chips, selects, tables)
+  // translates data-level names automatically. Fallback stays the JA name —
+  // categories without name_en simply have no dict entry.
+  React.useEffect(() => {
+    if (!meQ.data) return;
+    api.listCategories().then((res) => {
+      const dict = window._PLX_DICT_EN;
+      if (!dict) return;
+      const walk = (nodes) => (nodes || []).forEach((c) => {
+        if (c.name && c.name_en) dict[c.name] = c.name_en;
+        walk(c.children);
+      });
+      walk(res?.items || res || []);
+    }).catch(() => {});
+  }, [meQ.data]);
+
   // Standalone phone scan view (Option 2). Render it bare — no sidebar, no
   // command palette / dev panel — so a phone opening the pairing QR sees only
   // the camera. Early-return before the admin chrome is composed (and before

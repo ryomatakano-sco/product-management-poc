@@ -122,6 +122,8 @@ class Product(Base, TimestampMixin):
         comment="Expiry date for consumables (Yoshioka 2026-05-11)",
     )
     lot_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    internal_code: Mapped[str | None] = mapped_column(String(20), nullable=True,
+        comment="Per-store human code: CA#### consumables / PR#### retail (mig 016)")
     unit: Mapped[str | None] = mapped_column(
         String(20), nullable=True,
         comment="Counting unit: 個, 箱, mL, g, 本, etc.",

@@ -51,6 +51,7 @@ class SaleRead(BaseModel):
     payment_method: PaymentMethod
     sold_at: datetime
     sold_by: str | None
+    created_by: str | None = None
     patient_ref: str | None
     note: str | None
     refunded_at: datetime | None = None

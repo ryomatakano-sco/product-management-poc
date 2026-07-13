@@ -772,4 +772,26 @@ window._PLX_DICT_EN = {
   "商品名・SKUで絞り込み…": "Filter by product name / SKU…",
   "下書きの発注書は入荷を記録できません。「📤 送信」で発注済みにすると、部分入荷（一部だけ届いた場合）も含めて入荷を記録できます。":
     "A draft PO can't receive stock yet. Press 「📤 送信」 to mark it ordered — then you can record receipts, including partial shipments.",
+
+  // ---- Feedback batch B: attribution / audit log / tax rates / EN category names / internal codes ----
+  "英語名（任意）": "English name (optional)",
+  "e.g. Toothbrush — EN表示時に使用、未設定なら日本語名を表示": "e.g. Toothbrush — shown in EN mode, falls back to the Japanese name",
+  "例: 標準税率": "e.g. Standard rate",
+  "税率名を入力してください": "Enter a name for the tax rate",
+  "税率は 0〜100 の数値で入力してください": "Tax rate must be a number between 0 and 100",
+  "＋ 税率を追加": "＋ Add tax rate",
+  "この税率を削除": "Delete this tax rate",
+  "標準": "Default",
+  "税率が設定されていません。": "No tax rates configured.",
+  "監査ログ": "Audit log",
+  "ユーザー管理・設定変更の履歴（最新 15 件）": "User management & settings changes (latest 15)",
+  "まだ記録がありません": "No records yet",
+  "ユーザー追加": "User added",
+  "ユーザー無効化": "User disabled",
+  "ユーザー有効化": "User enabled",
+  "権限変更": "Role changed",
+  "パスワード再設定": "Password reset",
+  "設定変更": "Settings changed",
+  "社内コード": "Internal code",
+  "記録者": "Recorded by",
 };

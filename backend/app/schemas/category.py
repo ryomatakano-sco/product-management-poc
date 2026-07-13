@@ -15,6 +15,7 @@ class CategoryBase(BaseModel):
     """
     name: str
     name_kana: str | None = None
+    name_en: str | None = None
     parent_id: int | None = None
     color_hex: str | None = None
     icon_name: str | None = None
@@ -32,6 +33,7 @@ class CategoryUpdate(BaseModel):
     """All fields optional — PATCH semantics."""
     name: str | None = None
     name_kana: str | None = None
+    name_en: str | None = None
     parent_id: int | None = None
     color_hex: str | None = None
     icon_name: str | None = None
@@ -48,6 +50,7 @@ class CategoryRead(BaseModel):
     store_id: int
     name: str
     name_kana: str | None
+    name_en: str | None = None
     parent_id: int | None
     color_hex: str | None
     icon_name: str | None
@@ -77,6 +80,7 @@ class CategoryTreeNode(BaseModel):
     id: int
     name: str
     name_kana: str | None
+    name_en: str | None = None
     color_hex: str | None
     icon_name: str | None
     applies_to: CategoryAppliesTo

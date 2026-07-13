@@ -103,6 +103,7 @@ class PurchaseOrderRead(BaseModel):
     tags: list[str] = []
     supplier_name: str | None = None
     branch_name: str | None = None
+    created_by: str | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -555,6 +555,7 @@ function RecentAdjustments({ refreshKey }) {
           }}>{a.delta > 0 ? `▲ +${a.delta}` : a.delta < 0 ? `▼ ${Math.abs(a.delta)}` : a.delta}</span>
           <span style={{ fontSize: 11, color: T.PLX_INK_500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {a.note || "—"}
+            {a.created_by && <span style={{ color: T.PLX_INK_400 }}>　by {a.created_by}</span>}
           </span>
         </div>
       ))}

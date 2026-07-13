@@ -869,6 +869,7 @@ function SaleDetailModal({ saleId, onClose, onRefunded }) {
             <Row label="合計 (税込)" value={yen(Number(s.unit_price) * Number(s.quantity))} />
             <Row label="支払方法" value={PM_LABEL[s.payment_method] ?? s.payment_method} />
             <Row label="担当者" value={s.sold_by || "—"} />
+          <Row label="記録者" value={s.created_by || "—"} />
             <Row label="患者"   value={s.patient_ref ? `${s.patient_ref} さま` : "—"} />
             {s.note && <Row label="メモ" value={s.note} />}
           </div>

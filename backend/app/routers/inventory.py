@@ -9,7 +9,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from app.deps import DB, StoreId
+from app.deps import DB, StoreId, CurrentUserName
 from app.models.inventory import AdjustmentReason, InventoryAdjustment, InventoryField, VariantBranchStock
 from app.models.product import ItemType, Product, ProductStatus, ProductVariant
 from app.schemas.base import PaginatedResponse
@@ -127,7 +127,7 @@ async def _build_inventory_rows(
             "last_adjusted_at": (
                 last_adj.created_at.isoformat() if last_adj else None
             ),
-            "last_adjusted_by": None,  # staff name denorm is future work
+            "last_adjusted_by": last_adj.created_by if last_adj else None,
         })
     return items
 
@@ -188,6 +188,7 @@ async def list_recent_adjustments(
         product = variant.product if variant else None
         items.append({
             "id": a.id,
+            "created_by": a.created_by,
             "created_at": a.created_at.isoformat() if a.created_at else None,
             "product_id": product.id if product else None,
             "product_name": product.name if product else f"#{a.variant_id}",
@@ -201,7 +202,7 @@ async def list_recent_adjustments(
 
 
 @router.post("/inventory/transfer", summary="拠点間で在庫を移動する")
-async def transfer_stock(body: dict, db: DB, store_id: StoreId):
+async def transfer_stock(body: dict, db: DB, store_id: StoreId, user_name: CurrentUserName = None):
     """Branch-to-branch transfer: −qty at from_branch, +qty at to_branch,
     both atomic and logged with reason='transfer' (migration 015).
     Body: {variant_id, from_branch_id, to_branch_id, quantity, note?}
@@ -242,6 +243,7 @@ async def transfer_stock(body: dict, db: DB, store_id: StoreId):
 
     for b, d in ((from_branch, -quantity), (to_branch, quantity)):
         db.add(InventoryAdjustment(
+            created_by=user_name,
             store_id=store_id, variant_id=variant_id, branch_id=b,
             field=InventoryField.on_hand, delta=d,
             reason=AdjustmentReason.transfer, note=note,
@@ -256,6 +258,7 @@ async def import_stocktake_csv(
     db: DB,
     store_id: StoreId,
     file: UploadFile,
+    user_name: CurrentUserName = None,
     branch_id: int | None = Query(None, description="棚卸しした拠点（省略時は本院）"),
 ):
     """Re-import the 棚卸しCSV: rows where 実地棚卸数 (col 10) is filled and
@@ -336,6 +339,7 @@ async def import_stocktake_csv(
             errors.append({"row": idx, "message": e.message})
             continue
         db.add(InventoryAdjustment(
+            created_by=user_name,
             store_id=store_id, variant_id=variant.id, branch_id=target_branch,
             field=InventoryField.on_hand, delta=delta,
             reason=AdjustmentReason.correction, note=today_note,
@@ -395,7 +399,7 @@ async def export_inventory_csv(
 
 
 @router.post("/variants/{variant_id}/inventory-adjust", response_model=InventoryAdjustmentRead, status_code=201)
-async def adjust_inventory(variant_id: int, body: InventoryAdjustRequest, db: DB, store_id: StoreId):
+async def adjust_inventory(variant_id: int, body: InventoryAdjustRequest, db: DB, store_id: StoreId, user_name: CurrentUserName = None):
     """Atomically adjust a variant's inventory counter (per-branch) and log it."""
     variant = (
         await db.execute(
@@ -423,6 +427,7 @@ async def adjust_inventory(variant_id: int, body: InventoryAdjustRequest, db: DB
 
     # Log adjustment
     adj = InventoryAdjustment(
+        created_by=user_name,
         store_id=store_id,
         variant_id=variant_id,
         branch_id=branch_id,

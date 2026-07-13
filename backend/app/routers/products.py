@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Query, UploadFile
 from sqlalchemy import case, exists, func, insert as sa_insert, literal, or_, select, text
 from sqlalchemy.orm import selectinload
 
-from app.deps import DB, StoreId
+from app.deps import DB, StoreId, CurrentUserName
 from app.models.category import Category
 from app.models.product import ItemType, Product, ProductImage, ProductStatus, ProductVariant
 from app.models.sale import SalesRecord
@@ -29,6 +29,27 @@ from app.schemas.product import (
 )
 
 router = APIRouter(prefix="/products", tags=["products"])
+
+
+async def _next_internal_code(db, store_id: int, item_type) -> str:
+    """CA#### for consumables / PR#### for retail, per store (mig 016).
+    MAX() on the fixed-width code is safe because the numeric part is
+    zero-padded; falls back past any manually assigned malformed codes.
+    """
+    prefix = "CA" if getattr(item_type, "value", item_type) == "consumable" else "PR"
+    last = (await db.execute(
+        select(func.max(Product.internal_code)).where(
+            Product.store_id == store_id,
+            Product.internal_code.like(f"{prefix}%"),
+        )
+    )).scalar_one_or_none()
+    n = 0
+    if last:
+        try:
+            n = int(last[len(prefix):])
+        except ValueError:
+            n = 0
+    return f"{prefix}{n + 1:04d}"
 
 
 # MySQL's default FULLTEXT parser silently ignores tokens shorter than
@@ -109,6 +130,7 @@ def _build_list_item(p: Product, match_reasons: list[str] | None = None) -> Prod
         id=p.id,
         store_id=p.store_id,
         name=p.name,
+        internal_code=p.internal_code,
         name_kana=p.name_kana,
         category_name=p.category.name if p.category else None,
         vendor_name=p.vendor.company_name if p.vendor else None,
@@ -293,7 +315,7 @@ async def product_import_template():
 
 
 @router.post("/import.csv", summary="商品CSVを一括インポート")
-async def import_products_csv(db: DB, store_id: StoreId, file: UploadFile):
+async def import_products_csv(db: DB, store_id: StoreId, file: UploadFile, user_name: CurrentUserName = None):
     """Bulk product import. Row rules (documented):
       • name required; category/vendor resolved BY NAME (unknown → row error,
         nothing auto-created); barcode already in the catalog → row error.
@@ -372,6 +394,7 @@ async def import_products_csv(db: DB, store_id: StoreId, file: UploadFile):
 
         product = Product(
             store_id=store_id, name=name, name_kana=cell(row, "name_kana") or None,
+            internal_code=await _next_internal_code(db, store_id, item_type_raw),
             category_id=cats.get(cat_name), vendor_id=vendors.get(vendor_name),
             status=ProductStatus.draft,
             item_type=ItemType(item_type_raw),
@@ -398,6 +421,7 @@ async def import_products_csv(db: DB, store_id: StoreId, file: UploadFile):
                     branch_id=None, field=InventoryField.on_hand, delta=stock,
                 )
                 db.add(InventoryAdjustment(
+                    created_by=user_name,
                     store_id=store_id, variant_id=variant.id, branch_id=b,
                     field=InventoryField.on_hand, delta=stock,
                     reason=AdjustmentReason.correction, note="CSVインポート初期在庫",
@@ -563,6 +587,7 @@ async def get_product(product_id: int, db: DB, store_id: StoreId):
         id=product.id,
         store_id=product.store_id,
         name=product.name,
+        internal_code=product.internal_code,
         name_kana=product.name_kana,
         description=product.description,
         category_id=product.category_id,
@@ -594,8 +619,9 @@ async def get_product(product_id: int, db: DB, store_id: StoreId):
 
 
 @router.post("", response_model=ProductDetail, status_code=201)
-async def create_product(body: ProductCreate, db: DB, store_id: StoreId):
+async def create_product(body: ProductCreate, db: DB, store_id: StoreId, user_name: CurrentUserName = None):
     product = Product(
+        internal_code=await _next_internal_code(db, store_id, body.item_type),
         store_id=store_id,
         name=body.name,
         name_kana=body.name_kana,

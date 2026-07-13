@@ -54,6 +54,7 @@ class PurchaseOrder(Base, TimestampMixin):
     tracking_number: Mapped[str | None] = mapped_column(String(255), nullable=True)
     reference_number: Mapped[str | None] = mapped_column(String(255), nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
     subtotal: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False)
     shipping_cost: Mapped[float] = mapped_column(Numeric(10, 2), default=0, nullable=False)
     total: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False)

@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from app.deps import DB, StoreId
+from app.deps import DB, StoreId, CurrentUserName
 from app.models.inventory import AdjustmentReason, InventoryAdjustment, InventoryField
 from app.models.product import Product, ProductStatus, ProductVariant
 from app.models.purchase_order import POStatus, PurchaseOrder, PurchaseOrderItem, PurchaseOrderTag
@@ -83,6 +83,7 @@ def _po_to_read(po: PurchaseOrder) -> PurchaseOrderRead:
         tags=[t.name for t in po.tags],
         supplier_name=po.supplier.company_name if po.supplier else None,
         branch_name=po.destination_branch.name if po.destination_branch else None,
+        created_by=po.created_by,
         created_at=po.created_at,
         updated_at=po.updated_at,
     )
@@ -164,7 +165,7 @@ async def list_purchase_orders(
 
 # NOTE: declared before /{po_id} — "auto-draft" must not be parsed as a po_id.
 @router.post("/auto-draft", summary="低在庫から発注書ドラフトを自動作成")
-async def auto_draft_purchase_orders(db: DB, store_id: StoreId):
+async def auto_draft_purchase_orders(db: DB, store_id: StoreId, user_name: CurrentUserName = None):
     """One draft PO per vendor covering every active product whose default
     variant sits at/below its low-stock threshold, has a vendor, and is not
     already on an open (draft/ordered/partially_received) PO.
@@ -219,6 +220,7 @@ async def auto_draft_purchase_orders(db: DB, store_id: StoreId):
     created = []
     for vendor_id, lines in by_vendor.items():
         po = PurchaseOrder(
+        created_by=user_name,
             store_id=store_id,
             supplier_vendor_id=vendor_id,
             destination_branch_id=main_branch,
@@ -362,7 +364,7 @@ async def get_purchase_order(po_id: int, db: DB, store_id: StoreId):
 
 
 @router.post("", response_model=PurchaseOrderRead, status_code=201)
-async def create_purchase_order(body: PurchaseOrderCreate, db: DB, store_id: StoreId):
+async def create_purchase_order(body: PurchaseOrderCreate, db: DB, store_id: StoreId, user_name: CurrentUserName = None):
     # Tenancy validation (audit M3): vendor, branch and every line-item
     # variant must belong to this store.
     from app.models.branch import Branch
@@ -389,6 +391,7 @@ async def create_purchase_order(body: PurchaseOrderCreate, db: DB, store_id: Sto
             raise HTTPException(400, detail=f"この店舗に存在しない商品が含まれています (variant {sorted(missing)})")
 
     po = PurchaseOrder(
+        created_by=user_name,
         store_id=store_id,
         supplier_vendor_id=body.supplier_vendor_id,
         destination_branch_id=body.destination_branch_id,
@@ -531,7 +534,7 @@ async def submit_purchase_order(po_id: int, db: DB, store_id: StoreId):
 
 
 @router.post("/{po_id}/receive", response_model=PurchaseOrderRead)
-async def receive_purchase_order(po_id: int, body: PurchaseOrderReceive, db: DB, store_id: StoreId):
+async def receive_purchase_order(po_id: int, body: PurchaseOrderReceive, db: DB, store_id: StoreId, user_name: CurrentUserName = None):
     """Receive items on a PO: updates quantity_received, bumps on_hand inventory."""
     po = await _get_po(po_id, store_id, db)
     if po.status not in (POStatus.ordered, POStatus.partially_received):
@@ -598,6 +601,7 @@ async def receive_purchase_order(po_id: int, body: PurchaseOrderReceive, db: DB,
 
         # Log adjustment
         adj = InventoryAdjustment(
+        created_by=user_name,
             store_id=store_id,
             variant_id=item.variant_id,
             branch_id=recv_branch,

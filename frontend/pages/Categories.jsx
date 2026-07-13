@@ -276,6 +276,7 @@ function appliesLabel(v) {
 // ── Create / Edit modal ────────────────────────────────────────────
 function CategoryFormModal({ editing, allCategories, onClose, onSaved }) {
   const [name, setName] = React.useState(editing?.name || "");
+  const [nameEn, setNameEn] = React.useState(editing?.name_en || "");
   const [appliesTo, setAppliesTo] = React.useState(editing?.applies_to || "both");
   const [colorHex, setColorHex] = React.useState(editing?.color_hex || "#16A36C");
   const [iconName, setIconName] = React.useState(editing?.icon_name || "");
@@ -291,7 +292,8 @@ function CategoryFormModal({ editing, allCategories, onClose, onSaved }) {
     setSaving(true);
     try {
       const body = {
-        name, applies_to: appliesTo, color_hex: colorHex, icon_name: iconName || null,
+        name, name_en: nameEn.trim() || null,
+        applies_to: appliesTo, color_hex: colorHex, icon_name: iconName || null,
         sort_order: Number(sortOrder) || 0,
         description: description || null,
         default_tax_rate: Number(taxRate),
@@ -316,6 +318,10 @@ function CategoryFormModal({ editing, allCategories, onClose, onSaved }) {
       <FormRow label="カテゴリ名">
         <input value={name} onChange={(e) => setName(e.target.value)} style={formInput}
           placeholder="例：歯ブラシ" />
+      </FormRow>
+      <FormRow label="英語名（任意）">
+        <input value={nameEn} onChange={(e) => setNameEn(e.target.value)} style={formInput}
+          placeholder="e.g. Toothbrush — EN表示時に使用、未設定なら日本語名を表示" />
       </FormRow>
       <FormRow label="種別">
         <SegmentedControl value={appliesTo} onChange={setAppliesTo} options={[

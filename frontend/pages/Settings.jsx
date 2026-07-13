@@ -56,7 +56,7 @@ function Settings({ query }) {
           {ns === "tax_rates" && <TaxRatesSettings />}
           {ns === "ai" && <AiSettings />}
           {ns === "integrations" && <IntegrationsSettings />}
-          {ns === "users" && <UsersSettings />}
+          {ns === "users" && <><UsersSettings /><AuditLogSection /></>}
           {ns === "api" && <ApiSettings />}
         </div>
       </div>
@@ -294,25 +294,62 @@ function ToggleRow({ label, on, onChange }) {
 
 function TaxRatesSettings() {
   const f = useSettingsForm("tax_rates");
-  if (f.loading) return <SettingsCard title="税率"><div style={{ color: T.PLX_INK_500 }}>読み込み中…</div></SettingsCard>;
-  const rates = f.form.rates || [];
+  const [rows, setRows] = React.useState(null);
+  React.useEffect(() => { if (f.form.rates && rows === null) setRows(f.form.rates); }, [f.form]);
+  if (f.loading || rows === null) return <SettingsCard title="税率"><div style={{ color: T.PLX_INK_500 }}>読み込み中…</div></SettingsCard>;
+
+  const upd = (i, k, v) => setRows(rows.map((r, j) => j === i ? { ...r, [k]: v } : r));
+  const setDefault = (i) => setRows(rows.map((r, j) => ({ ...r, is_default: j === i })));
+  const addRow = () => setRows([...rows, { id: Math.max(0, ...rows.map(r => r.id || 0)) + 1, name: "", rate: "10", is_default: rows.length === 0 }]);
+  const removeRow = (i) => {
+    const next = rows.filter((_, j) => j !== i);
+    if (next.length > 0 && !next.some(r => r.is_default)) next[0] = { ...next[0], is_default: true };
+    setRows(next);
+  };
+  const saveRates = () => {
+    for (const r of rows) {
+      if (!String(r.name || "").trim()) { window.PLX_TOAST.warn("税率名を入力してください"); return; }
+      if (isNaN(Number(r.rate)) || Number(r.rate) < 0 || Number(r.rate) > 100) { window.PLX_TOAST.warn("税率は 0〜100 の数値で入力してください"); return; }
+    }
+    f.save({ rates: rows.map(r => ({ ...r, rate: String(r.rate) })) });
+  };
+
   return (
     <SettingsCard title="税率">
-      {rates.length === 0 && <div style={{ color: T.PLX_INK_500 }}>税率が設定されていません。</div>}
-      {rates.map((r, i) => (
+      {rows.length === 0 && <div style={{ color: T.PLX_INK_500, marginBottom: 8 }}>税率が設定されていません。</div>}
+      {rows.map((r, i) => (
         <div key={i} style={{
-          display: "grid", gridTemplateColumns: "1.5fr 1fr 0.6fr 80px",
-          gap: 12, padding: "10px 0", alignItems: "center",
-          borderBottom: i < rates.length - 1 ? `1px solid ${T.PLX_LINE_100}` : "none",
+          display: "grid", gridTemplateColumns: "1.5fr 120px 90px 60px",
+          gap: 12, padding: "8px 0", alignItems: "center",
+          borderBottom: `1px solid ${T.PLX_LINE_100}`,
         }}>
-          <span style={{ fontSize: 13, fontWeight: 600 }}>{r.name}</span>
-          <span style={{ fontSize: 13, fontFamily: T.FONT_MONO }}>{r.rate}%</span>
-          <span>{r.is_default && <Pill color={T.PLX_GREEN_700} bg={T.PLX_GREEN_100}>標準</Pill>}</span>
-          <span style={{ fontSize: 12, color: T.PLX_INK_500 }}>ID: {r.id}</span>
+          <input value={r.name} onChange={(e) => upd(i, "name", e.target.value)}
+            placeholder="例: 標準税率" style={formInput} />
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <input type="number" min={0} max={100} step="0.1" value={r.rate}
+              onChange={(e) => upd(i, "rate", e.target.value)}
+              style={{ ...formInput, width: 80, textAlign: "right", fontFamily: T.FONT_MONO }} />
+            <span style={{ fontSize: 13, color: T.PLX_INK_500 }}>%</span>
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: T.PLX_INK_700, cursor: "pointer" }}>
+            <input type="radio" name="tax-default" checked={!!r.is_default} onChange={() => setDefault(i)} />
+            標準
+          </label>
+          <button onClick={() => removeRow(i)} title="この税率を削除" style={{
+            background: "none", border: "none", cursor: "pointer", color: T.PLX_RED_600, fontSize: 15,
+          }}>🗑</button>
         </div>
       ))}
-      <div style={{ marginTop: 14, padding: 12, background: T.PLX_BLUE_100, borderRadius: T.RADIUS_MD, fontSize: 12, color: T.PLX_BLUE_600 }}>
-        税率の追加・編集機能は近日対応予定です。
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 14 }}>
+        <button onClick={addRow} style={{
+          padding: "7px 14px", borderRadius: T.RADIUS_MD, border: `1px dashed ${T.PLX_LINE_200}`,
+          background: "transparent", fontSize: 12, fontWeight: 700, color: T.PLX_INK_700, cursor: "pointer",
+        }}>＋ 税率を追加</button>
+        <button onClick={saveRates} disabled={f.saving} style={{
+          padding: "8px 18px", borderRadius: T.RADIUS_MD, border: "none",
+          background: T.PLX_GREEN_600, color: "#fff", fontSize: 13, fontWeight: 700,
+          cursor: f.saving ? "not-allowed" : "pointer", opacity: f.saving ? 0.6 : 1,
+        }}>{f.saving ? "保存中…" : "変更を保存"}</button>
       </div>
     </SettingsCard>
   );
@@ -436,6 +473,53 @@ function IntegrationTile({ name, extra, connected }) {
 }
 
 // ユーザー管理 — backed by /auth/users (admin only; staff see a 403 notice).
+// 監査ログ — admin-only activity feed (mig 016): user management events,
+// settings changes. Write attribution (created_by) lives on each record.
+function AuditLogSection() {
+  const q = useFetch(() => api.listAuditEvents({ limit: 15 }), []);
+  const items = q.data?.items || [];
+  const ACTION_JA = {
+    user_created: "ユーザー追加",
+    user_disabled: "ユーザー無効化",
+    user_enabled: "ユーザー有効化",
+    user_role_changed: "権限変更",
+    user_password_reset: "パスワード再設定",
+    settings_updated: "設定変更",
+  };
+  if (q.error) return null; // staff (non-admin) — pane is admin-only anyway
+  return (
+    <div style={{
+      background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+      boxShadow: T.SHADOW_SM, padding: 24, marginTop: 18,
+    }}>
+      <h3 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700 }}>監査ログ</h3>
+      <div style={{ fontSize: 12, color: T.PLX_INK_500, marginBottom: 12 }}>
+        ユーザー管理・設定変更の履歴（最新 15 件）
+      </div>
+      {q.loading && <div style={{ fontSize: 12, color: T.PLX_INK_500 }}>読み込み中…</div>}
+      {!q.loading && items.length === 0 && (
+        <div style={{ fontSize: 12, color: T.PLX_INK_500 }}>まだ記録がありません</div>
+      )}
+      {items.map((e) => (
+        <div key={e.id} style={{
+          display: "grid", gridTemplateColumns: "150px 130px 1fr", gap: 12,
+          padding: "8px 0", borderBottom: `1px solid ${T.PLX_LINE_100}`,
+          fontSize: 12, alignItems: "baseline",
+        }}>
+          <span style={{ color: T.PLX_INK_500, fontFamily: T.FONT_MONO, fontSize: 11 }}>
+            {e.created_at ? new Date(e.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}
+          </span>
+          <span style={{ fontWeight: 700, color: T.PLX_INK_900 }}>{ACTION_JA[e.action] || e.action}</span>
+          <span style={{ color: T.PLX_INK_700 }}>
+            {e.detail || "—"}
+            {e.user_name && <span style={{ color: T.PLX_INK_400 }}>（{e.user_name}）</span>}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function UsersSettings() {
   const [refreshKey, setRefreshKey] = React.useState(0);
   const usersQ = useFetch(() => api.listUsers(), [refreshKey]);

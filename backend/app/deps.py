@@ -38,5 +38,28 @@ async def get_store_id(
     return x_store_id
 
 
+async def get_current_user_name(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> str | None:
+    """Display name of the logged-in user, or None on the X-Store-Id dev path.
+
+    Used to stamp `created_by` on writes (mig 016). Snapshot by name, not FK,
+    so history survives user deletion.
+    """
+    from sqlalchemy import select
+
+    from app.models.user import User
+    from app.services.auth import COOKIE_NAME, parse_session_token
+
+    tok = parse_session_token(request.cookies.get(COOKIE_NAME))
+    if tok is None:
+        return None
+    return (await db.execute(
+        select(User.display_name).where(User.id == tok["user_id"])
+    )).scalar_one_or_none()
+
+
 DB = Annotated[AsyncSession, Depends(get_db)]
 StoreId = Annotated[int, Depends(get_store_id)]
+CurrentUserName = Annotated[str | None, Depends(get_current_user_name)]

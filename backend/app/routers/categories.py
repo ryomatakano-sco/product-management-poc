@@ -108,6 +108,7 @@ async def list_categories_tree(db: DB, store_id: StoreId):
                 id=c.id,
                 name=c.name,
                 name_kana=c.name_kana,
+                name_en=c.name_en,
                 color_hex=c.color_hex,
                 icon_name=c.icon_name,
                 applies_to=c.applies_to,

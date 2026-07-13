@@ -53,6 +53,7 @@ const api = {
   logout: () => request(`/auth/logout`, { method: "POST" }),
   me:     () => request(`/auth/me`),
   listUsers:  () => request(`/auth/users`),
+  listAuditEvents: (params) => request(`/auth/audit-events${qs(params)}`),
   createUser: (body) => request(`/auth/users`, { method: "POST", body: JSON.stringify(body) }),
   updateUser: (id, body) => request(`/auth/users/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
 

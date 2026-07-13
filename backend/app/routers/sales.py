@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
-from app.deps import DB, StoreId
+from app.deps import DB, StoreId, CurrentUserName
 from app.models.inventory import AdjustmentReason, InventoryAdjustment, InventoryField
 from app.models.product import Product, ProductStatus, ProductVariant, TaxRate
 from app.models.sale import PaymentMethod, SalesRecord
@@ -397,7 +397,7 @@ async def get_sale(sale_id: int, db: DB, store_id: StoreId):
 
 
 @router.post("/{sale_id}/refund", response_model=SaleRead, status_code=201)
-async def refund_sale(sale_id: int, db: DB, store_id: StoreId, body: RefundRequest | None = None):
+async def refund_sale(sale_id: int, db: DB, store_id: StoreId, body: RefundRequest | None = None, user_name: CurrentUserName = None):
     """Reverse a sale: create a negative-quantity refund row, mark the original
     as refunded, add the stock back on the variant, and log an audit adjustment.
     """
@@ -458,12 +458,14 @@ async def refund_sale(sale_id: int, db: DB, store_id: StoreId, body: RefundReque
             + (f"｜理由: {reason}" if (reason := (body.reason or "").strip() if body else "") else "")
         ),
         refund_of_sale_id=original.id,
+        created_by=user_name,
     )
     db.add(refund)
 
     original.refunded_at = now
 
     db.add(InventoryAdjustment(
+        created_by=user_name,
         store_id=store_id,
         variant_id=original.variant_id,
         branch_id=refund_branch,
@@ -485,7 +487,7 @@ async def refund_sale(sale_id: int, db: DB, store_id: StoreId, body: RefundReque
 
 
 @router.post("", response_model=SaleRead, status_code=201)
-async def create_sale(body: SaleCreate, db: DB, store_id: StoreId):
+async def create_sale(body: SaleCreate, db: DB, store_id: StoreId, user_name: CurrentUserName = None):
     """Record a sale and decrement on_hand inventory."""
     variant = (
         await db.execute(
@@ -540,12 +542,14 @@ async def create_sale(body: SaleCreate, db: DB, store_id: StoreId):
         sold_by=(body.sold_by or None),
         patient_ref=body.patient_ref,
         note=body.note,
+        created_by=user_name,
     )
     db.add(sale)
     await db.flush()
 
     # Log inventory adjustment
     adj = InventoryAdjustment(
+        created_by=user_name,
         store_id=store_id,
         variant_id=body.variant_id,
         branch_id=branch_id,

@@ -21,7 +21,7 @@ from fastapi import APIRouter, HTTPException, Path, UploadFile
 from sqlalchemy import select
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 
-from app.deps import DB, StoreId
+from app.deps import DB, StoreId, CurrentUserName
 from app.models.settings_kv import SettingsKV
 from app.schemas.settings import (
     NAMESPACE_SCHEMAS,
@@ -103,6 +103,7 @@ async def put_settings(
     body: dict,
     db: DB,
     store_id: StoreId,
+    user_name: CurrentUserName = None,
     namespace: str = Path(..., description="general | notifications | tax_rates | ai | integrations"),
 ):
     if namespace not in NAMESPACE_SCHEMAS:
@@ -147,6 +148,10 @@ async def put_settings(
     )
     stmt = stmt.on_duplicate_key_update(data_json=validated)
     await db.execute(stmt)
+    from app.services.audit import log_event
+    log_event(db, store_id=store_id, user_name=user_name,
+              action="settings_updated", entity_type="settings",
+              detail=f"namespace={namespace}")
     await db.commit()
 
     row = (await db.execute(

@@ -362,6 +362,11 @@ function ProductList({ initialQuery }) {
                       whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                     }}>{p.name_kana}</div>
                   )}
+                  {p.internal_code && (
+                    <div style={{ fontSize: 9, color: PLX_SUBTLE, marginTop: 2, fontFamily: "ui-monospace, Consolas, monospace" }}>
+                      {p.internal_code}
+                    </div>
+                  )}
                   {p.tags?.length > 0 && (
                     <div style={{ display: "flex", gap: 4, marginTop: 5, flexWrap: "wrap" }}>
                       {p.tags.slice(0, 2).map((t) => (
