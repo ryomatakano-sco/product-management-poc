@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, UploadFile
 from sqlalchemy import case, exists, func, insert as sa_insert, literal, or_, select, text
 from sqlalchemy.orm import selectinload
 
@@ -266,6 +266,150 @@ async def search_products(
             )
         results.append(ProductSearchResult(id=p.id, name=p.name, default_variant=dv))
     return results
+
+
+# NOTE: static routes — declared before /{product_id}.
+_IMPORT_COLUMNS = ["name", "name_kana", "category", "vendor", "sku", "barcode",
+                   "price", "cost", "stock", "item_type", "expiry_date", "unit", "reorder_url"]
+
+
+@router.get("/import-template.csv", summary="商品インポート用テンプレートCSV")
+async def product_import_template():
+    import csv as _csv
+    import io as _io
+    from fastapi.responses import StreamingResponse
+    buf = _io.StringIO()
+    buf.write("﻿")  # UTF-8 BOM
+    w = _csv.writer(buf)
+    w.writerow(_IMPORT_COLUMNS)
+    w.writerow(["サンプル歯ブラシ", "サンプルハブラシ", "歯ブラシ", "サンスター",
+                "SAMPLE-001", "4901234567894", "330", "200", "10", "product", "", "個", ""])
+    w.writerow(["サンプルグローブ", "", "衛生材料", "Ci メディカル",
+                "", "", "1280", "800", "20", "consumable", "2027-01-31", "箱", ""])
+    return StreamingResponse(
+        iter([buf.getvalue()]), media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="product_import_template.csv"'},
+    )
+
+
+@router.post("/import.csv", summary="商品CSVを一括インポート")
+async def import_products_csv(db: DB, store_id: StoreId, file: UploadFile):
+    """Bulk product import. Row rules (documented):
+      • name required; category/vendor resolved BY NAME (unknown → row error,
+        nothing auto-created); barcode already in the catalog → row error.
+      • item_type: product | consumable (default product).
+      • Rows import as DRAFT products with one default variant; publish from
+        the list afterwards. Bad rows are reported, good rows still import.
+    """
+    import csv as _csv
+    import io as _io
+
+    raw = await file.read()
+    if len(raw) > 2 * 1024 * 1024:
+        raise HTTPException(422, detail="ファイルサイズは 2MB 以下にしてください")
+    try:
+        text_data = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        try:
+            text_data = raw.decode("cp932")
+        except UnicodeDecodeError:
+            raise HTTPException(422, detail="CSV の文字コードを判定できません（UTF-8 か Shift_JIS で保存してください）")
+
+    rows = list(_csv.reader(_io.StringIO(text_data)))
+    if not rows:
+        raise HTTPException(422, detail="CSV が空です")
+
+    # Header map (template order not required — match by header name).
+    header = [h.strip().lstrip("﻿").lower() for h in rows[0]]
+    col = {name: header.index(name) for name in _IMPORT_COLUMNS if name in header}
+    if "name" not in col:
+        raise HTTPException(422, detail="ヘッダー行に name 列が必要です（テンプレートをご利用ください）")
+
+    def cell(row, key):
+        i = col.get(key)
+        return (row[i].strip() if i is not None and i < len(row) else "")
+
+    cats = {c.name: c.id for c in (await db.execute(
+        select(Category).where(Category.store_id == store_id))).scalars().all()}
+    vendors = {v.company_name: v.id for v in (await db.execute(
+        select(Vendor).where(Vendor.store_id == store_id))).scalars().all()}
+    existing_barcodes = set((await db.execute(
+        select(ProductVariant.barcode).where(
+            ProductVariant.store_id == store_id, ProductVariant.barcode.is_not(None))
+    )).scalars().all())
+
+    created, errors = 0, []
+    for idx, row in enumerate(rows[1:], start=2):
+        if not any((c or "").strip() for c in row):
+            continue
+        name = cell(row, "name")
+        if not name:
+            errors.append({"row": idx, "message": "name が空です"})
+            continue
+        cat_name, vendor_name = cell(row, "category"), cell(row, "vendor")
+        if cat_name and cat_name not in cats:
+            errors.append({"row": idx, "message": f"カテゴリ「{cat_name}」が存在しません"})
+            continue
+        if vendor_name and vendor_name not in vendors:
+            errors.append({"row": idx, "message": f"仕入先「{vendor_name}」が存在しません"})
+            continue
+        barcode = cell(row, "barcode") or None
+        if barcode and barcode in existing_barcodes:
+            errors.append({"row": idx, "message": f"JAN {barcode} は既に登録されています"})
+            continue
+        item_type_raw = (cell(row, "item_type") or "product").lower()
+        if item_type_raw not in ("product", "consumable"):
+            errors.append({"row": idx, "message": f"item_type は product か consumable です: {item_type_raw}"})
+            continue
+        try:
+            price = Decimal(cell(row, "price") or "0")
+            cost = Decimal(cell(row, "cost")) if cell(row, "cost") else None
+            stock = int(cell(row, "stock") or "0")
+            expiry = date.fromisoformat(cell(row, "expiry_date")) if cell(row, "expiry_date") else None
+        except (ValueError, ArithmeticError):
+            errors.append({"row": idx, "message": "price / cost / stock / expiry_date の形式が不正です"})
+            continue
+
+        product = Product(
+            store_id=store_id, name=name, name_kana=cell(row, "name_kana") or None,
+            category_id=cats.get(cat_name), vendor_id=vendors.get(vendor_name),
+            status=ProductStatus.draft,
+            item_type=ItemType(item_type_raw),
+            expiry_date=expiry, unit=cell(row, "unit") or None,
+            reorder_url=cell(row, "reorder_url") or None,
+        )
+        db.add(product)
+        await db.flush()
+        variant = ProductVariant(
+            product_id=product.id, store_id=store_id, is_default=True,
+            sku=cell(row, "sku") or None, barcode=barcode,
+            price=price, cost=cost, on_hand=0,
+        )
+        db.add(variant)
+        await db.flush()
+        # Initial stock goes through the per-branch stock service so the
+        # branch row + total stay consistent, with an audit trail.
+        if stock > 0:
+            from app.models.inventory import AdjustmentReason, InventoryAdjustment, InventoryField
+            from app.services.stock import StockError, apply_stock_delta
+            try:
+                b = await apply_stock_delta(
+                    db, store_id=store_id, variant_id=variant.id,
+                    branch_id=None, field=InventoryField.on_hand, delta=stock,
+                )
+                db.add(InventoryAdjustment(
+                    store_id=store_id, variant_id=variant.id, branch_id=b,
+                    field=InventoryField.on_hand, delta=stock,
+                    reason=AdjustmentReason.correction, note="CSVインポート初期在庫",
+                ))
+            except StockError as e:
+                errors.append({"row": idx, "message": f"在庫の初期化に失敗: {e.message}"})
+        if barcode:
+            existing_barcodes.add(barcode)
+        created += 1
+
+    await db.commit()
+    return {"created": created, "errors": errors}
 
 
 @router.get("/{product_id}/sales-weekly", summary="過去N週の週次販売実績")

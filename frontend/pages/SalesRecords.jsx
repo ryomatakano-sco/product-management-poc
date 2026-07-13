@@ -347,7 +347,7 @@ function SalesRecords({ query, initialSaleId }) {
               </select>
             </div>
             <div style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
-              <span>{(page - 1) * pageSize + 1} - {Math.min(page * pageSize, totalRows)} 件 / 全 {totalRows} 件</span>
+              <span>{`${(page - 1) * pageSize + 1} - ${Math.min(page * pageSize, totalRows)} 件 / 全 ${totalRows} 件`}</span>
               <button
                 type="button" onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
@@ -397,7 +397,9 @@ function SalesRecords({ query, initialSaleId }) {
 // method chips, optional sold_at + note. Matches the design tab mockup.
 // ───────────────────────────────────────────────────────────────────────────
 
-function ManualSaleModal({ onClose, onSaved }) {
+function ManualSaleModal({ onClose, onSaved, initialProduct }) {
+  // initialProduct (optional): { variant_id, name, sku, on_hand, price } —
+  // passed by the product-detail quick-sale button to skip the typeahead.
   const branchesQ = useFetch(() => api.listBranches(), []);
   const branches = branchesQ.data?.items ?? [];
 
@@ -406,12 +408,13 @@ function ManualSaleModal({ onClose, onSaved }) {
   const [searching, setSearching] = React.useState(false);
   const [showResults, setShowResults] = React.useState(false);
 
-  const [selected, setSelected] = React.useState(null); // { variant_id, name, sku, on_hand, price }
+  const [selected, setSelected] = React.useState(initialProduct || null); // { variant_id, name, sku, on_hand, price }
   const [branchId, setBranchId] = React.useState("");
   const [quantity, setQuantity] = React.useState(1);
-  const [unitPrice, setUnitPrice] = React.useState(0);
+  const [unitPrice, setUnitPrice] = React.useState(initialProduct?.price != null ? Number(initialProduct.price) : 0);
   const [paymentMethod, setPaymentMethod] = React.useState("cash");
-  const [soldBy, setSoldBy]   = React.useState("");
+  // 担当者 prefilled from the logged-in user (auth heavy-tier item 1).
+  const [soldBy, setSoldBy]   = React.useState(window.PLX_ME?.display_name || "");
   const [patientRef, setPatientRef] = React.useState("");
   const [soldAt, setSoldAt]   = React.useState("");
   const [note, setNote]       = React.useState("");
@@ -967,3 +970,4 @@ function SalesFilterSelect({ label, value, onChange, options, disabled }) {
 }
 
 window.SalesRecords = SalesRecords;
+window.PlxManualSaleModal = ManualSaleModal;  // reused by ProductDetail's quick-sale button

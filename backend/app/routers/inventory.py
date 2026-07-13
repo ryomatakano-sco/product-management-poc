@@ -4,13 +4,13 @@ import csv
 import io
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.deps import DB, StoreId
-from app.models.inventory import InventoryAdjustment, VariantBranchStock
+from app.models.inventory import AdjustmentReason, InventoryAdjustment, InventoryField, VariantBranchStock
 from app.models.product import ItemType, Product, ProductStatus, ProductVariant
 from app.schemas.base import PaginatedResponse
 from app.schemas.inventory import InventoryAdjustmentRead, InventoryAdjustRequest
@@ -198,6 +198,154 @@ async def list_recent_adjustments(
             "note": a.note,
         })
     return {"items": items, "total": total}
+
+
+@router.post("/inventory/transfer", summary="拠点間で在庫を移動する")
+async def transfer_stock(body: dict, db: DB, store_id: StoreId):
+    """Branch-to-branch transfer: −qty at from_branch, +qty at to_branch,
+    both atomic and logged with reason='transfer' (migration 015).
+    Body: {variant_id, from_branch_id, to_branch_id, quantity, note?}
+    """
+    try:
+        variant_id = int(body["variant_id"])
+        from_branch = int(body["from_branch_id"])
+        to_branch = int(body["to_branch_id"])
+        quantity = int(body["quantity"])
+    except (KeyError, TypeError, ValueError):
+        raise HTTPException(422, detail="variant_id / from_branch_id / to_branch_id / quantity は必須です")
+    if quantity <= 0:
+        raise HTTPException(422, detail="数量は1以上を指定してください")
+    if from_branch == to_branch:
+        raise HTTPException(400, detail="移動元と移動先が同じ拠点です")
+    note = (body.get("note") or "").strip() or None
+
+    variant = (await db.execute(
+        select(ProductVariant)
+        .where(ProductVariant.id == variant_id, ProductVariant.store_id == store_id)
+        .options(selectinload(ProductVariant.product))
+    )).scalar_one_or_none()
+    if variant is None:
+        raise HTTPException(404, detail="Variant not found")
+
+    try:
+        await apply_stock_delta(
+            db, store_id=store_id, variant_id=variant_id,
+            branch_id=from_branch, field=InventoryField.on_hand, delta=-quantity,
+        )
+        await apply_stock_delta(
+            db, store_id=store_id, variant_id=variant_id,
+            branch_id=to_branch, field=InventoryField.on_hand, delta=quantity,
+        )
+    except StockError as e:
+        await db.rollback()
+        raise HTTPException(400, detail=e.message)
+
+    for b, d in ((from_branch, -quantity), (to_branch, quantity)):
+        db.add(InventoryAdjustment(
+            store_id=store_id, variant_id=variant_id, branch_id=b,
+            field=InventoryField.on_hand, delta=d,
+            reason=AdjustmentReason.transfer, note=note,
+        ))
+    await db.commit()
+    return {"ok": True, "variant_id": variant_id, "moved": quantity,
+            "from_branch_id": from_branch, "to_branch_id": to_branch}
+
+
+@router.post("/inventory/stocktake.csv", summary="棚卸しCSVを取り込んで差異を反映")
+async def import_stocktake_csv(
+    db: DB,
+    store_id: StoreId,
+    file: UploadFile,
+    branch_id: int | None = Query(None, description="棚卸しした拠点（省略時は本院）"),
+):
+    """Re-import the 棚卸しCSV: rows where 実地棚卸数 (col 10) is filled and
+    differs from the current count create a reason='correction' adjustment
+    for the difference.
+
+    PoC scope (documented): the CSV is per-PRODUCT; corrections apply to the
+    product's DEFAULT variant at the chosen branch — exact for single-variant
+    products (all current data), approximate for multi-variant ones.
+    """
+    raw = await file.read()
+    if len(raw) > 2 * 1024 * 1024:
+        raise HTTPException(422, detail="ファイルサイズは 2MB 以下にしてください")
+    try:
+        text_data = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        try:
+            text_data = raw.decode("cp932")
+        except UnicodeDecodeError:
+            raise HTTPException(422, detail="CSV の文字コードを判定できません（UTF-8 か Shift_JIS で保存してください）")
+
+    from app.services.notifier import check_low_stock
+    from app.services.stock import resolve_branch_id
+    try:
+        target_branch = await resolve_branch_id(db, store_id, branch_id)
+    except StockError as e:
+        raise HTTPException(400, detail=e.message)
+
+    reader = csv.reader(io.StringIO(text_data))
+    rows = list(reader)
+    adjusted, unchanged, errors = 0, 0, []
+    today_note = f"棚卸し取込 {date.today().isoformat()}"
+
+    for idx, row in enumerate(rows[1:], start=2):  # skip header; 1-based +header
+        if not row or not (row[0] or "").strip():
+            continue
+        try:
+            product_id = int(row[0])
+            actual_raw = (row[9] if len(row) > 9 else "").strip()
+            if actual_raw == "":
+                unchanged += 1
+                continue
+            actual = int(actual_raw)
+            if actual < 0:
+                raise ValueError("負の数")
+        except (ValueError, IndexError):
+            errors.append({"row": idx, "message": "商品ID または 実地棚卸数 が不正です"})
+            continue
+
+        variant = (await db.execute(
+            select(ProductVariant)
+            .where(ProductVariant.product_id == product_id, ProductVariant.store_id == store_id)
+            .order_by(ProductVariant.is_default.desc(), ProductVariant.id)
+            .options(selectinload(ProductVariant.product))
+            .limit(1)
+        )).scalar_one_or_none()
+        if variant is None:
+            errors.append({"row": idx, "message": f"商品ID {product_id} が見つかりません"})
+            continue
+
+        current = (await db.execute(
+            select(VariantBranchStock.on_hand).where(
+                VariantBranchStock.store_id == store_id,
+                VariantBranchStock.variant_id == variant.id,
+                VariantBranchStock.branch_id == target_branch,
+            )
+        )).scalar_one_or_none() or 0
+        delta = actual - current
+        if delta == 0:
+            unchanged += 1
+            continue
+        try:
+            await apply_stock_delta(
+                db, store_id=store_id, variant_id=variant.id,
+                branch_id=target_branch, field=InventoryField.on_hand, delta=delta,
+            )
+        except StockError as e:
+            errors.append({"row": idx, "message": e.message})
+            continue
+        db.add(InventoryAdjustment(
+            store_id=store_id, variant_id=variant.id, branch_id=target_branch,
+            field=InventoryField.on_hand, delta=delta,
+            reason=AdjustmentReason.correction, note=today_note,
+        ))
+        if delta < 0:
+            await check_low_stock(db, store_id, variant.id, variant.product)
+        adjusted += 1
+
+    await db.commit()
+    return {"adjusted": adjusted, "unchanged": unchanged, "errors": errors}
 
 
 @router.get("/inventory/export.csv", summary="棚卸しCSVをダウンロード")

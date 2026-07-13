@@ -96,8 +96,34 @@ function PurchaseOrders() {
     } finally { setExporting(false); }
   }
 
+  // ⚡ auto-draft: one draft PO per vendor for low-stock products not yet on
+  // an open PO (POST /purchase-orders/auto-draft).
+  const [autoDrafting, setAutoDrafting] = React.useState(false);
+  async function handleAutoDraft() {
+    if (autoDrafting) return;
+    setAutoDrafting(true);
+    try {
+      const r = await api.autoDraftPurchaseOrders();
+      if ((r.created || []).length === 0) {
+        window.PLX_TOAST.warn(r.message || "自動作成の対象がありません");
+      } else {
+        window.PLX_TOAST.success(`発注書ドラフトを ${r.created.length} 件作成しました`);
+        posQ.refetch();
+        if (summaryQ.refetch) summaryQ.refetch();
+      }
+    } catch (e) {
+      window.PLX_TOAST.error(e?.body?.detail || "自動作成に失敗しました");
+    } finally { setAutoDrafting(false); }
+  }
+
   const headerRight = (
     <div style={{ display: "inline-flex", gap: 8 }}>
+      <button onClick={handleAutoDraft} disabled={autoDrafting} style={{
+        ...btnSecondary, display: "inline-flex", alignItems: "center", gap: 6,
+        opacity: autoDrafting ? 0.6 : 1,
+      }} title="在庫低下の商品を仕入先ごとにまとめてドラフト化します">
+        {autoDrafting ? "作成中…" : "⚡ 低在庫から自動作成"}
+      </button>
       <button onClick={handleExport} disabled={exporting} style={{
         ...btnSecondary, display: "inline-flex", alignItems: "center", gap: 6,
         opacity: exporting ? 0.6 : 1,
@@ -255,7 +281,7 @@ function PurchaseOrders() {
               </select>
             </div>
             <div style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
-              <span>{(page - 1) * pageSize + 1} - {Math.min(page * pageSize, allRows.length)} 件 / 全 {allRows.length} 件</span>
+              <span>{`${(page - 1) * pageSize + 1} - ${Math.min(page * pageSize, allRows.length)} 件 / 全 ${allRows.length} 件`}</span>
               <button
                 type="button" onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}

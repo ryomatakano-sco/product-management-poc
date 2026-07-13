@@ -5,6 +5,8 @@
 .env.local
 .env.*.local
 !.env.example
+.cursor
+.claude
 
 # Local dev TLS certs (self-signed, for the phone-camera HTTPS path). The
 # private key must never be committed — regenerate locally via gen-dev-cert.

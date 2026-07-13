@@ -517,3 +517,28 @@ translation pass.
   "17 days left". **Pattern note for future strings:** keep counter phrases as ONE template
   child (`{\`あと ${days} 日\`}`), never `あと {days} 日` split across children.
 - Data values (category/vendor/product names) intentionally stay Japanese in EN mode.
+
+
+## 最終バッチ — 移動・棚卸取込・自動発注・商品CSV取込・クイック販売・APIパネル
+
+Branch: `feature/sales-records`
+
+**Backend**
+| Feature | Endpoint | Notes |
+|---|---|---|
+| 拠点間在庫移動 | `POST /inventory/transfer` | migration 015 が `inventory_adjustments.reason` に `'transfer'` を追加。移動元 −qty / 移動先 +qty を `apply_stock_delta` でアトミックに適用し、reason=`transfer` の監査行を 2 本記録。同一拠点は 400、在庫不足も 400。バリアント合計は不変（検証済み: 50 = 48+2 → 戻し）。 |
+| 棚卸しCSV取込 | `POST /inventory/stocktake.csv?branch_id=` | エクスポートCSV（UTF-8 BOM / cp932 両対応）の「実地棚卸数」列を読み、システム在庫との差分を reason=`correction`・メモ「棚卸し取込 <日付>」の調整として適用。`{adjusted, unchanged, errors[]}` を返す（検証: 1 件修正 / 11 件変更なし）。 |
+| 低在庫から自動発注 | `POST /purchase-orders/auto-draft` | 有効・仕入先設定済み・利用可能≦しきい値・未発注（オープンPOなし）のデフォルトバリアントを仕入先ごとにまとめ、下書きPOを作成。数量 = max(1, しきい値×2 − 利用可能)。再実行は重複を作らない（検証: 2 → 0 件）。 |
+| 商品CSVインポート | `GET /products/import-template.csv` + `POST /products/import.csv` | ヘッダー名でマッピング（name 必須）。カテゴリ・仕入先は**名前**で解決、未知は行エラー。JAN 重複も行エラー。取込商品は下書き、初期在庫は `apply_stock_delta` で拠点別に整合（検証: 1 件取込 + 2 行エラー、branch 行と variant 合計一致）。 |
+
+**Frontend**
+- 在庫: `⇄ 拠点間移動` モーダル（商品→バリアント→移動元/先→数量→メモ）と `⬆ 棚卸しCSV取込`（hidden file input → 結果トースト）。調整履歴の transfer は「拠点間移動」ラベルで表示。
+- 発注書: `⚡ 低在庫から自動作成` ボタン（作成件数をトースト）。
+- 商品一覧: `⬆ インポート` モーダル（テンプレDL / ファイル選択 / 行エラーテーブル表示）。
+- 商品詳細: `＋ 販売を記録` — SalesRecords の ManualSaleModal を `window.PlxManualSaleModal` として共有化し、`initialProduct` で商品プリフィル・担当者はログインユーザー名。
+- 設定 > API・Webhooks: 実情パネル（ベースURL / Swagger `/docs` リンク / セッションクッキー + `X-Store-Id` の説明 / curl 例 / APIキー・Webhook は本番スコープの注記）。
+
+**EN 翻訳の追加修正（ユーザー指摘: 「en 版で日本語が残る」）**
+- 最終バッチ全 UI 文言 + 既存の抜け（在庫テーブルヘッダー、ページネーション、調整履歴ヘッダー、サイドバーフッター、検索プレースホルダー等）を辞書に追加（約 90 エントリ）。
+- **i18n_autotr.js の実バグ修正**: テンプレートの優先順位が「キー全長」ソートだったため、スロット名が長い汎用キー（`${b.low_stock_threshold} 件`）が具体的なテンプレート（`${a} - ${b} 件 / 全 ${c} 件`）に勝ってしまい、末尾「件」が欠落する誤訳が発生。**リテラル部分の長さ**でソートするよう修正。
+- ページネーション等の複数子 JSX は単一テンプレート子（`{`...`}`）に統一（Phase 0 のパターン規則に準拠）。

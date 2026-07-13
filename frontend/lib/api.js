@@ -129,6 +129,25 @@ const api = {
   // Inventory (aggregate view + adjustments)
   listInventory:   (params) => request(`/inventory${qs(params)}`),
   listRecentAdjustments: (params) => request(`/inventory/adjustments${qs(params)}`),
+  transferStock: (body) => request(`/inventory/transfer`, { method: "POST", body: JSON.stringify(body) }),
+  // Multipart CSV uploads (stock-take reconciliation / product import).
+  uploadCsv: async (path, file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(path, {
+      method: "POST",
+      headers: { "X-Store-Id": String(getStoreId()) },
+      body: fd,
+    });
+    let body = null;
+    try { body = await res.json(); } catch (_) {}
+    if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status, body });
+    return body;
+  },
+  importStocktakeCsv: (file, branchId) =>
+    api.uploadCsv(`/inventory/stocktake.csv${branchId ? `?branch_id=${branchId}` : ""}`, file),
+  importProductsCsv: (file) => api.uploadCsv(`/products/import.csv`, file),
+  autoDraftPurchaseOrders: () => request(`/purchase-orders/auto-draft`, { method: "POST" }),
 
   // Purchase orders (existing backend at /purchase-orders)
   listPurchaseOrders: (params) => request(`/purchase-orders${qs(params)}`),

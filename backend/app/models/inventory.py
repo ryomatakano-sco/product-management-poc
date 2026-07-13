@@ -26,6 +26,7 @@ class AdjustmentReason(str, enum.Enum):
     damage = "damage"
     other = "other"
     refund = "refund"
+    transfer = "transfer"  # branch-to-branch move (migration 015)
 
 
 class InventoryAdjustment(Base):

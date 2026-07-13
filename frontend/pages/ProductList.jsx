@@ -125,14 +125,18 @@ function ProductList({ initialQuery }) {
     productsQ.refetch();
   }
 
+  const [showImport, setShowImport] = React.useState(false);
   const headerRight = (
-    <button onClick={() => navigate("/products/new")} style={{
-      height: 38, padding: "0 18px", borderRadius: 9999,
-      background: PLX_GREEN, color: "#fff", border: "none",
-      fontWeight: 700, fontSize: 13, cursor: "pointer",
-      display: "inline-flex", alignItems: "center", gap: 6,
-      boxShadow: "0 6px 16px rgba(26,166,138,.25)",
-    }}>＋ 新しい商品を追加</button>
+    <div style={{ display: "inline-flex", gap: 8 }}>
+      <button onClick={() => setShowImport(true)} style={btnSecondary}>⬆ インポート</button>
+      <button onClick={() => navigate("/products/new")} style={{
+        height: 38, padding: "0 18px", borderRadius: 9999,
+        background: PLX_GREEN, color: "#fff", border: "none",
+        fontWeight: 700, fontSize: 13, cursor: "pointer",
+        display: "inline-flex", alignItems: "center", gap: 6,
+        boxShadow: "0 6px 16px rgba(26,166,138,.25)",
+      }}>＋ 新しい商品を追加</button>
+    </div>
   );
 
   const toggleQuick = (k) => setQuickFilters((s) => s.includes(k) ? s.filter(x => x !== k) : [...s, k]);
@@ -456,7 +460,7 @@ function ProductList({ initialQuery }) {
               </select>
             </div>
             <div style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
-              <span>{(page - 1) * pageSize + 1} - {Math.min(page * pageSize, items.length)} 件 / 全 {items.length} 件</span>
+              <span>{`${(page - 1) * pageSize + 1} - ${Math.min(page * pageSize, items.length)} 件 / 全 ${items.length} 件`}</span>
               <button
                 type="button" onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
@@ -477,7 +481,88 @@ function ProductList({ initialQuery }) {
           </div>
         )}
       </div>
+
+      {showImport && (
+        <ProductImportModal
+          onClose={() => setShowImport(false)}
+          onImported={() => productsQ.refetch()}
+        />
+      )}
     </AdminShell>
+  );
+}
+
+// 商品CSVインポート — POST /products/import.csv. Rows import as DRAFTS;
+// unknown category/vendor or duplicate JAN become row errors (nothing is
+// auto-created). Template: GET /products/import-template.csv.
+function ProductImportModal({ onClose, onImported }) {
+  const inputRef = React.useRef(null);
+  const [busy, setBusy] = React.useState(false);
+  const [result, setResult] = React.useState(null); // {created, errors}
+
+  const doImport = async (file) => {
+    if (!file || busy) return;
+    setBusy(true);
+    setResult(null);
+    try {
+      const r = await api.importProductsCsv(file);
+      setResult(r);
+      if (r.created > 0) {
+        window.PLX_TOAST.success(`${r.created} 件の商品を下書きとして取り込みました`);
+        onImported();
+      } else if ((r.errors || []).length) {
+        window.PLX_TOAST.warn("取り込めた商品がありません — エラーをご確認ください");
+      }
+    } catch (e) {
+      window.PLX_TOAST.error(e?.body?.detail || "インポートに失敗しました");
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <PlxModal title="商品CSVインポート" onClose={onClose}>
+      <div style={{ fontSize: 12, color: PLX_MUTED, lineHeight: 1.7, marginBottom: 14 }}>
+        {"テンプレートの列（name は必須）で作成した CSV を選択してください。取り込んだ商品は下書きとして登録され、カテゴリ・仕入先は既存の名前で指定します（存在しない行はエラーになります）。"}
+        <div style={{ marginTop: 6 }}>
+          <a href="#" onClick={(e) => { e.preventDefault(); api.downloadCsv("/products/import-template.csv", null, "product_import_template.csv"); }}
+            style={{ color: PLX_GREEN, fontWeight: 700 }}>⬇ テンプレートをダウンロード</a>
+        </div>
+      </div>
+
+      <input ref={inputRef} type="file" accept=".csv,text/csv" style={{ display: "none" }}
+        onChange={(e) => { doImport(e.target.files?.[0]); e.target.value = ""; }} />
+      <button onClick={() => inputRef.current?.click()} disabled={busy} style={{
+        width: "100%", padding: "22px 16px", borderRadius: 10,
+        border: `2px dashed ${PLX_BORDER}`, background: T.PLX_SURFACE_50,
+        color: PLX_MUTED, fontSize: 13, cursor: "pointer", opacity: busy ? 0.6 : 1,
+      }}>{busy ? "取込中…" : "📄 クリックして CSV を選択"}</button>
+
+      {result && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>
+            結果: {result.created} 件取込 / {(result.errors || []).length} 行エラー
+          </div>
+          {(result.errors || []).length > 0 && (
+            <div style={{
+              maxHeight: 180, overflowY: "auto", border: `1px solid ${PLX_BORDER}`,
+              borderRadius: 8, fontSize: 12,
+            }}>
+              {result.errors.map((er, i) => (
+                <div key={i} style={{
+                  padding: "6px 10px",
+                  borderBottom: i < result.errors.length - 1 ? `1px solid ${PLX_BORDER}` : "none",
+                }}>
+                  <span style={{ fontWeight: 700, color: PLX_RED }}>行 {er.row}:</span> {er.message}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
+        <button onClick={onClose} style={btnSecondary}>閉じる</button>
+      </div>
+    </PlxModal>
   );
 }
 

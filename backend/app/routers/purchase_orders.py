@@ -14,7 +14,7 @@ from sqlalchemy.orm import selectinload
 
 from app.deps import DB, StoreId
 from app.models.inventory import AdjustmentReason, InventoryAdjustment, InventoryField
-from app.models.product import Product, ProductVariant
+from app.models.product import Product, ProductStatus, ProductVariant
 from app.models.purchase_order import POStatus, PurchaseOrder, PurchaseOrderItem, PurchaseOrderTag
 from app.models.tag import Tag
 from sqlalchemy import insert as sa_insert
@@ -160,6 +160,90 @@ async def list_purchase_orders(
     total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     rows = (await db.execute(stmt.order_by(PurchaseOrder.id.desc()).offset(offset).limit(limit))).scalars().unique().all()
     return PaginatedResponse(items=[_po_to_read(po) for po in rows], total=total)
+
+
+# NOTE: declared before /{po_id} — "auto-draft" must not be parsed as a po_id.
+@router.post("/auto-draft", summary="低在庫から発注書ドラフトを自動作成")
+async def auto_draft_purchase_orders(db: DB, store_id: StoreId):
+    """One draft PO per vendor covering every active product whose default
+    variant sits at/below its low-stock threshold, has a vendor, and is not
+    already on an open (draft/ordered/partially_received) PO.
+
+    Quantity heuristic (documented): threshold*2 − available, min 1.
+    unit_cost = the variant's cost (0 when unset — editable on the draft).
+    """
+    variants = (await db.execute(
+        select(ProductVariant)
+        .join(Product, Product.id == ProductVariant.product_id)
+        .where(
+            ProductVariant.store_id == store_id,
+            ProductVariant.is_default.is_(True),
+            Product.status == ProductStatus.active,
+            Product.vendor_id.is_not(None),
+        )
+        .options(selectinload(ProductVariant.product))
+    )).scalars().all()
+
+    # Variants already covered by an open PO.
+    open_variant_ids = set((await db.execute(
+        select(PurchaseOrderItem.variant_id)
+        .join(PurchaseOrder, PurchaseOrder.id == PurchaseOrderItem.purchase_order_id)
+        .where(
+            PurchaseOrder.store_id == store_id,
+            PurchaseOrder.status.in_([POStatus.draft, POStatus.ordered, POStatus.partially_received]),
+        )
+    )).scalars().all())
+
+    from collections import defaultdict
+    by_vendor: dict[int, list] = defaultdict(list)
+    for v in variants:
+        threshold = v.low_stock_threshold if v.low_stock_threshold is not None else 10
+        available = (v.on_hand or 0) - (v.committed or 0) - (v.unavailable or 0)
+        if available > threshold or v.id in open_variant_ids:
+            continue
+        qty = max(1, threshold * 2 - available)
+        by_vendor[v.product.vendor_id].append((v, qty))
+
+    if not by_vendor:
+        return {"created": [], "message": "自動作成の対象がありません（低在庫かつ未発注の商品なし）"}
+
+    # Destination = the store's main branch.
+    from app.models.branch import Branch
+    main_branch = (await db.execute(
+        select(Branch.id).where(Branch.store_id == store_id)
+        .order_by((Branch.branch_type != "main"), Branch.id).limit(1)
+    )).scalar_one_or_none()
+    if main_branch is None:
+        raise HTTPException(400, detail="拠点が登録されていません")
+
+    created = []
+    for vendor_id, lines in by_vendor.items():
+        po = PurchaseOrder(
+            store_id=store_id,
+            supplier_vendor_id=vendor_id,
+            destination_branch_id=main_branch,
+            status=POStatus.draft,
+            note="低在庫からの自動作成ドラフト",
+            shipping_cost=Decimal("0"),
+            subtotal=Decimal("0"),
+            total=Decimal("0"),
+        )
+        db.add(po)
+        await db.flush()
+        items = []
+        for v, qty in lines:
+            cost = v.cost if v.cost is not None else Decimal("0")
+            item = PurchaseOrderItem(
+                purchase_order_id=po.id, store_id=store_id, variant_id=v.id,
+                quantity_ordered=qty, unit_cost=cost, line_total=cost * qty,
+            )
+            db.add(item)
+            items.append(item)
+        po.subtotal, po.total = _compute_totals(items, po.shipping_cost)
+        created.append(po.id)
+
+    await db.commit()
+    return {"created": created}
 
 
 # NOTE: declared before /{po_id} — "summary" must not be parsed as a po_id.

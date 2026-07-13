@@ -6,6 +6,7 @@ function ProductDetail({ productId }) {
   const [adjustVariant, setAdjustVariant] = React.useState(null);
   // Bumped after each adjustment so the 在庫履歴 tab refetches (audit F5).
   const [histKey, setHistKey] = React.useState(0);
+  const [showQuickSale, setShowQuickSale] = React.useState(false);
   const [publishing, setPublishing] = React.useState(false);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
@@ -71,6 +72,15 @@ function ProductDetail({ productId }) {
   const canPublish = canPublishProduct(p);
   const headerRight = (
     <div style={{ display: "flex", gap: 8 }}>
+      {p && p.status === "active" && heroVariant && (
+        <button
+          onClick={() => setShowQuickSale(true)}
+          style={btnSecondary}
+          title="この商品の販売をその場で記録します"
+        >
+          ＋ 販売を記録
+        </button>
+      )}
       <button
         onClick={() => setConfirmDelete(true)}
         style={{ ...btnGhost, color: "#B91C1C" }}
@@ -301,6 +311,25 @@ function ProductDetail({ productId }) {
         )}
       </div>
 
+      {showQuickSale && heroVariant && (
+        <PlxManualSaleModal
+          initialProduct={{
+            variant_id: heroVariant.id,
+            name: p.name,
+            sku: heroVariant.sku,
+            on_hand: heroVariant.on_hand,
+            price: heroVariant.price,
+          }}
+          onClose={() => setShowQuickSale(false)}
+          onSaved={() => {
+            setShowQuickSale(false);
+            window.PLX_TOAST?.success("販売を記録しました");
+            productQ.refetch();
+            setHistKey((k) => k + 1);
+          }}
+        />
+      )}
+
       {adjustVariant && (
         <InventoryAdjustModal
           variant={adjustVariant}
@@ -517,7 +546,7 @@ function InventoryHistory({ variantId, refreshKey }) {
   const q = useFetch(() => api.inventoryHistory(variantId, 50, 0), [variantId, refreshKey]);
   const reasonLabels = {
     manual: "手動", sale: "販売", purchase_order_received: "仕入",
-    correction: "修正", damage: "破損", other: "その他",
+    correction: "修正", damage: "破損", transfer: "拠点間移動", other: "その他",
   };
   const fieldLabels = { on_hand: "在庫", committed: "引当", unavailable: "使用不可" };
 

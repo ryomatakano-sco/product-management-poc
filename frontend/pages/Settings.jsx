@@ -11,7 +11,7 @@ const SETTINGS_SECTIONS = [
   { id: "ai",            label: "AI設定",        icon: "sparkles" },
   { id: "integrations",  label: "統合",          icon: "link" },
   { id: "users",         label: "ユーザー管理",  icon: "users" },
-  { id: "api",           label: "API・Webhooks", icon: "key",   placeholder: true },
+  { id: "api",           label: "API・Webhooks", icon: "key" },
 ];
 
 function Settings({ query }) {
@@ -57,12 +57,7 @@ function Settings({ query }) {
           {ns === "ai" && <AiSettings />}
           {ns === "integrations" && <IntegrationsSettings />}
           {ns === "users" && <UsersSettings />}
-          {ns === "api" && (
-            <div style={{
-              background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
-              padding: 48, textAlign: "center", color: T.PLX_INK_500,
-            }}>この項目は近日対応予定です。</div>
-          )}
+          {ns === "api" && <ApiSettings />}
         </div>
       </div>
     </AdminShell>
@@ -608,6 +603,56 @@ function UserAddModal({ onClose, onSaved }) {
         </button>
       </div>
     </PlxModal>
+  );
+}
+
+// API・Webhooks — honest PoC pane: documents how to call the API today
+// (session cookie or the X-Store-Id dev header + interactive Swagger docs).
+// Real API-key issuance / webhooks are production scope, stated as such.
+function ApiSettings() {
+  const base = window.location.origin;
+  const storeId = window.PLX_ME?.store_id ?? (window.getStoreId ? window.getStoreId() : 1);
+  const row = { fontSize: 12, display: "grid", gridTemplateColumns: "160px 1fr", gap: 10, padding: "9px 0", borderBottom: `1px solid ${T.PLX_LINE_100}`, alignItems: "center" };
+  const mono = { fontFamily: T.FONT_MONO, fontSize: 12, color: T.PLX_INK_900 };
+  return (
+    <div style={{
+      background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+      boxShadow: T.SHADOW_SM, padding: 24,
+    }}>
+      <h3 style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 700 }}>API・Webhooks</h3>
+      <div style={{ fontSize: 12, color: T.PLX_INK_500, marginBottom: 16 }}>
+        {"PoC の REST API はこのアプリと同じサーバーで公開されています。すべてのエンドポイントは Swagger UI から対話的に試せます。"}
+      </div>
+
+      <div style={row}><span style={{ color: T.PLX_INK_500, fontWeight: 600 }}>ベースURL</span><span style={mono}>{base}</span></div>
+      <div style={row}>
+        <span style={{ color: T.PLX_INK_500, fontWeight: 600 }}>APIドキュメント</span>
+        <a href={`${base}/docs`} target="_blank" rel="noopener noreferrer" style={{ ...mono, color: T.PLX_GREEN_700 }}>{base}/docs（Swagger UI）</a>
+      </div>
+      <div style={row}>
+        <span style={{ color: T.PLX_INK_500, fontWeight: 600 }}>認証（ブラウザ）</span>
+        <span style={{ fontSize: 12, color: T.PLX_INK_700 }}>ログイン時の HttpOnly セッションクッキー（7日間有効）</span>
+      </div>
+      <div style={row}>
+        <span style={{ color: T.PLX_INK_500, fontWeight: 600 }}>認証（開発用）</span>
+        <span style={{ fontSize: 12, color: T.PLX_INK_700 }}>
+          ヘッダー <code style={mono}>X-Store-Id: {String(storeId)}</code>（PoC 限定 — 本番では廃止予定）
+        </span>
+      </div>
+      <div style={{ ...row, borderBottom: "none" }}>
+        <span style={{ color: T.PLX_INK_500, fontWeight: 600 }}>例 (curl)</span>
+        <code style={{ ...mono, background: T.PLX_SURFACE_50, padding: "6px 10px", borderRadius: 6, display: "block", overflowX: "auto" }}>
+          curl -H "X-Store-Id: {String(storeId)}" {base}/products?limit=5
+        </code>
+      </div>
+
+      <div style={{
+        marginTop: 16, padding: 12, background: T.PLX_SURFACE_50,
+        borderRadius: T.RADIUS_MD, fontSize: 11, color: T.PLX_INK_500, lineHeight: 1.7,
+      }}>
+        {"APIキーの発行・失効、Webhook 配信、レート制限は本番実装のスコープです（認証基盤の置き換えと同時に実装予定）。PoC では上記 2 方式のみをサポートします。"}
+      </div>
+    </div>
   );
 }
 

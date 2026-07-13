@@ -61,11 +61,12 @@
       const re = new RegExp(
         "^" + parts.map(_escapeRe).join("([^]*?)") + "$",
       );
-      out.push({ re, en: dict[ja], slots, jaLen: ja.length });
+      // Specificity = length of the literal (non-slot) text. Sorting by raw
+      // key length lets a generic key with a long slot name (e.g.
+      // "${b.low_stock_threshold} 件") outrank a truly specific template.
+      out.push({ re, en: dict[ja], slots, litLen: parts.join("").length });
     }
-    // Longer keys first so a generic 3-char pattern doesn't gobble a
-    // specific 30-char one.
-    out.sort((a, b) => b.jaLen - a.jaLen);
+    out.sort((a, b) => b.litLen - a.litLen);
     return out;
   }
 
