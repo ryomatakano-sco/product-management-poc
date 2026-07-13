@@ -15,7 +15,7 @@ from sqlalchemy.orm import selectinload
 from app.deps import DB, StoreId, CurrentUserName
 from app.models.inventory import AdjustmentReason, InventoryAdjustment, InventoryField
 from app.models.product import Product, ProductStatus, ProductVariant
-from app.models.purchase_order import POStatus, PurchaseOrder, PurchaseOrderItem, PurchaseOrderTag
+from app.models.purchase_order import POComment, POStatus, PurchaseOrder, PurchaseOrderItem, PurchaseOrderTag
 from app.models.tag import Tag
 from sqlalchemy import insert as sa_insert
 from app.services.lots import receive_into_lot
@@ -647,3 +647,37 @@ async def cancel_purchase_order(po_id: int, db: DB, store_id: StoreId):
     )
     await db.commit()
     return _po_to_read(await _get_po(po.id, store_id, db))
+
+# ── Comments (feedback batch C) ─────────────────────────────────────
+
+@router.get("/{po_id}/comments", summary="発注書のコメント一覧")
+async def list_po_comments(po_id: int, db: DB, store_id: StoreId):
+    await _get_po(po_id, store_id, db)  # 404 + tenancy check
+    rows = (await db.execute(
+        select(POComment)
+        .where(POComment.purchase_order_id == po_id, POComment.store_id == store_id)
+        .order_by(POComment.created_at.asc(), POComment.id.asc())
+    )).scalars().all()
+    return {"items": [{
+        "id": c.id,
+        "author": c.author,
+        "body": c.body,
+        "created_at": c.created_at.isoformat() if c.created_at else None,
+    } for c in rows]}
+
+
+@router.post("/{po_id}/comments", status_code=201, summary="発注書にコメントを追加")
+async def add_po_comment(po_id: int, body: dict, db: DB, store_id: StoreId, user_name: CurrentUserName = None):
+    await _get_po(po_id, store_id, db)
+    text = str(body.get("body") or "").strip()
+    if not text:
+        raise HTTPException(400, detail="コメントを入力してください")
+    if len(text) > 1000:
+        raise HTTPException(400, detail="コメントは1000文字以内で入力してください")
+    c = POComment(store_id=store_id, purchase_order_id=po_id, author=user_name, body=text)
+    db.add(c)
+    await db.commit()
+    await db.refresh(c)
+    return {"id": c.id, "author": c.author, "body": c.body,
+            "created_at": c.created_at.isoformat() if c.created_at else None}
+

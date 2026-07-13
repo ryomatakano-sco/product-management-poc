@@ -10,6 +10,13 @@ const DASH_RED_LIGHT = "#FEE2E2";
 
 function Dashboard() {
   const summaryQ = useFetch(() => api.getDashboardSummary(), []);
+  const flowQ = useFetch(() => api.getMonthlyFlow(6), []);
+  // KPI tiles alternate between two metric sets every 7s (feedback batch C).
+  const [kpiAlt, setKpiAlt] = React.useState(false);
+  React.useEffect(() => {
+    const t = setInterval(() => setKpiAlt((a) => !a), 7000);
+    return () => clearInterval(t);
+  }, []);
   // Pull the 5 lowest-available active products for the attention table.
   const productsQ = useFetch(() => api.listProducts({ limit: 50, status: "active" }), []);
 
@@ -82,17 +89,37 @@ function Dashboard() {
         {loading ? (
           [0, 1, 2, 3].map((i) => <KpiSkeleton key={i} />)
         ) : (
-          <>
-            <KpiTile icon="box" label="登録商品数" value={String(kpis.total_products)} unit="" tone="green"
-              onClick={() => navigate("/products")} clickable />
-            <KpiTile icon="alert" label="在庫低下アラート" value={String(kpis.low_stock)} unit="件"
-              tone={kpis.low_stock > 0 ? "red" : "muted"}
-              onClick={() => navigate("/products?stock=low")} clickable />
-            <KpiTile icon="calendar" label="期限切れ間近" value={String(kpis.expiring_soon)} unit="件"
-              tone={kpis.expiring_soon > 0 ? "amber" : "muted"} delta="30日以内"
-              onClick={() => navigate("/products?expiry=soon")} clickable />
-            <KpiTile icon="card" label="今月の販売" value={`¥${formatYen(kpis.monthly_sales_jpy)}`} unit="" tone="green" />
-          </>
+          (() => {
+            const catRows = summary?.category_breakdown || [];
+            const totalUnits = catRows.reduce((a, r) => a + (r.stock_count || 0), 0);
+            const thisMonth = (flowQ.data?.months || []).slice(-1)[0] || { received: 0, sold: 0 };
+            const fade = { key: kpiAlt ? "b" : "a", style: { animation: "plxkpifade .45s ease" } };
+            return !kpiAlt ? (
+              <React.Fragment {...{ key: fade.key }}>
+                <div style={fade.style}><KpiTile icon="box" label="登録商品数" value={String(kpis.total_products)} unit="" tone="green"
+                  onClick={() => navigate("/products")} clickable /></div>
+                <div style={fade.style}><KpiTile icon="alert" label="在庫低下アラート" value={String(kpis.low_stock)} unit="件"
+                  tone={kpis.low_stock > 0 ? "red" : "muted"}
+                  onClick={() => navigate("/products?stock=low")} clickable /></div>
+                <div style={fade.style}><KpiTile icon="calendar" label="期限切れ間近" value={String(kpis.expiring_soon)} unit="件"
+                  tone={kpis.expiring_soon > 0 ? "amber" : "muted"} delta="30日以内"
+                  onClick={() => navigate("/products?expiry=soon")} clickable /></div>
+                <div style={fade.style}><KpiTile icon="card" label="今月の販売" value={`¥${formatYen(kpis.monthly_sales_jpy)}`} unit="" tone="green" /></div>
+              </React.Fragment>
+            ) : (
+              <React.Fragment {...{ key: fade.key }}>
+                <div style={fade.style}><KpiTile icon="box" label="総在庫点数" value={String(totalUnits)} unit="点" tone="green"
+                  onClick={() => navigate("/inventory")} clickable /></div>
+                <div style={fade.style}><KpiTile icon="alert" label="要対応の商品" value={String(attention.length)} unit="件"
+                  tone={attention.length > 0 ? "amber" : "muted"}
+                  onClick={() => navigate("/products?stock=low")} clickable /></div>
+                <div style={fade.style}><KpiTile icon="calendar" label="今月の入荷点数" value={String(thisMonth.received)} unit="点" tone="green"
+                  onClick={() => navigate("/purchase-orders")} clickable /></div>
+                <div style={fade.style}><KpiTile icon="card" label="今月の販売点数" value={String(thisMonth.sold)} unit="点" tone="green"
+                  onClick={() => navigate("/sales")} clickable /></div>
+              </React.Fragment>
+            );
+          })()
         )}
       </div>
 
@@ -114,7 +141,14 @@ function Dashboard() {
         {loading ? <CategorySkeleton /> : <CategoryBars rows={summary?.category_breakdown || []} />}
       </div>
 
-      <style>{`@keyframes plxshimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}`}</style>
+      {/* 月別 入荷 vs 販売 (feedback batch C) */}
+      <div style={{ ...dashCard, marginTop: 14 }}>
+        <DashCardHeader title="月別 入荷・販売点数（直近6ヶ月）" />
+        {flowQ.loading ? <CategorySkeleton /> : <MonthlyFlowBars months={flowQ.data?.months || []} />}
+      </div>
+
+      <style>{`@keyframes plxshimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+@keyframes plxkpifade{0%{opacity:0;transform:translateY(4px)}100%{opacity:1;transform:none}}`}</style>
     </AdminShell>
   );
 }
@@ -655,3 +689,41 @@ function SkelBlock({ w = "100%", h = 12, r = 6 }) {
 }
 
 window.Dashboard = Dashboard;
+
+// 月別の入荷 vs 販売（棒グラフ、点数ベース）。データは
+// GET /dashboard/monthly-flow — inventory_adjustments 由来なので
+// 手動調整・移動はどちらにも含まれない。
+function MonthlyFlowBars({ months }) {
+  if (!months.length || months.every((m) => m.received === 0 && m.sold === 0)) {
+    return <div style={{ fontSize: 12, color: PLX_MUTED, padding: "18px 0" }}>まだ入荷・販売のデータがありません。</div>;
+  }
+  const max = Math.max(1, ...months.flatMap((m) => [m.received, m.sold]));
+  const H = 120;
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 14, alignItems: "flex-end", paddingTop: 8 }}>
+        {months.map((m) => (
+          <div key={m.month} style={{ flex: 1, textAlign: "center" }}>
+            <div style={{ display: "flex", gap: 4, alignItems: "flex-end", justifyContent: "center", height: H }}>
+              <div title={`入荷 ${m.received} 点`} style={{
+                width: 18, height: Math.max(2, Math.round(H * m.received / max)),
+                background: T.PLX_GREEN_600, borderRadius: "4px 4px 0 0",
+              }} />
+              <div title={`販売 ${m.sold} 点`} style={{
+                width: 18, height: Math.max(2, Math.round(H * m.sold / max)),
+                background: T.PLX_BLUE_600 || "#2E7BD6", borderRadius: "4px 4px 0 0",
+              }} />
+            </div>
+            <div style={{ fontSize: 10, color: PLX_MUTED, marginTop: 6, fontFamily: T.FONT_MONO }}>{m.month.slice(2)}</div>
+            <div style={{ fontSize: 10, color: PLX_MUTED }}>{`${m.received} / ${m.sold}`}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 16, marginTop: 10, fontSize: 11, color: PLX_MUTED, justifyContent: "center" }}>
+        <span><span style={{ display: "inline-block", width: 10, height: 10, background: T.PLX_GREEN_600, borderRadius: 2, marginRight: 5 }} />入荷</span>
+        <span><span style={{ display: "inline-block", width: 10, height: 10, background: T.PLX_BLUE_600 || "#2E7BD6", borderRadius: 2, marginRight: 5 }} />販売</span>
+      </div>
+    </div>
+  );
+}
+

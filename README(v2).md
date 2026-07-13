@@ -571,3 +571,17 @@ Branch: `feature/sales-records`（migration 016）
 | 社内コード | `products.internal_code`: 消耗品 CA####、物販 PR####（店舗ごと連番）。mig 016 で既存商品をバックフィル、新規作成・CSVインポートでも自動採番（`_next_internal_code`）。商品一覧（名前下のモノスペース表記）と商品詳細（社内コード行）に表示。 |
 
 検証: cookie ログイン → 調整で created_by=山田 花子、PR0001 表示、カテゴリ「歯ブラシ」に Toothbrush 設定 → EN モードで全画面 Toothbrush 表示、税率 PUT → audit_events に settings_updated 記録。
+
+
+## フィードバック改善 C — 商品画像・POコメント・月別チャート・KPIローテーション
+
+Branch: `feature/sales-records`（migration 017）
+
+| 機能 | 実装 |
+|---|---|
+| 商品画像アップロード | `POST /products/{id}/images`（multipart, PNG/JPEG/WebP ≤4MB, ロゴと同じ /media 保存）+ `DELETE .../images/{image_id}`（DB 行 + ファイルを削除）。既存 `product_images` テーブルを利用、position は追記順で先頭がサムネイル。商品詳細のサムネ下に「＋ 画像を追加」ボタン + サブ画像サムネ（×で削除）。 |
+| PO コメント | mig 017 `po_comments`（author = ログインユーザー名スナップショット, body ≤1000字, CASCADE削除）。`GET/POST /purchase-orders/{id}/comments`。PO 詳細下部にスレッド UI（Enter 送信）— 編集権がなくても注意喚起・提案を残せる。空コメントは 400。 |
+| 月別 入荷 vs 販売チャート | `GET /dashboard/monthly-flow?months=`：inventory_adjustments を JST 月で集計（in = purchase_order_received の Σdelta、out = sale の Σ(−delta)、負値はノイズとして 0 クランプ）。ダッシュボード下部に 2 色棒グラフ（緑=入荷 / 青=販売、凡例・欠損月は 0 表示）。 |
+| KPI ローテーション | ダッシュボードの KPI 4 枚が 7 秒ごとに第2セットとクロスフェード：登録商品数↔総在庫点数、在庫低下↔要対応件数、期限間近↔今月の入荷点数、今月の販売額↔今月の販売点数。在庫・PO ページの KPI は保有情報を既に全て表示しているため対象外（追加データができたら同パターンを適用）。 |
+
+検証: 画像アップロード→ /media 配信 200 →削除 204、コメント投稿（author=山田 花子）+空ガード 400、monthly-flow が 2026-02〜07 の連続軸で 7月 = 入荷66/販売15、KPI が 7 秒後に第2セットへ切替。

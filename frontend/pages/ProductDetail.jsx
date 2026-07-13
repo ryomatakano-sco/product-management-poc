@@ -130,6 +130,7 @@ function ProductDetail({ productId }) {
       }}>
         <div>
           <ProductThumb url={p.images?.[0]?.url} size={160} iconSize={56} alt={p.name} />
+          <ProductImageManager product={p} onChanged={() => productQ.refetch()} />
         </div>
 
         <div style={{ minWidth: 0 }}>
@@ -841,3 +842,66 @@ function LotHistory({ product }) {
 
 window.ProductDetail = ProductDetail;
 window.PlxInventoryAdjustModal = InventoryAdjustModal;  // reused by the 在庫 page's adjust flow
+
+// 商品画像 — upload (PNG/JPEG/WebP ≤4MB) + thumbnails with delete.
+// First image (position 0) is the hero/thumbnail everywhere.
+function ProductImageManager({ product, onChanged }) {
+  const inputRef = React.useRef(null);
+  const [busy, setBusy] = React.useState(false);
+  const images = product.images || [];
+  const upload = async (file) => {
+    if (!file || busy) return;
+    setBusy(true);
+    try {
+      await api.uploadProductImage(product.id, file);
+      window.PLX_TOAST?.success("画像をアップロードしました");
+      onChanged?.();
+    } catch (e) {
+      window.PLX_TOAST?.error(e?.body?.detail || "画像のアップロードに失敗しました");
+    } finally { setBusy(false); }
+  };
+  const remove = async (img) => {
+    try {
+      await api.deleteProductImage(product.id, img.id);
+      window.PLX_TOAST?.success("画像を削除しました");
+      onChanged?.();
+    } catch (e) {
+      window.PLX_TOAST?.error(e?.body?.detail || "画像の削除に失敗しました");
+    }
+  };
+  return (
+    <div style={{ marginTop: 8, width: 160 }}>
+      <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" style={{ display: "none" }}
+        onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ""; }} />
+      <button onClick={() => inputRef.current?.click()} disabled={busy} style={{
+        width: "100%", padding: "6px 0", borderRadius: 8, fontSize: 11, fontWeight: 700,
+        border: `1px dashed ${PLX_BORDER}`, background: "transparent", color: PLX_MUTED,
+        cursor: "pointer", opacity: busy ? 0.6 : 1,
+      }}>{busy ? "アップロード中…" : "＋ 画像を追加"}</button>
+      {images.length > 1 && (
+        <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+          {images.slice(1).map((img) => (
+            <div key={img.id} style={{ position: "relative" }}>
+              <img src={img.url} alt="" style={{
+                width: 46, height: 46, objectFit: "cover", borderRadius: 8,
+                border: `1px solid ${PLX_BORDER}`,
+              }} />
+              <button onClick={() => remove(img)} title="この画像を削除" style={{
+                position: "absolute", top: -6, right: -6, width: 18, height: 18,
+                borderRadius: "50%", border: "none", background: T.PLX_RED_600, color: "#fff",
+                fontSize: 10, lineHeight: "18px", cursor: "pointer", padding: 0,
+              }}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {images.length > 0 && (
+        <button onClick={() => remove(images[0])} style={{
+          width: "100%", marginTop: 6, padding: "4px 0", borderRadius: 8, fontSize: 10,
+          border: "none", background: "transparent", color: T.PLX_RED_600, cursor: "pointer",
+        }}>メイン画像を削除</button>
+      )}
+    </div>
+  );
+}
+

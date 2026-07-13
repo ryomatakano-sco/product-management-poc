@@ -723,6 +723,9 @@ function PurchaseOrderDetail({ id }) {
             </div>
           )}
 
+          {/* コメント — 編集権がなくても連絡・注意喚起を残せる (batch C) */}
+          <POCommentsSection poId={po.id} />
+
           {/* Receive modal */}
           {showReceiveModal && (
             <POReceiveModal po={po} onClose={() => setShowReceiveModal(false)} onDone={() => { setShowReceiveModal(false); poQ.refetch(); }} />
@@ -1455,3 +1458,67 @@ window.PurchaseOrders = PurchaseOrders;
 window.PurchaseOrderDetail = PurchaseOrderDetail;
 window.PlxDetailKV = DetailKV;
 window.POStatusPill = POStatusPill;  // reused by the vendor detail 発注履歴 tab
+
+// コメントスレッド — GET/POST /purchase-orders/{id}/comments.
+// author はログインユーザー名のスナップショット（開発ヘッダー経由は匿名）。
+function POCommentsSection({ poId }) {
+  const q = useFetch(() => api.listPoComments(poId), [poId]);
+  const [text, setText] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const items = q.data?.items || [];
+  const submit = async () => {
+    const body = text.trim();
+    if (!body || busy) return;
+    setBusy(true);
+    try {
+      await api.addPoComment(poId, body);
+      setText("");
+      q.refetch();
+    } catch (e) {
+      window.PLX_TOAST?.error(e?.body?.detail || "コメントの投稿に失敗しました");
+    } finally { setBusy(false); }
+  };
+  return (
+    <div style={{
+      background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+      boxShadow: T.SHADOW_SM, padding: "14px 16px",
+    }}>
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
+        {`コメント (${items.length})`}
+      </div>
+      {items.length === 0 && (
+        <div style={{ fontSize: 12, color: T.PLX_INK_400, marginBottom: 10 }}>
+          まだコメントはありません。気づいた点や提案を残せます。
+        </div>
+      )}
+      {items.map((c) => (
+        <div key={c.id} style={{ padding: "8px 0", borderBottom: `1px solid ${T.PLX_LINE_100}` }}>
+          <div style={{ fontSize: 11, color: T.PLX_INK_500, marginBottom: 3 }}>
+            <b style={{ color: T.PLX_INK_700 }}>{c.author || "匿名"}</b>
+            <span style={{ marginLeft: 8, fontFamily: T.FONT_MONO, fontSize: 10 }}>
+              {c.created_at ? new Date(c.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}
+            </span>
+          </div>
+          <div style={{ fontSize: 13, color: T.PLX_INK_900, whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{c.body}</div>
+        </div>
+      ))}
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <input
+          value={text} onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
+          placeholder="コメントを入力…（Enter で送信）"
+          style={{
+            flex: 1, height: 36, padding: "0 12px", borderRadius: T.RADIUS_MD,
+            border: `1px solid ${T.PLX_LINE_200}`, fontSize: 13,
+            background: T.PLX_CARD_BG, color: T.PLX_INK_900, boxSizing: "border-box",
+          }}
+        />
+        <button onClick={submit} disabled={busy || !text.trim()} style={{
+          ...btnPrimary, fontSize: 12, padding: "0 16px",
+          opacity: busy || !text.trim() ? 0.5 : 1,
+        }}>投稿</button>
+      </div>
+    </div>
+  );
+}
+

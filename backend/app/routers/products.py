@@ -752,3 +752,69 @@ async def delete_product(product_id: int, db: DB, store_id: StoreId):
     product.status = ProductStatus.archived
     await db.commit()
     return await get_product(product_id, db, store_id)
+
+# ── Product images (feedback batch C) ───────────────────────────────
+# Same storage as the display logo: file lands in MEDIA_DIR, public URL
+# /media/<name>, DB row in product_images (position = append order).
+
+_IMG_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
+_IMG_MAX_BYTES = 4 * 1024 * 1024
+
+
+@router.post("/{product_id}/images", summary="商品画像をアップロード")
+async def upload_product_image(product_id: int, file: UploadFile, db: DB, store_id: StoreId):
+    import secrets as _secrets
+
+    from app.routers.settings import MEDIA_DIR
+
+    product = (await db.execute(
+        select(Product).where(Product.id == product_id, Product.store_id == store_id)
+        .options(selectinload(Product.images))
+    )).scalar_one_or_none()
+    if product is None:
+        raise HTTPException(404, detail="商品が見つかりません")
+    ext = _IMG_TYPES.get((file.content_type or "").lower())
+    if ext is None:
+        raise HTTPException(422, detail="PNG / JPEG / WebP のみアップロードできます")
+    contents = await file.read()
+    if len(contents) > _IMG_MAX_BYTES:
+        raise HTTPException(422, detail="ファイルサイズは 4MB 以下にしてください")
+
+    MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+    fname = f"product_{store_id}_{product_id}_{_secrets.token_hex(8)}{ext}"
+    (MEDIA_DIR / fname).write_bytes(contents)
+
+    img = ProductImage(
+        product_id=product_id, store_id=store_id,
+        url=f"/media/{fname}", alt_text=product.name,
+        position=max([i.position for i in product.images], default=-1) + 1,
+    )
+    db.add(img)
+    await db.commit()
+    await db.refresh(img)
+    return {"id": img.id, "url": img.url, "position": img.position}
+
+
+@router.delete("/{product_id}/images/{image_id}", status_code=204, summary="商品画像を削除")
+async def delete_product_image(product_id: int, image_id: int, db: DB, store_id: StoreId):
+    from pathlib import Path as _Path
+
+    from app.routers.settings import MEDIA_DIR
+
+    img = (await db.execute(
+        select(ProductImage).where(
+            ProductImage.id == image_id,
+            ProductImage.product_id == product_id,
+            ProductImage.store_id == store_id,
+        )
+    )).scalar_one_or_none()
+    if img is None:
+        raise HTTPException(404, detail="画像が見つかりません")
+    url = img.url
+    await db.delete(img)
+    await db.commit()
+    if url.startswith("/media/"):
+        try:
+            (_Path(MEDIA_DIR) / url.removeprefix("/media/")).unlink(missing_ok=True)
+        except OSError:
+            pass

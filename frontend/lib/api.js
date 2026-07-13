@@ -148,6 +148,11 @@ const api = {
   importStocktakeCsv: (file, branchId) =>
     api.uploadCsv(`/inventory/stocktake.csv${branchId ? `?branch_id=${branchId}` : ""}`, file),
   importProductsCsv: (file) => api.uploadCsv(`/products/import.csv`, file),
+  uploadProductImage: (productId, file) => api.uploadCsv(`/products/${productId}/images`, file),
+  deleteProductImage: (productId, imageId) => request(`/products/${productId}/images/${imageId}`, { method: "DELETE" }),
+  listPoComments: (poId) => request(`/purchase-orders/${poId}/comments`),
+  addPoComment: (poId, body) => request(`/purchase-orders/${poId}/comments`, { method: "POST", body: JSON.stringify({ body }) }),
+  getMonthlyFlow: (months) => request(`/dashboard/monthly-flow?months=${months || 6}`),
   autoDraftPurchaseOrders: () => request(`/purchase-orders/auto-draft`, { method: "POST" }),
 
   // Purchase orders (existing backend at /purchase-orders)

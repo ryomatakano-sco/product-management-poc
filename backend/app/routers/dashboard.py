@@ -286,3 +286,57 @@ async def regenerate_summary(db: DB, store_id: StoreId):
         pass  # keep the template — the dashboard must always render
 
     return base
+
+@router.get("/monthly-flow", summary="月別の入荷・販売点数（棒グラフ用）")
+async def monthly_flow(db: DB, store_id: StoreId, months: int = 6):
+    """Units received (PO receive adjustments) vs units sold per JST month.
+
+    Both series come from inventory_adjustments, whose created_at is JST-naive
+    (MySQL NOW()) — so DATE_FORMAT month grouping is already calendar-correct.
+    Sale deltas are negative; refunds are excluded from both series.
+    """
+    months = max(1, min(months, 24))
+    # First day of the window, JST calendar months.
+    today = datetime.now(timezone(timedelta(hours=9))).date()
+    y, m = today.year, today.month - (months - 1)
+    while m <= 0:
+        m += 12
+        y -= 1
+    start = date(y, m, 1)
+
+    rows = (await db.execute(
+        select(
+            func.date_format(InventoryAdjustment.created_at, "%Y-%m").label("ym"),
+            InventoryAdjustment.reason,
+            func.sum(InventoryAdjustment.delta),
+        )
+        .where(
+            InventoryAdjustment.store_id == store_id,
+            InventoryAdjustment.created_at >= datetime.combine(start, datetime.min.time()),
+            InventoryAdjustment.reason.in_(["purchase_order_received", "sale"]),
+        )
+        .group_by("ym", InventoryAdjustment.reason)
+    )).all()
+
+    by_month: dict[str, dict[str, int]] = {}
+    for ym, reason, total in rows:
+        r = getattr(reason, "value", reason)
+        d = by_month.setdefault(ym, {"in": 0, "out": 0})
+        if r == "purchase_order_received":
+            d["in"] += int(total or 0)
+        else:
+            # Sale deltas are negative by design; clamp legacy/noise rows to 0.
+            d["out"] += max(0, int(-(total or 0)))
+
+    # Emit a continuous month axis (missing months as zeros).
+    out = []
+    y, m = start.year, start.month
+    for _ in range(months):
+        ym = f"{y}-{m:02d}"
+        d = by_month.get(ym, {"in": 0, "out": 0})
+        out.append({"month": ym, "received": d["in"], "sold": d["out"]})
+        m += 1
+        if m == 13:
+            y, m = y + 1, 1
+    return {"months": out}
+
