@@ -1154,4 +1154,51 @@ window._PLX_DICT_EN = {
   "の結果": "— results",
   "取引 ${n}  ・  適格請求書 (インボイス) 対応  ・  8% / 10% の税率区分を自動判定します":
     "Transaction ${n}  ・  Qualified invoice ready  ・  8% / 10% tax classes judged automatically",
+
+  // ---- First-time tutorial (components/Tutorial.jsx) ----
+  "次へ": "Next",
+  "スキップ": "Skip",
+  "完了": "Done",
+  "SCO 商品管理へようこそ 👋": "Welcome to SCO Product Management 👋",
+  "歯科クリニックの商品・在庫・発注・販売をひとつで管理できます。主要な機能を約1分でご案内します（いつでもスキップできます）。":
+    "Manage your clinic's products, stock, purchase orders and sales in one place. This one-minute tour shows the essentials (you can skip anytime).",
+  "サイドバー": "Sidebar",
+  "MAIN（ダッシュボード・商品・カテゴリ）、OPERATIONS（在庫・発注書・販売記録）、MASTER（仕入先・院/店舗）の3グループで移動します。":
+    "Navigate via three groups: MAIN (dashboard, products, categories), OPERATIONS (stock, purchase orders, sales) and MASTER (vendors, branches).",
+  "商品名・SKU・JAN・仕入先をまとめて検索できます。キーボードの Ctrl+K でも開けます。":
+    "Search products, SKUs, JAN codes and vendors in one box. Ctrl+K opens it from anywhere.",
+  "在庫低下・使用期限・発注書の状態変化・承認リクエストがここに届きます。":
+    "Low-stock alerts, expiry warnings, PO status changes and approval requests arrive here.",
+  "表示の切り替え": "Display options",
+  "テーマ（ライト/ダーク）と言語（日本語/English）をワンクリックで切り替えられます。":
+    "Switch the theme (light/dark) and the language (日本語/English) with one click.",
+  "AI サマリー": "AI summary",
+  "在庫・期限・売上の要点を AI が毎日まとめます。「再生成」で最新データから作り直せます。":
+    "AI summarizes stock, expiry and sales highlights daily. 「再生成」 rebuilds it from the latest data.",
+  "商品を追加": "Add products",
+  "このボタンから商品を登録します。JAN コードを入れると AI が商品情報を自動入力。CSV 一括登録は隣の「⬆ インポート」から。":
+    "Register products here. Enter a JAN code and AI fills the details; bulk CSV import is right next door (⬆ インポート).",
+  "在庫を調整": "Adjust stock",
+  "入出庫の手動調整はここから。「⇄ 拠点間移動」で店舗間の在庫移動、「⬆ 棚卸しCSV取込」で実地棚卸の反映もできます。":
+    "Manual stock adjustments start here. 「⇄ 拠点間移動」 moves stock between branches; 「⬆ 棚卸しCSV取込」 applies a physical stock-take.",
+  "発注書を作成": "Create purchase orders",
+  "発注書は 下書き → 送信 → 入荷 の流れで管理します（部分入荷にも対応）。「⚡ 低在庫から自動作成」で発注ドラフトを一括生成できます。":
+    "POs flow draft → sent → received (partial receipts supported). 「⚡ 低在庫から自動作成」 drafts POs for every low-stock item at once.",
+  "販売を記録": "Record sales",
+  "店頭販売はここから手動入力します。記録した販売は返品・レシート/領収書の発行にも対応しています。":
+    "Enter over-the-counter sales here. Recorded sales support refunds and receipt / formal-receipt printing.",
+  "ユーザーと権限、税率、通知、API 情報、監査ログはここで管理します（管理者のみ）。":
+    "Manage users & roles, tax rates, notifications, API info and the audit log here (admin only).",
+  "準備完了です 🎉": "You're all set 🎉",
+  "以上で基本操作のご案内は終わりです。もう一度見たいときは、画面左下の Dev メニュー（Ctrl+`）の Tutorial から再生できます。":
+    "That's the basics! To replay this tour, open the Dev menu (bottom-left, Ctrl+`) and use the Tutorial section.",
+  "チュートリアルを完了しました": "Tutorial completed",
+  // Dev panel: password gate + tutorial controls
+  "開発者パスワードを入力してください": "Enter the developer password",
+  "パスワードが違います": "Wrong password",
+  "フラグをリセット": "Reset flag",
+  "▶ チュートリアルを開始": "▶ Start tutorial",
+  "再発注済にできませんでした": "Could not mark as reordered",
+  "公開時にお知らせします": "We'll let you know when it ships",
+  "入力を確認してください": "Check your input",
 };

@@ -28,7 +28,7 @@ function Settings({ query }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", gap: 18, alignItems: "flex-start" }}>
         {/* Left nav */}
-        <div style={{
+        <div data-tour="settings-nav" style={{
           background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
           boxShadow: T.SHADOW_SM, padding: 6, position: "sticky", top: 24,
         }}>

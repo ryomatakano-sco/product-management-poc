@@ -97,7 +97,7 @@ function Inventory({ query }) {
       <button onClick={() => setShowTransfer(true)} style={{
         ...btnSecondary, display: "inline-flex", alignItems: "center", gap: 6,
       }}>⇄ 拠点間移動</button>
-      <button onClick={() => setAdjustFlow({ stage: "pick" })} style={{
+      <button data-tour="inv-adjust" onClick={() => setAdjustFlow({ stage: "pick" })} style={{
         ...btnPrimary, display: "inline-flex", alignItems: "center", gap: 6,
       }}>＋ 在庫調整</button>
     </div>

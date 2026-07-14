@@ -95,6 +95,7 @@ function App() {
       <DevPanel />
       <AiArenaHost />
       <ToastContainer />
+      <TutorialHost />
     </>
   );
 }

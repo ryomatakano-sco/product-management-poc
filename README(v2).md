@@ -660,3 +660,25 @@ Branch: `feature/sales-records`（migration 018）
 - 「返品がダッシュボードで二重計上」→ **誤り**。返品は負数 quantity で保存され `SUM(qty*price)` で正しく相殺される（純売上KPIとして意図通り）。
 - 承認の監査が承認者でなく申請者 → 調整行の created_by は**申請者が正**（承認者は note と audit_event に別途記録）。仕様通り。
 - モーダルの role=dialog / フォーカストラップ、失敗ログインのレート制限、FEFO 消費の原子性等 → PoC スコープ外（本番ハードニング項目として CONTEXT.md に記載済み）。
+
+
+## 初回ユーザーチュートリアル + Dev パネルのパスワード + Dev からのチュートリアル制御
+
+Branch: `feature/sales-records`
+
+**初回チュートリアル（`components/Tutorial.jsx`・新規）**
+- 初ログイン後にダッシュボードで自動開始するスポットライトツアー（12ステップ・約1分）。サイドバー→横断検索→通知ベル→表示切替→AIサマリーを案内し、そのまま 商品→在庫→発注書→販売→設定 とページを自動遷移して各ページの主ボタンをハイライト。
+- 仕組み: 対象要素に `data-tour="<key>"` 属性（AdminShell 4箇所 + 6ページの主ボタン）。エンジンは querySelector → scrollIntoView → getBoundingClientRect で採寸し、box-shadow 方式のスポットライト穴を描画（要素が 4 秒以内に見つからないステップは自動スキップ＝絶対に固まらない）。次へ/戻る/スキップ/ESC、進捗表示付き。スタッフには管理者専用ステップ（設定）を出さない。
+- 状態は localStorage: `plx.tutorial.done.<userId>`（ユーザー毎の既読）と `plx.tutorial.autostart`（自動開始のグローバル ON/OFF）。スキップも既読扱い＝二度と勝手に出ない。
+- API: `window.PLX_TUTORIAL = { start, stop, reset, isDone, autoStartEnabled, setAutoStart }`。
+
+**Dev パネル > Tutorial セクション**
+- First-run フラグの状態表示 +「フラグをリセット」（次のダッシュボード表示で再度自動開始）。
+- Auto-start ON/OFF ピル（新規ユーザー向け自動開始を止められる）。
+- 「▶ チュートリアルを開始」= その場で再生（ユーザーを作り直す必要なし）。
+
+**Dev パネルのパスワード（サーバー検証）**
+- `backend/.env` の `DEV_PANEL_PASSWORD`（既定: `sco-dev`・gitignore 対象なので各自設定）。設定時は /dev/* 全エンドポイントが `X-Dev-Password` ヘッダー必須（`hmac.compare_digest`、不一致 401）。未設定なら従来どおりパスワードなし。※ ループバック限定チェックの内側で動作（前回レビュー対応との二段構え）。`EDITABLE_KEYS` には絶対に追加しない（パネルが自分の鍵を書き換えられてしまうため）。
+- フロント: パネルを開くとパスワード入力（`DevPasswordGate`）。正しい値は sessionStorage（`plx.devpanel.pw`）にブラウザセッション中だけ保持し、全 /dev fetch に付与。401 が返ると保存値を破棄してゲートに戻る。
+
+検証: curl で 401（ヘッダーなし/誤り）→ 200（正しい値）、PATCH /dev/env も同様。通常 API・アプリ配信は無影響。esbuild で全 JSX パース、ツアー10ターゲット全てに data-tour 属性が存在することを機械検証、EN 辞書は Tutorial/DevPanel の新文言を全カバー（sweep 残 37 = 全て意図的据え置き）。**ブラウザでの実クリック確認は未実施**（このセッションはブラウザツール不可）— 初回表示時にスポットライトの見た目を一度確認してください。
