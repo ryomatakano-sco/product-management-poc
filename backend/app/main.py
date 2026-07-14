@@ -18,7 +18,9 @@ from fastapi.staticfiles import StaticFiles
 
 from app.routers import (
     ai_suggestions,
+    auth,
     branches,
+    notifications,
     categories,
     dashboard,
     dev,
@@ -35,6 +37,7 @@ from app.routers import (
     tags,
     variants,
     vendors,
+    approvals,
 )
 
 app = FastAPI(
@@ -54,6 +57,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(stores.router)
 app.include_router(branches.router)
 app.include_router(vendors.router)
@@ -71,7 +75,92 @@ app.include_router(dashboard.router)
 app.include_router(settings_router.router)
 app.include_router(support.router)
 app.include_router(search.router)
+app.include_router(notifications.router)
+app.include_router(approvals.router)
 app.include_router(dev.router)
+
+
+# --- Daily notification tick (heavy-tier item 3) --------------------------------
+# A single asyncio loop (PoC: one uvicorn worker) that fires the 日次サマリー
+# notification at each store's configured 設定 › 通知 daily_summary_time (JST).
+# Guarded per (store, JST-date) by checking for an existing daily_summary row.
+@app.on_event("startup")
+async def _start_daily_notification_tick() -> None:
+    import asyncio
+    from datetime import datetime, timedelta, timezone as _tz
+
+    from sqlalchemy import func as _func, select as _select
+
+    from app.db import async_session as _session
+    from app.models.notification import Notification as _Notification
+    from app.models.product import (
+        ItemType as _ItemType, Product as _Product,
+        ProductStatus as _PStatus, ProductVariant as _PV,
+    )
+    from app.models.settings_kv import SettingsKV as _KV
+    from app.models.store import Store as _Store
+    from app.services.notifier import notify as _notify
+
+    _JST = _tz(timedelta(hours=9))
+
+    async def _tick_once() -> None:
+        now_jst = datetime.now(_JST)
+        hhmm = now_jst.strftime("%H:%M")
+        day_start_utc = now_jst.replace(hour=0, minute=0, second=0, microsecond=0) \
+            .astimezone(_tz.utc).replace(tzinfo=None)
+        async with _session() as db:
+            stores = (await db.execute(_select(_Store.id))).scalars().all()
+            for sid in stores:
+                row = (await db.execute(_select(_KV).where(
+                    _KV.store_id == sid, _KV.namespace == "notifications"
+                ))).scalar_one_or_none()
+                cfg = dict(row.data_json) if row and row.data_json else {}
+                if cfg.get("daily_summary_time", "08:00") != hhmm:
+                    continue
+                already = (await db.execute(_select(_Notification.id).where(
+                    _Notification.store_id == sid,
+                    _Notification.kind == "daily_summary",
+                    _Notification.created_at >= day_start_utc,
+                ).limit(1))).scalar_one_or_none()
+                if already is not None:
+                    continue
+                # Compose the summary: low-stock count + expiring consumables.
+                low = (await db.execute(
+                    _select(_func.count(_func.distinct(_Product.id)))
+                    .join(_PV, _PV.product_id == _Product.id)
+                    .where(
+                        _Product.store_id == sid,
+                        _Product.status == _PStatus.active,
+                        (_PV.on_hand - _PV.committed - _PV.unavailable)
+                        <= _func.coalesce(_PV.low_stock_threshold, 10),
+                    )
+                )).scalar_one()
+                expiring = (await db.execute(
+                    _select(_func.count(_Product.id)).where(
+                        _Product.store_id == sid,
+                        _Product.item_type == _ItemType.consumable,
+                        _Product.expiry_date.is_not(None),
+                        _Product.expiry_date <= (now_jst.date() + timedelta(days=30)),
+                        _Product.expiry_date >= now_jst.date(),
+                    )
+                )).scalar_one()
+                await _notify(
+                    db, sid, "daily_summary",
+                    f"日次サマリー {now_jst.strftime('%m/%d')}",
+                    f"在庫低下 {low} 件・期限間近（30日以内） {expiring} 件です。ダッシュボードでご確認ください。",
+                    link_path="/dashboard",
+                )
+                await db.commit()
+
+    async def _loop() -> None:
+        while True:
+            try:
+                await _tick_once()
+            except Exception:  # noqa: BLE001 — the tick must never die
+                pass
+            await asyncio.sleep(60)
+
+    asyncio.create_task(_loop())
 
 
 @app.get("/health")

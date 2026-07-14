@@ -10,14 +10,19 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
-from app.deps import DB, StoreId
+from app.deps import DB, StoreId, CurrentUserName
 from app.models.inventory import AdjustmentReason, InventoryAdjustment, InventoryField
 from app.models.product import Product, ProductStatus, ProductVariant, TaxRate
 from app.models.sale import PaymentMethod, SalesRecord
 from app.models.settings_kv import SettingsKV
+from app.services.lots import consume_fefo, restock_newest
+from app.services.notifier import check_low_stock
+from app.services.stock import StockError, apply_stock_delta
+from app.services.tz import any_to_utc_naive, jst_to_utc_naive
 from app.schemas.sale import (
     ReceiptData, ReceiptLine, ReceiptStore,
     SaleCreate, SaleListResponse, SaleRead, SalesSummary,
+    RefundRequest,
 )
 
 router = APIRouter(prefix="/sales", tags=["sales"])
@@ -43,10 +48,11 @@ def _apply_sale_filters(
         stmt = stmt.where(SalesRecord.payment_method == payment_method)
     if sold_by:
         stmt = stmt.where(SalesRecord.sold_by == sold_by)
+    # sold_at is stored UTC-naive — normalize aware inputs (audit M9).
     if date_from is not None:
-        stmt = stmt.where(SalesRecord.sold_at >= date_from)
+        stmt = stmt.where(SalesRecord.sold_at >= any_to_utc_naive(date_from))
     if date_to is not None:
-        stmt = stmt.where(SalesRecord.sold_at <= date_to)
+        stmt = stmt.where(SalesRecord.sold_at <= any_to_utc_naive(date_to))
     if has_patient is True:
         stmt = stmt.where(SalesRecord.patient_ref.is_not(None))
     elif has_patient is False:
@@ -68,9 +74,11 @@ def _apply_sale_filters(
 async def _next_transaction_id(db, store_id: int, sold_at_utc: datetime) -> str:
     """Generate SL-YYYYMMDD-#### for the given sale.
 
-    Counter is per (store_id, JST-date). Race under high concurrency is
-    theoretically possible; the unique index will surface a duplicate as an
-    IntegrityError which the caller could retry (not implemented — PoC).
+    Counter starts at (day's row count + 1) but then PROBES for a free id
+    (audit C4): counts drift from the real max whenever rows are deleted or
+    refunds inflate the day, which previously produced duplicate ids and an
+    unhandled IntegrityError 500. Single-worker PoC — a cross-process race
+    remains theoretical; a real build would use a DB sequence.
     """
     sold_at_jst = sold_at_utc.astimezone(JST) if sold_at_utc.tzinfo else sold_at_utc.replace(tzinfo=timezone.utc).astimezone(JST)
     ymd = sold_at_jst.strftime("%Y%m%d")
@@ -82,7 +90,17 @@ async def _next_transaction_id(db, store_id: int, sold_at_utc: datetime) -> str:
         .where(SalesRecord.sold_at >= day_start_utc)
         .where(SalesRecord.sold_at < next_day_start_utc)
     )).scalar_one()
-    return f"SL-{ymd}-{count + 1:04d}"
+
+    n = count + 1
+    for _ in range(200):  # generous headroom; bails to a 409 below
+        candidate = f"SL-{ymd}-{n:04d}"
+        exists = (await db.execute(
+            select(SalesRecord.id).where(SalesRecord.transaction_id == candidate).limit(1)
+        )).scalar_one_or_none()
+        if exists is None:
+            return candidate
+        n += 1
+    raise HTTPException(409, detail="取引IDの採番に失敗しました。もう一度お試しください。")
 
 
 @router.get("", response_model=SaleListResponse)
@@ -159,9 +177,11 @@ async def sales_summary(db: DB, store_id: StoreId):
     base = select(count_expr, revenue_expr).where(SalesRecord.store_id == store_id)
 
     async def in_range(start, end=None):
-        stmt = base.where(SalesRecord.sold_at >= start)
+        # sold_at is UTC-naive; the JST boundaries must be converted or every
+        # KPI is skewed by 9 hours at day/month edges (audit C1).
+        stmt = base.where(SalesRecord.sold_at >= jst_to_utc_naive(start))
         if end is not None:
-            stmt = stmt.where(SalesRecord.sold_at < end)
+            stmt = stmt.where(SalesRecord.sold_at < jst_to_utc_naive(end))
         return (await db.execute(stmt)).one()
 
     today_count, today_revenue         = await in_range(today_start, tomorrow_start)
@@ -377,7 +397,7 @@ async def get_sale(sale_id: int, db: DB, store_id: StoreId):
 
 
 @router.post("/{sale_id}/refund", response_model=SaleRead, status_code=201)
-async def refund_sale(sale_id: int, db: DB, store_id: StoreId):
+async def refund_sale(sale_id: int, db: DB, store_id: StoreId, body: RefundRequest | None = None, user_name: CurrentUserName = None):
     """Reverse a sale: create a negative-quantity refund row, mark the original
     as refunded, add the stock back on the variant, and log an audit adjustment.
     """
@@ -398,13 +418,33 @@ async def refund_sale(sale_id: int, db: DB, store_id: StoreId):
     variant = original.variant
     if not variant:
         raise HTTPException(400, detail="商品バリアントが見つかりません")
+    # Fail closed when the product record is gone (orphaned variant — audit C5).
+    if variant.product is None:
+        raise HTTPException(400, detail="商品情報が見つからないため返品できません")
 
     now = datetime.now(timezone.utc)
     transaction_id = await _next_transaction_id(db, store_id, now)
 
+    # Restore stock at the branch the sale happened at (atomic; services/stock.py).
+    try:
+        refund_branch = await apply_stock_delta(
+            db, store_id=store_id, variant_id=original.variant_id,
+            branch_id=original.branch_id, field=InventoryField.on_hand,
+            delta=original.quantity,
+        )
+    except StockError as e:
+        await db.rollback()
+        raise HTTPException(400, detail=e.message)
+
+    # Return the stock to the newest known lot at that branch (tracking layer).
+    await restock_newest(
+        db, store_id=store_id, variant_id=original.variant_id,
+        branch_id=refund_branch, qty=original.quantity,
+    )
+
     refund = SalesRecord(
         store_id=store_id,
-        branch_id=original.branch_id,
+        branch_id=refund_branch,
         variant_id=original.variant_id,
         transaction_id=transaction_id,
         quantity=-original.quantity,
@@ -413,22 +453,28 @@ async def refund_sale(sale_id: int, db: DB, store_id: StoreId):
         sold_at=now,
         sold_by=original.sold_by,
         patient_ref=original.patient_ref,
-        note=f"返品: {original.transaction_id}",
+        note=(
+            f"返品: {original.transaction_id}"
+            + (f"｜理由: {reason}" if (reason := (body.reason or "").strip() if body else "") else "")
+        ),
         refund_of_sale_id=original.id,
+        created_by=user_name,
     )
     db.add(refund)
 
     original.refunded_at = now
-    variant.on_hand += original.quantity
 
     db.add(InventoryAdjustment(
+        created_by=user_name,
         store_id=store_id,
         variant_id=original.variant_id,
+        branch_id=refund_branch,
         field=InventoryField.on_hand,
         delta=original.quantity,
         reason=AdjustmentReason.refund,
         reference_type="sales_record",
         reference_id=original.id,
+        note=(f"理由: {reason}" if reason else None),
     ))
 
     await db.commit()
@@ -441,7 +487,7 @@ async def refund_sale(sale_id: int, db: DB, store_id: StoreId):
 
 
 @router.post("", response_model=SaleRead, status_code=201)
-async def create_sale(body: SaleCreate, db: DB, store_id: StoreId):
+async def create_sale(body: SaleCreate, db: DB, store_id: StoreId, user_name: CurrentUserName = None):
     """Record a sale and decrement on_hand inventory."""
     variant = (
         await db.execute(
@@ -455,30 +501,38 @@ async def create_sale(body: SaleCreate, db: DB, store_id: StoreId):
     if not variant:
         raise HTTPException(404, detail="Variant not found")
 
-    # Only active products are sellable. Draft items are still being onboarded
-    # (invisible on the inventory page); archived items are out of catalog.
-    if variant.product and variant.product.status != ProductStatus.active:
+    # Only active products are sellable — fail CLOSED when the variant has no
+    # product (orphaned variant; audit M7).
+    if variant.product is None or variant.product.status != ProductStatus.active:
         raise HTTPException(
             status_code=400,
             detail="この商品はまだ販売可能ではありません（商品ステータスが「公開中」ではありません）",
         )
 
-    if body.quantity > variant.on_hand:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"在庫が不足しています（残り {variant.on_hand}個）"
-                if variant.on_hand > 0
-                else "在庫切れのため販売できません"
-            ),
-        )
-
     sold_at = body.sold_at or datetime.now(timezone.utc)
     transaction_id = await _next_transaction_id(db, store_id, sold_at)
 
+    # Decrement stock at the sale's branch — atomic, branch-validated
+    # (services/stock.py; fixes the C3 oversell race and M2 branch tenancy).
+    try:
+        branch_id = await apply_stock_delta(
+            db, store_id=store_id, variant_id=body.variant_id,
+            branch_id=body.branch_id, field=InventoryField.on_hand,
+            delta=-body.quantity,
+        )
+    except StockError as e:
+        await db.rollback()
+        raise HTTPException(400, detail=e.message)
+
+    # FEFO lot consumption (tracking layer; never raises).
+    await consume_fefo(
+        db, store_id=store_id, variant_id=body.variant_id,
+        branch_id=branch_id, qty=body.quantity,
+    )
+
     sale = SalesRecord(
         store_id=store_id,
-        branch_id=body.branch_id,
+        branch_id=branch_id,
         variant_id=body.variant_id,
         transaction_id=transaction_id,
         quantity=body.quantity,
@@ -488,17 +542,17 @@ async def create_sale(body: SaleCreate, db: DB, store_id: StoreId):
         sold_by=(body.sold_by or None),
         patient_ref=body.patient_ref,
         note=body.note,
+        created_by=user_name,
     )
     db.add(sale)
     await db.flush()
 
-    # Decrement on_hand
-    variant.on_hand -= body.quantity
-
     # Log inventory adjustment
     adj = InventoryAdjustment(
+        created_by=user_name,
         store_id=store_id,
         variant_id=body.variant_id,
+        branch_id=branch_id,
         field=InventoryField.on_hand,
         delta=-body.quantity,
         reason=AdjustmentReason.sale,
@@ -506,6 +560,11 @@ async def create_sale(body: SaleCreate, db: DB, store_id: StoreId):
         reference_id=sale.id,
     )
     db.add(adj)
+
+    # Low-stock notification when the sale drops available below the threshold
+    # (rides in the same transaction; never raises).
+    await check_low_stock(db, store_id, body.variant_id, variant.product)
+
     await db.commit()
     await db.refresh(sale)
     return sale

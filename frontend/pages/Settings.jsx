@@ -10,8 +10,8 @@ const SETTINGS_SECTIONS = [
   { id: "tax_rates",     label: "税率",          icon: "calc" },
   { id: "ai",            label: "AI設定",        icon: "sparkles" },
   { id: "integrations",  label: "統合",          icon: "link" },
-  { id: "users",         label: "ユーザー管理",  icon: "users", placeholder: true },
-  { id: "api",           label: "API・Webhooks", icon: "key",   placeholder: true },
+  { id: "users",         label: "ユーザー管理",  icon: "users" },
+  { id: "api",           label: "API・Webhooks", icon: "key" },
 ];
 
 function Settings({ query }) {
@@ -56,12 +56,8 @@ function Settings({ query }) {
           {ns === "tax_rates" && <TaxRatesSettings />}
           {ns === "ai" && <AiSettings />}
           {ns === "integrations" && <IntegrationsSettings />}
-          {(ns === "users" || ns === "api") && (
-            <div style={{
-              background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
-              padding: 48, textAlign: "center", color: T.PLX_INK_500,
-            }}>この項目は近日対応予定です。</div>
-          )}
+          {ns === "users" && <><UsersSettings /><AuditLogSection /></>}
+          {ns === "api" && <ApiSettings />}
         </div>
       </div>
     </AdminShell>
@@ -102,7 +98,7 @@ function useSettingsForm(namespace) {
       window.PLX_TOAST.success("設定を保存しました");
       q.refetch();
     } catch (e) {
-      window.PLX_TOAST.error("設定の保存に失敗しました");
+      window.PLX_TOAST.error(e?.body?.detail?.detail || e?.body?.detail || "設定の保存に失敗しました");
     } finally {
       setSaving(false);
     }
@@ -172,7 +168,7 @@ function LogoUploader({ logoUrl, onChanged }) {
 
   const doDelete = async () => {
     if (busy) return;
-    if (!window.confirm("ロゴを削除しますか？")) return;
+    if (!window.confirm((window.PLX_TR || String)("ロゴを削除しますか？"))) return;
     setBusy(true);
     try {
       await api.deleteLogo();
@@ -234,6 +230,42 @@ function NotificationsSettings() {
         <input value={f.form.daily_summary_time || "08:00"} onChange={(e) => f.update("daily_summary_time", e.target.value)}
           placeholder="HH:MM" style={{ ...formInput, maxWidth: 120, fontFamily: T.FONT_MONO }} />
       </FormRow>
+
+      {/* Email delivery (heavy-tier item 3). In-app notifications always work;
+          email additionally fires when SMTP + 宛先 are configured. */}
+      <div style={{
+        marginTop: 18, paddingTop: 14, borderTop: `1px solid ${T.PLX_LINE_200}`,
+      }}>
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>メール配信 (SMTP)</div>
+        <div style={{ fontSize: 11, color: T.PLX_INK_500, marginBottom: 12 }}>
+          未設定の場合はアプリ内通知（ベル）のみ動作します。設定するとベルと同じ内容がメールでも届きます。
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <FormRow label="通知の宛先メール">
+            <input value={f.form.notify_email || ""} onChange={(e) => f.update("notify_email", e.target.value)}
+              placeholder="alerts@example.co.jp" style={formInput} />
+          </FormRow>
+          <FormRow label="SMTPホスト">
+            <input value={f.form.smtp_host || ""} onChange={(e) => f.update("smtp_host", e.target.value)}
+              placeholder="smtp.example.com" style={formInput} />
+          </FormRow>
+          <FormRow label="SMTPポート">
+            <input type="number" value={f.form.smtp_port ?? 587} onChange={(e) => f.update("smtp_port", Number(e.target.value) || 587)}
+              style={{ ...formInput, maxWidth: 120 }} />
+          </FormRow>
+          <FormRow label="送信元 (From)">
+            <input value={f.form.smtp_from || ""} onChange={(e) => f.update("smtp_from", e.target.value)}
+              placeholder="noreply@example.co.jp" style={formInput} />
+          </FormRow>
+          <FormRow label="SMTPユーザー">
+            <input value={f.form.smtp_user || ""} onChange={(e) => f.update("smtp_user", e.target.value)} style={formInput} />
+          </FormRow>
+          <FormRow label="SMTPパスワード">
+            <input type="password" value={f.form.smtp_password || ""} onChange={(e) => f.update("smtp_password", e.target.value)}
+              placeholder="••••••" style={formInput} />
+          </FormRow>
+        </div>
+      </div>
     </SettingsCard>
   );
 }
@@ -262,25 +294,62 @@ function ToggleRow({ label, on, onChange }) {
 
 function TaxRatesSettings() {
   const f = useSettingsForm("tax_rates");
-  if (f.loading) return <SettingsCard title="税率"><div style={{ color: T.PLX_INK_500 }}>読み込み中…</div></SettingsCard>;
-  const rates = f.form.rates || [];
+  const [rows, setRows] = React.useState(null);
+  React.useEffect(() => { if (f.form.rates && rows === null) setRows(f.form.rates); }, [f.form]);
+  if (f.loading || rows === null) return <SettingsCard title="税率"><div style={{ color: T.PLX_INK_500 }}>読み込み中…</div></SettingsCard>;
+
+  const upd = (i, k, v) => setRows(rows.map((r, j) => j === i ? { ...r, [k]: v } : r));
+  const setDefault = (i) => setRows(rows.map((r, j) => ({ ...r, is_default: j === i })));
+  const addRow = () => setRows([...rows, { id: Math.max(0, ...rows.map(r => r.id || 0)) + 1, name: "", rate: "10", is_default: rows.length === 0 }]);
+  const removeRow = (i) => {
+    const next = rows.filter((_, j) => j !== i);
+    if (next.length > 0 && !next.some(r => r.is_default)) next[0] = { ...next[0], is_default: true };
+    setRows(next);
+  };
+  const saveRates = () => {
+    for (const r of rows) {
+      if (!String(r.name || "").trim()) { window.PLX_TOAST.warn("税率名を入力してください"); return; }
+      if (isNaN(Number(r.rate)) || Number(r.rate) < 0 || Number(r.rate) > 100) { window.PLX_TOAST.warn("税率は 0〜100 の数値で入力してください"); return; }
+    }
+    f.save({ rates: rows.map(r => ({ ...r, rate: String(r.rate) })) });
+  };
+
   return (
     <SettingsCard title="税率">
-      {rates.length === 0 && <div style={{ color: T.PLX_INK_500 }}>税率が設定されていません。</div>}
-      {rates.map((r, i) => (
+      {rows.length === 0 && <div style={{ color: T.PLX_INK_500, marginBottom: 8 }}>税率が設定されていません。</div>}
+      {rows.map((r, i) => (
         <div key={i} style={{
-          display: "grid", gridTemplateColumns: "1.5fr 1fr 0.6fr 80px",
-          gap: 12, padding: "10px 0", alignItems: "center",
-          borderBottom: i < rates.length - 1 ? `1px solid ${T.PLX_LINE_100}` : "none",
+          display: "grid", gridTemplateColumns: "1.5fr 120px 90px 60px",
+          gap: 12, padding: "8px 0", alignItems: "center",
+          borderBottom: `1px solid ${T.PLX_LINE_100}`,
         }}>
-          <span style={{ fontSize: 13, fontWeight: 600 }}>{r.name}</span>
-          <span style={{ fontSize: 13, fontFamily: T.FONT_MONO }}>{r.rate}%</span>
-          <span>{r.is_default && <Pill color={T.PLX_GREEN_700} bg={T.PLX_GREEN_100}>標準</Pill>}</span>
-          <span style={{ fontSize: 12, color: T.PLX_INK_500 }}>ID: {r.id}</span>
+          <input value={r.name} onChange={(e) => upd(i, "name", e.target.value)}
+            placeholder="例: 標準税率" style={formInput} />
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <input type="number" min={0} max={100} step="0.1" value={r.rate}
+              onChange={(e) => upd(i, "rate", e.target.value)}
+              style={{ ...formInput, width: 80, textAlign: "right", fontFamily: T.FONT_MONO }} />
+            <span style={{ fontSize: 13, color: T.PLX_INK_500 }}>%</span>
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: T.PLX_INK_700, cursor: "pointer" }}>
+            <input type="radio" name="tax-default" checked={!!r.is_default} onChange={() => setDefault(i)} />
+            標準
+          </label>
+          <button onClick={() => removeRow(i)} title="この税率を削除" style={{
+            background: "none", border: "none", cursor: "pointer", color: T.PLX_RED_600, fontSize: 15,
+          }}>🗑</button>
         </div>
       ))}
-      <div style={{ marginTop: 14, padding: 12, background: T.PLX_BLUE_100, borderRadius: T.RADIUS_MD, fontSize: 12, color: T.PLX_BLUE_600 }}>
-        税率の追加・編集機能は近日対応予定です。
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 14 }}>
+        <button onClick={addRow} style={{
+          padding: "7px 14px", borderRadius: T.RADIUS_MD, border: `1px dashed ${T.PLX_LINE_200}`,
+          background: "transparent", fontSize: 12, fontWeight: 700, color: T.PLX_INK_700, cursor: "pointer",
+        }}>＋ 税率を追加</button>
+        <button onClick={saveRates} disabled={f.saving} style={{
+          padding: "8px 18px", borderRadius: T.RADIUS_MD, border: "none",
+          background: T.PLX_GREEN_600, color: "#fff", fontSize: 13, fontWeight: 700,
+          cursor: f.saving ? "not-allowed" : "pointer", opacity: f.saving ? 0.6 : 1,
+        }}>{f.saving ? "保存中…" : "変更を保存"}</button>
       </div>
     </SettingsCard>
   );
@@ -399,6 +468,274 @@ function IntegrationTile({ name, extra, connected }) {
       <button onClick={() => window.PLX_TOAST.warn("デモ用未実装")} style={{
         ...btnSecondary, marginTop: 10, height: 32, padding: "0 14px", fontSize: 12,
       }}>{connected ? "再認証" : "接続する"}</button>
+    </div>
+  );
+}
+
+// ユーザー管理 — backed by /auth/users (admin only; staff see a 403 notice).
+// 監査ログ — admin-only activity feed (mig 016): user management events,
+// settings changes. Write attribution (created_by) lives on each record.
+function AuditLogSection() {
+  const q = useFetch(() => api.listAuditEvents({ limit: 15 }), []);
+  const items = q.data?.items || [];
+  const ACTION_JA = {
+    user_created: "ユーザー追加",
+    user_disabled: "ユーザー無効化",
+    user_enabled: "ユーザー有効化",
+    user_role_changed: "権限変更",
+    user_password_reset: "パスワード再設定",
+    settings_updated: "設定変更",
+  };
+  if (q.error) return null; // staff (non-admin) — pane is admin-only anyway
+  return (
+    <div style={{
+      background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+      boxShadow: T.SHADOW_SM, padding: 24, marginTop: 18,
+    }}>
+      <h3 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700 }}>監査ログ</h3>
+      <div style={{ fontSize: 12, color: T.PLX_INK_500, marginBottom: 12 }}>
+        ユーザー管理・設定変更の履歴（最新 15 件）
+      </div>
+      {q.loading && <div style={{ fontSize: 12, color: T.PLX_INK_500 }}>読み込み中…</div>}
+      {!q.loading && items.length === 0 && (
+        <div style={{ fontSize: 12, color: T.PLX_INK_500 }}>まだ記録がありません</div>
+      )}
+      {items.map((e) => (
+        <div key={e.id} style={{
+          display: "grid", gridTemplateColumns: "150px 130px 1fr", gap: 12,
+          padding: "8px 0", borderBottom: `1px solid ${T.PLX_LINE_100}`,
+          fontSize: 12, alignItems: "baseline",
+        }}>
+          <span style={{ color: T.PLX_INK_500, fontFamily: T.FONT_MONO, fontSize: 11 }}>
+            {e.created_at ? new Date(e.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}
+          </span>
+          <span style={{ fontWeight: 700, color: T.PLX_INK_900 }}>{ACTION_JA[e.action] || e.action}</span>
+          <span style={{ color: T.PLX_INK_700 }}>
+            {e.detail || "—"}
+            {e.user_name && <span style={{ color: T.PLX_INK_400 }}>（{e.user_name}）</span>}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function UsersSettings() {
+  const [refreshKey, setRefreshKey] = React.useState(0);
+  const usersQ = useFetch(() => api.listUsers(), [refreshKey]);
+  const [showAdd, setShowAdd] = React.useState(false);
+  const me = window.PLX_ME || {};
+  const isForbidden = usersQ.error && (usersQ.error.status === 403 || usersQ.error.status === 401);
+
+  const toggleStatus = async (u) => {
+    const next = u.status === "active" ? "inactive" : "active";
+    if (next === "inactive" && !window.confirm((window.PLX_TR || String)(`「${u.display_name}」を無効化しますか？ログインできなくなります。`))) return;
+    try {
+      await api.updateUser(u.id, { status: next });
+      window.PLX_TOAST.success(next === "active" ? "有効化しました" : "無効化しました");
+      setRefreshKey((k) => k + 1);
+    } catch (e) {
+      window.PLX_TOAST.error(e?.body?.detail || "更新に失敗しました");
+    }
+  };
+
+  const toggleRole = async (u) => {
+    const next = u.role === "admin" ? "staff" : "admin";
+    try {
+      await api.updateUser(u.id, { role: next });
+      window.PLX_TOAST.success(`権限を${next === "admin" ? "管理者" : "スタッフ"}に変更しました`);
+      setRefreshKey((k) => k + 1);
+    } catch (e) {
+      window.PLX_TOAST.error(e?.body?.detail || "更新に失敗しました");
+    }
+  };
+
+  if (isForbidden) {
+    return (
+      <div style={{
+        background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+        padding: 48, textAlign: "center", color: T.PLX_INK_500,
+      }}>ユーザー管理は管理者のみ利用できます。</div>
+    );
+  }
+
+  return (
+    <div style={{
+      background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+      boxShadow: T.SHADOW_SM, padding: 24,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>ユーザー管理</h3>
+        <button onClick={() => setShowAdd(true)} style={btnPrimary}>＋ ユーザーを追加</button>
+      </div>
+
+      {usersQ.loading && <div style={{ color: T.PLX_INK_500, fontSize: 13 }}>読み込み中…</div>}
+      {(usersQ.data || []).map((u, i, arr) => (
+        <div key={u.id} style={{
+          display: "grid", gridTemplateColumns: "36px 1.4fr 1.6fr 0.8fr 0.8fr auto",
+          gap: 12, alignItems: "center", padding: "12px 0",
+          borderBottom: i < arr.length - 1 ? `1px solid ${T.PLX_LINE_100}` : "none",
+        }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: "50%", background: T.PLX_GREEN_100,
+            color: T.PLX_GREEN_700, fontWeight: 700, fontSize: 13,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>{u.display_name.charAt(0)}</div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>
+              {u.display_name}{u.id === me.id && <span style={{ fontSize: 10, color: T.PLX_INK_400, marginLeft: 6 }}>(自分)</span>}
+            </div>
+          </div>
+          <div style={{ fontSize: 12, color: T.PLX_INK_500, fontFamily: T.FONT_MONO }}>{u.email}</div>
+          <div>
+            {u.role === "admin"
+              ? <Pill color={T.PLX_GREEN_700} bg={T.PLX_GREEN_100}>管理者</Pill>
+              : <Pill color={T.PLX_BLUE_600} bg={T.PLX_BLUE_100}>スタッフ</Pill>}
+          </div>
+          <div>
+            {u.status === "active"
+              ? <Pill color={T.PLX_GREEN_700} bg={T.PLX_GREEN_100}>有効</Pill>
+              : <Pill color={T.PLX_INK_500} bg={T.PLX_SURFACE_100}>無効</Pill>}
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {u.id !== me.id && (
+              <>
+                <button onClick={() => toggleRole(u)} style={{ ...btnSecondary, height: 30, padding: "0 10px", fontSize: 11 }}>
+                  {u.role === "admin" ? "スタッフにする" : "管理者にする"}
+                </button>
+                <button onClick={() => toggleStatus(u)} style={{
+                  ...btnSecondary, height: 30, padding: "0 10px", fontSize: 11,
+                  color: u.status === "active" ? T.PLX_RED_600 : T.PLX_GREEN_700,
+                }}>
+                  {u.status === "active" ? "無効化" : "有効化"}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      ))}
+
+      <div style={{
+        marginTop: 16, padding: 12, background: T.PLX_SURFACE_50,
+        borderRadius: T.RADIUS_MD, fontSize: 11, color: T.PLX_INK_500,
+      }}>
+        PoC 認証です。パスワードは scrypt でハッシュ化され、セッションは HttpOnly クッキーで管理されます。
+      </div>
+
+      {showAdd && (
+        <UserAddModal
+          onClose={() => setShowAdd(false)}
+          onSaved={(u) => {
+            setShowAdd(false);
+            window.PLX_TOAST.success(`ユーザー「${u.display_name}」を追加しました`);
+            setRefreshKey((k) => k + 1);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function UserAddModal({ onClose, onSaved }) {
+  const [form, setForm] = React.useState({ display_name: "", email: "", password: "", role: "staff" });
+  const [saving, setSaving] = React.useState(false);
+  const update = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+
+  const submit = async () => {
+    if (!form.display_name.trim() || !form.email.trim() || form.password.length < 4) {
+      window.PLX_TOAST.warn("氏名・メール・パスワード（4文字以上）を入力してください"); return;
+    }
+    setSaving(true);
+    try {
+      const u = await api.createUser({
+        display_name: form.display_name.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        role: form.role,
+      });
+      onSaved(u);
+    } catch (e) {
+      window.PLX_TOAST.error(e?.body?.detail || "追加に失敗しました");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <PlxModal title="ユーザーを追加" onClose={onClose}>
+      <FormRow label="氏名 *">
+        <input value={form.display_name} onChange={(e) => update("display_name", e.target.value)}
+          style={formInput} placeholder="例：佐藤 太郎" />
+      </FormRow>
+      <FormRow label="メールアドレス *">
+        <input type="email" value={form.email} onChange={(e) => update("email", e.target.value)}
+          style={formInput} placeholder="taro@example.com" />
+      </FormRow>
+      <FormRow label="初期パスワード *（4文字以上）">
+        <input type="password" value={form.password} onChange={(e) => update("password", e.target.value)}
+          style={formInput} placeholder="••••••" />
+      </FormRow>
+      <FormRow label="権限">
+        <SegmentedControl value={form.role} onChange={(v) => update("role", v)} options={[
+          { value: "staff", label: "スタッフ" },
+          { value: "admin", label: "管理者" },
+        ]}/>
+      </FormRow>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16 }}>
+        <button onClick={onClose} style={btnSecondary}>キャンセル</button>
+        <button onClick={submit} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.5 : 1 }}>
+          {saving ? "追加中…" : "追加する"}
+        </button>
+      </div>
+    </PlxModal>
+  );
+}
+
+// API・Webhooks — honest PoC pane: documents how to call the API today
+// (session cookie or the X-Store-Id dev header + interactive Swagger docs).
+// Real API-key issuance / webhooks are production scope, stated as such.
+function ApiSettings() {
+  const base = window.location.origin;
+  const storeId = window.PLX_ME?.store_id ?? (window.getStoreId ? window.getStoreId() : 1);
+  const row = { fontSize: 12, display: "grid", gridTemplateColumns: "160px 1fr", gap: 10, padding: "9px 0", borderBottom: `1px solid ${T.PLX_LINE_100}`, alignItems: "center" };
+  const mono = { fontFamily: T.FONT_MONO, fontSize: 12, color: T.PLX_INK_900 };
+  return (
+    <div style={{
+      background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+      boxShadow: T.SHADOW_SM, padding: 24,
+    }}>
+      <h3 style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 700 }}>API・Webhooks</h3>
+      <div style={{ fontSize: 12, color: T.PLX_INK_500, marginBottom: 16 }}>
+        {"PoC の REST API はこのアプリと同じサーバーで公開されています。すべてのエンドポイントは Swagger UI から対話的に試せます。"}
+      </div>
+
+      <div style={row}><span style={{ color: T.PLX_INK_500, fontWeight: 600 }}>ベースURL</span><span style={mono}>{base}</span></div>
+      <div style={row}>
+        <span style={{ color: T.PLX_INK_500, fontWeight: 600 }}>APIドキュメント</span>
+        <a href={`${base}/docs`} target="_blank" rel="noopener noreferrer" style={{ ...mono, color: T.PLX_GREEN_700 }}>{base}/docs（Swagger UI）</a>
+      </div>
+      <div style={row}>
+        <span style={{ color: T.PLX_INK_500, fontWeight: 600 }}>認証（ブラウザ）</span>
+        <span style={{ fontSize: 12, color: T.PLX_INK_700 }}>ログイン時の HttpOnly セッションクッキー（7日間有効）</span>
+      </div>
+      <div style={row}>
+        <span style={{ color: T.PLX_INK_500, fontWeight: 600 }}>認証（開発用）</span>
+        <span style={{ fontSize: 12, color: T.PLX_INK_700 }}>
+          ヘッダー <code style={mono}>X-Store-Id: {String(storeId)}</code>（PoC 限定 — 本番では廃止予定）
+        </span>
+      </div>
+      <div style={{ ...row, borderBottom: "none" }}>
+        <span style={{ color: T.PLX_INK_500, fontWeight: 600 }}>例 (curl)</span>
+        <code style={{ ...mono, background: T.PLX_SURFACE_50, padding: "6px 10px", borderRadius: 6, display: "block", overflowX: "auto" }}>
+          curl -H "X-Store-Id: {String(storeId)}" {base}/products?limit=5
+        </code>
+      </div>
+
+      <div style={{
+        marginTop: 16, padding: 12, background: T.PLX_SURFACE_50,
+        borderRadius: T.RADIUS_MD, fontSize: 11, color: T.PLX_INK_500, lineHeight: 1.7,
+      }}>
+        {"APIキーの発行・失効、Webhook 配信、レート制限は本番実装のスコープです（認証基盤の置き換えと同時に実装予定）。PoC では上記 2 方式のみをサポートします。"}
+      </div>
     </div>
   );
 }

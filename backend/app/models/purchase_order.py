@@ -54,6 +54,7 @@ class PurchaseOrder(Base, TimestampMixin):
     tracking_number: Mapped[str | None] = mapped_column(String(255), nullable=True)
     reference_number: Mapped[str | None] = mapped_column(String(255), nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
     subtotal: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False)
     shipping_cost: Mapped[float] = mapped_column(Numeric(10, 2), default=0, nullable=False)
     total: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False)
@@ -103,3 +104,23 @@ class PurchaseOrderTag(Base):
     tag_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("tags.id"), primary_key=True
     )
+
+class POComment(Base):
+    """Comment thread on a PO (mig 017) — visible to everyone, author is a
+    display-name snapshot like created_by."""
+
+    __tablename__ = "po_comments"
+    __table_args__ = (
+        Index("ix_po_comments_po", "purchase_order_id", "created_at"),
+        Base.__table_args__,
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    store_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("stores.id"), nullable=False)
+    purchase_order_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("purchase_orders.id", ondelete="CASCADE"), nullable=False
+    )
+    author: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    body: Mapped[str] = mapped_column(String(1000), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+

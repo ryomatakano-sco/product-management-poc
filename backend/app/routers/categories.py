@@ -21,7 +21,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from app.deps import DB, StoreId
+from app.deps import DB, StoreId, CurrentUser, ensure_admin
 from app.models.category import Category
 from app.models.product import Product
 from app.schemas.base import PaginatedResponse
@@ -108,6 +108,7 @@ async def list_categories_tree(db: DB, store_id: StoreId):
                 id=c.id,
                 name=c.name,
                 name_kana=c.name_kana,
+                name_en=c.name_en,
                 color_hex=c.color_hex,
                 icon_name=c.icon_name,
                 applies_to=c.applies_to,
@@ -172,7 +173,8 @@ async def get_category(category_id: int, db: DB, store_id: StoreId):
 
 
 @router.post("", response_model=CategoryRead, status_code=201, summary="カテゴリを作成")
-async def create_category(body: CategoryCreate, db: DB, store_id: StoreId):
+async def create_category(body: CategoryCreate, db: DB, store_id: StoreId, user: CurrentUser = None):
+    ensure_admin(user)
     cat = Category(store_id=store_id, **body.model_dump())
     db.add(cat)
     await db.commit()
@@ -181,7 +183,8 @@ async def create_category(body: CategoryCreate, db: DB, store_id: StoreId):
 
 
 @router.patch("/{category_id}", response_model=CategoryRead, summary="カテゴリを更新")
-async def update_category(category_id: int, body: CategoryUpdate, db: DB, store_id: StoreId):
+async def update_category(category_id: int, body: CategoryUpdate, db: DB, store_id: StoreId, user: CurrentUser = None):
+    ensure_admin(user)
     cat = (await db.execute(
         select(Category).where(Category.id == category_id, Category.store_id == store_id)
     )).scalar_one_or_none()
@@ -196,7 +199,8 @@ async def update_category(category_id: int, body: CategoryUpdate, db: DB, store_
 
 
 @router.delete("/{category_id}", status_code=204, summary="カテゴリを削除")
-async def delete_category(category_id: int, db: DB, store_id: StoreId):
+async def delete_category(category_id: int, db: DB, store_id: StoreId, user: CurrentUser = None):
+    ensure_admin(user)
     """Reject delete if any product still references this category.
 
     The design's UX is "move products first, then delete" — we surface the

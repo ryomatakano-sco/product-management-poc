@@ -39,6 +39,10 @@ class POItemRead(BaseModel):
 class POItemReceive(BaseModel):
     item_id: int
     quantity_received: int = Field(gt=0, description="Must be at least 1")
+    # Optional per-lot capture (migration 014). Providing either creates/merges
+    # a lot at the PO's destination branch; both empty = untracked stock.
+    lot_number: str | None = Field(default=None, max_length=100)
+    expiry_date: date | None = None
 
 
 # --- PO schemas ---
@@ -99,6 +103,7 @@ class PurchaseOrderRead(BaseModel):
     tags: list[str] = []
     supplier_name: str | None = None
     branch_name: str | None = None
+    created_by: str | None = None
     created_at: datetime
     updated_at: datetime
 

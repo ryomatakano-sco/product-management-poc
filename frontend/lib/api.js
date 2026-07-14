@@ -48,11 +48,24 @@ function qs(params) {
 }
 
 const api = {
+  // --- auth (PoC session cookie; see backend routers/auth.py) ---
+  login:  (email, password) => request(`/auth/login`, { method: "POST", body: JSON.stringify({ email, password }) }),
+  logout: () => request(`/auth/logout`, { method: "POST" }),
+  me:     () => request(`/auth/me`),
+  listUsers:  () => request(`/auth/users`),
+  listAuditEvents: (params) => request(`/auth/audit-events${qs(params)}`),
+  listApprovals: (params) => request(`/approvals${qs(params)}`),
+  approveRequest: (id) => request(`/approvals/${id}/approve`, { method: "POST" }),
+  rejectRequest: (id, note) => request(`/approvals/${id}/reject`, { method: "POST", body: JSON.stringify({ note: note || null }) }),
+  createUser: (body) => request(`/auth/users`, { method: "POST", body: JSON.stringify(body) }),
+  updateUser: (id, body) => request(`/auth/users/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+
   // --- products ---
   listProducts: (params) => request(`/products${qs(params)}`),
   searchProducts: (q, opts) => request(`/products/search${qs({ q, ...opts })}`),
   getProduct:   (id)     => request(`/products/${id}`),
   getProductSalesWeekly: (id, weeks = 12) => request(`/products/${id}/sales-weekly?weeks=${weeks}`),
+  getProductLots: (id) => request(`/products/${id}/lots`),
   createProduct: (body)  => request(`/products`, { method: "POST", body: JSON.stringify(body) }),
   updateProduct: (id, body) => request(`/products/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   archiveProduct: (id)   => request(`/products/${id}`, { method: "DELETE" }),
@@ -95,6 +108,11 @@ const api = {
       method: "POST", body: JSON.stringify({ code }),
     }),
 
+  // --- notifications (heavy-tier item 3: real bell) ---
+  listNotifications: (params) => request(`/notifications${qs(params)}`),
+  markNotificationRead: (id) => request(`/notifications/${id}/read`, { method: "POST" }),
+  markAllNotificationsRead: () => request(`/notifications/read-all`, { method: "POST" }),
+
   // --- dashboard (Yoshioka 2026-05-11) ---
   getDashboardSummary:        () => request(`/dashboard/summary`),
   regenerateDashboardSummary: () => request(`/dashboard/summary/regenerate`, { method: "POST" }),
@@ -115,6 +133,30 @@ const api = {
   // Inventory (aggregate view + adjustments)
   listInventory:   (params) => request(`/inventory${qs(params)}`),
   listRecentAdjustments: (params) => request(`/inventory/adjustments${qs(params)}`),
+  transferStock: (body) => request(`/inventory/transfer`, { method: "POST", body: JSON.stringify(body) }),
+  // Multipart CSV uploads (stock-take reconciliation / product import).
+  uploadCsv: async (path, file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(path, {
+      method: "POST",
+      headers: { "X-Store-Id": String(getStoreId()) },
+      body: fd,
+    });
+    let body = null;
+    try { body = await res.json(); } catch (_) {}
+    if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status, body });
+    return body;
+  },
+  importStocktakeCsv: (file, branchId) =>
+    api.uploadCsv(`/inventory/stocktake.csv${branchId ? `?branch_id=${branchId}` : ""}`, file),
+  importProductsCsv: (file) => api.uploadCsv(`/products/import.csv`, file),
+  uploadProductImage: (productId, file) => api.uploadCsv(`/products/${productId}/images`, file),
+  deleteProductImage: (productId, imageId) => request(`/products/${productId}/images/${imageId}`, { method: "DELETE" }),
+  listPoComments: (poId) => request(`/purchase-orders/${poId}/comments`),
+  addPoComment: (poId, body) => request(`/purchase-orders/${poId}/comments`, { method: "POST", body: JSON.stringify({ body }) }),
+  getMonthlyFlow: (months) => request(`/dashboard/monthly-flow?months=${months || 6}`),
+  autoDraftPurchaseOrders: () => request(`/purchase-orders/auto-draft`, { method: "POST" }),
 
   // Purchase orders (existing backend at /purchase-orders)
   listPurchaseOrders: (params) => request(`/purchase-orders${qs(params)}`),
@@ -134,7 +176,7 @@ const api = {
   getSale: (id) => request(`/sales/${id}`),
   listSalesStaff: () => request(`/sales/staff`).catch(() => []),
   createSale: (body) => request(`/sales`, { method: "POST", body: JSON.stringify(body) }),
-  refundSale: (id) => request(`/sales/${id}/refund`, { method: "POST" }),
+  refundSale: (id, reason) => request(`/sales/${id}/refund`, { method: "POST", body: JSON.stringify({ reason: reason || null }) }),
   getReceiptData: (id) => request(`/sales/${id}/receipt-data`),
   getSalesSummary: () => request(`/sales/summary`).catch((e) => {
     if (e.status === 405 || e.status === 404)

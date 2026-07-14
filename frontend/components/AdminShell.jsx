@@ -118,7 +118,7 @@ function PlxSidebar({ current }) {
         ))}
       </div>
 
-      {/* Footer — user */}
+      {/* Footer — logged-in user (window.PLX_ME set by the app.jsx auth gate) */}
       <div style={{
         height: 56, padding: "0 16px", display: "flex", alignItems: "center", gap: 10,
         borderTop: "1px solid rgba(255,255,255,0.06)",
@@ -127,11 +127,30 @@ function PlxSidebar({ current }) {
           width: 32, height: 32, borderRadius: "50%", background: "#F4D4B8",
           color: "#1F2937", fontWeight: 700, fontSize: 13,
           display: "flex", alignItems: "center", justifyContent: "center",
-        }}>山</div>
+        }}>{(window.PLX_ME?.display_name || "山田 花子").charAt(0)}</div>
         <div style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#fff" }}>山田 花子</div>
-          <div style={{ fontSize: 10, color: T.PLX_SIDEBAR_INK_DIM }}>本院 / 管理者</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {window.PLX_ME?.display_name || "山田 花子"}
+          </div>
+          <div style={{ fontSize: 10, color: T.PLX_SIDEBAR_INK_DIM }}>
+            {window.PLX_ME?.role === "admin" ? "管理者" : "スタッフ"}
+          </div>
         </div>
+        <button
+          onClick={async () => {
+            try { await api.logout(); } catch (_) {}
+            window.location.reload();
+          }}
+          title="ログアウト"
+          style={{
+            background: "none", border: "1px solid rgba(255,255,255,0.18)",
+            color: T.PLX_SIDEBAR_INK_DIM, borderRadius: 8, width: 28, height: 28,
+            cursor: "pointer", fontSize: 13, display: "inline-flex",
+            alignItems: "center", justifyContent: "center", flexShrink: 0,
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = "#fff"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.45)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = T.PLX_SIDEBAR_INK_DIM; e.currentTarget.style.borderColor = "rgba(255,255,255,0.18)"; }}
+        >⎋</button>
       </div>
 
       {/* Version badge — shows "Alpha v0.4.0" so users (and demo viewers)
@@ -394,10 +413,57 @@ function PlxTopBar({ title, breadcrumbs, headerRight }) {
       </button>
       <PlxLocaleToggle />
       <PlxThemeToggle />
-      {/* Bell */}
-      <button style={{
+      <NotificationBell />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Notification bell (heavy-tier item 3) — real feed from /notifications.
+// Polls every 30s; red dot when unread; dropdown lists the latest, click
+// marks read + navigates; すべて既読 clears the dot.
+// ─────────────────────────────────────────────────────────────────────
+const NOTIF_KIND_ICON = {
+  low_stock: "📉", expiring_soon: "⏱", po_status: "📦", daily_summary: "🌿",
+};
+
+function NotificationBell() {
+  const [open, setOpen] = React.useState(false);
+  const [tick, setTick] = React.useState(0);
+  const feedQ = useFetch(() => api.listNotifications({ limit: 12 }).catch(() => ({ items: [], unread_count: 0 })), [tick]);
+  React.useEffect(() => {
+    const h = setInterval(() => setTick((t) => t + 1), 30000);
+    return () => clearInterval(h);
+  }, []);
+  const items = feedQ.data?.items ?? [];
+  const unread = feedQ.data?.unread_count ?? 0;
+
+  const openItem = async (n) => {
+    setOpen(false);
+    try { if (!n.read_at) await api.markNotificationRead(n.id); } catch (_) {}
+    setTick((t) => t + 1);
+    if (n.link_path) navigate(n.link_path);
+  };
+
+  const readAll = async () => {
+    try { await api.markAllNotificationsRead(); } catch (_) {}
+    setTick((t) => t + 1);
+  };
+
+  const relTime = (iso) => {
+    if (!iso) return "";
+    const mins = Math.max(0, Math.floor((Date.now() - new Date(iso + (iso.endsWith("Z") ? "" : "Z")).getTime()) / 60000));
+    if (mins < 1) return "たった今";
+    if (mins < 60) return `${mins}分前`;
+    if (mins < 1440) return `${Math.floor(mins / 60)}時間前`;
+    return `${Math.floor(mins / 1440)}日前`;
+  };
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button onClick={() => setOpen((o) => !o)} title="通知" style={{
         width: 36, height: 36, borderRadius: T.RADIUS_MD, border: `1px solid ${T.PLX_LINE_200}`,
-        background: T.PLX_SURFACE_0, cursor: "pointer",
+        background: open ? T.PLX_SURFACE_100 : T.PLX_SURFACE_0, cursor: "pointer",
         display: "flex", alignItems: "center", justifyContent: "center", position: "relative",
       }}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.PLX_INK_700}
@@ -405,11 +471,73 @@ function PlxTopBar({ title, breadcrumbs, headerRight }) {
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>
           <path d="M13.7 21a2 2 0 0 1-3.4 0"/>
         </svg>
-        <span style={{
-          position: "absolute", top: 6, right: 8, width: 7, height: 7,
-          borderRadius: "50%", background: T.PLX_RED_600, border: `2px solid ${T.PLX_SURFACE_0}`,
-        }} />
+        {unread > 0 && (
+          <span style={{
+            position: "absolute", top: 4, right: 5, minWidth: 15, height: 15, padding: "0 3px",
+            borderRadius: 9999, background: T.PLX_RED_600, color: "#fff",
+            fontSize: 9, fontWeight: 800, display: "inline-flex",
+            alignItems: "center", justifyContent: "center",
+            border: `2px solid ${T.PLX_SURFACE_0}`,
+          }}>{unread > 9 ? "9+" : unread}</span>
+        )}
       </button>
+
+      {open && (
+        <>
+          {/* click-away scrim */}
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 60 }} />
+          <div style={{
+            position: "absolute", top: 42, right: 0, width: 360, zIndex: 61,
+            background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG,
+            border: `1px solid ${T.PLX_LINE_200}`,
+            boxShadow: T.SHADOW_LG || "0 12px 40px rgba(0,0,0,.18)", overflow: "hidden",
+          }}>
+            <div style={{
+              padding: "10px 14px", display: "flex", alignItems: "center",
+              justifyContent: "space-between", borderBottom: `1px solid ${T.PLX_LINE_200}`,
+            }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: T.PLX_INK_900 }}>通知</span>
+              {unread > 0 && (
+                <button onClick={readAll} style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  fontSize: 11, fontWeight: 600, color: T.PLX_GREEN_700,
+                }}>すべて既読にする</button>
+              )}
+            </div>
+            <div style={{ maxHeight: 380, overflowY: "auto" }}>
+              {items.length === 0 && (
+                <div style={{ padding: 26, textAlign: "center", color: T.PLX_INK_400, fontSize: 12 }}>
+                  通知はまだありません
+                </div>
+              )}
+              {items.map((n) => (
+                <div key={n.id} onClick={() => openItem(n)} style={{
+                  padding: "10px 14px", cursor: n.link_path ? "pointer" : "default",
+                  display: "flex", gap: 10, alignItems: "flex-start",
+                  background: n.read_at ? "transparent" : T.PLX_GREEN_050 || T.PLX_SURFACE_50,
+                  borderBottom: `1px solid ${T.PLX_LINE_100}`,
+                }}
+                  onMouseEnter={(e) => e.currentTarget.style.filter = "brightness(0.97)"}
+                  onMouseLeave={(e) => e.currentTarget.style.filter = "none"}>
+                  <span style={{ fontSize: 16, lineHeight: "20px" }}>{NOTIF_KIND_ICON[n.kind] || "🔔"}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: n.read_at ? 500 : 700, color: T.PLX_INK_900 }}>
+                      {n.title}
+                    </div>
+                    {n.body && (
+                      <div style={{ fontSize: 11, color: T.PLX_INK_500, marginTop: 2 }}>{n.body}</div>
+                    )}
+                    <div style={{ fontSize: 10, color: T.PLX_INK_400, marginTop: 3 }}>{relTime(n.created_at)}</div>
+                  </div>
+                  {!n.read_at && (
+                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: T.PLX_GREEN_600, marginTop: 5, flexShrink: 0 }} />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -12,12 +12,15 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from app.deps import DB, StoreId
+from app.deps import DB, StoreId, CurrentUserName
 from app.models.inventory import AdjustmentReason, InventoryAdjustment, InventoryField
-from app.models.product import Product, ProductVariant
-from app.models.purchase_order import POStatus, PurchaseOrder, PurchaseOrderItem, PurchaseOrderTag
+from app.models.product import Product, ProductStatus, ProductVariant
+from app.models.purchase_order import POComment, POStatus, PurchaseOrder, PurchaseOrderItem, PurchaseOrderTag
 from app.models.tag import Tag
 from sqlalchemy import insert as sa_insert
+from app.services.lots import receive_into_lot
+from app.services.notifier import notify
+from app.services.stock import StockError, apply_stock_delta
 from app.schemas.base import PaginatedResponse
 from app.schemas.purchase_order import (
     POItemRead,
@@ -80,6 +83,7 @@ def _po_to_read(po: PurchaseOrder) -> PurchaseOrderRead:
         tags=[t.name for t in po.tags],
         supplier_name=po.supplier.company_name if po.supplier else None,
         branch_name=po.destination_branch.name if po.destination_branch else None,
+        created_by=po.created_by,
         created_at=po.created_at,
         updated_at=po.updated_at,
     )
@@ -157,6 +161,91 @@ async def list_purchase_orders(
     total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     rows = (await db.execute(stmt.order_by(PurchaseOrder.id.desc()).offset(offset).limit(limit))).scalars().unique().all()
     return PaginatedResponse(items=[_po_to_read(po) for po in rows], total=total)
+
+
+# NOTE: declared before /{po_id} — "auto-draft" must not be parsed as a po_id.
+@router.post("/auto-draft", summary="低在庫から発注書ドラフトを自動作成")
+async def auto_draft_purchase_orders(db: DB, store_id: StoreId, user_name: CurrentUserName = None):
+    """One draft PO per vendor covering every active product whose default
+    variant sits at/below its low-stock threshold, has a vendor, and is not
+    already on an open (draft/ordered/partially_received) PO.
+
+    Quantity heuristic (documented): threshold*2 − available, min 1.
+    unit_cost = the variant's cost (0 when unset — editable on the draft).
+    """
+    variants = (await db.execute(
+        select(ProductVariant)
+        .join(Product, Product.id == ProductVariant.product_id)
+        .where(
+            ProductVariant.store_id == store_id,
+            ProductVariant.is_default.is_(True),
+            Product.status == ProductStatus.active,
+            Product.vendor_id.is_not(None),
+        )
+        .options(selectinload(ProductVariant.product))
+    )).scalars().all()
+
+    # Variants already covered by an open PO.
+    open_variant_ids = set((await db.execute(
+        select(PurchaseOrderItem.variant_id)
+        .join(PurchaseOrder, PurchaseOrder.id == PurchaseOrderItem.purchase_order_id)
+        .where(
+            PurchaseOrder.store_id == store_id,
+            PurchaseOrder.status.in_([POStatus.draft, POStatus.ordered, POStatus.partially_received]),
+        )
+    )).scalars().all())
+
+    from collections import defaultdict
+    by_vendor: dict[int, list] = defaultdict(list)
+    for v in variants:
+        threshold = v.low_stock_threshold if v.low_stock_threshold is not None else 10
+        available = (v.on_hand or 0) - (v.committed or 0) - (v.unavailable or 0)
+        if available > threshold or v.id in open_variant_ids:
+            continue
+        qty = max(1, threshold * 2 - available)
+        by_vendor[v.product.vendor_id].append((v, qty))
+
+    if not by_vendor:
+        return {"created": [], "message": "自動作成の対象がありません（低在庫かつ未発注の商品なし）"}
+
+    # Destination = the store's main branch.
+    from app.models.branch import Branch
+    main_branch = (await db.execute(
+        select(Branch.id).where(Branch.store_id == store_id)
+        .order_by((Branch.branch_type != "main"), Branch.id).limit(1)
+    )).scalar_one_or_none()
+    if main_branch is None:
+        raise HTTPException(400, detail="拠点が登録されていません")
+
+    created = []
+    for vendor_id, lines in by_vendor.items():
+        po = PurchaseOrder(
+        created_by=user_name,
+            store_id=store_id,
+            supplier_vendor_id=vendor_id,
+            destination_branch_id=main_branch,
+            status=POStatus.draft,
+            note="低在庫からの自動作成ドラフト",
+            shipping_cost=Decimal("0"),
+            subtotal=Decimal("0"),
+            total=Decimal("0"),
+        )
+        db.add(po)
+        await db.flush()
+        items = []
+        for v, qty in lines:
+            cost = v.cost if v.cost is not None else Decimal("0")
+            item = PurchaseOrderItem(
+                purchase_order_id=po.id, store_id=store_id, variant_id=v.id,
+                quantity_ordered=qty, unit_cost=cost, line_total=cost * qty,
+            )
+            db.add(item)
+            items.append(item)
+        po.subtotal, po.total = _compute_totals(items, po.shipping_cost)
+        created.append(po.id)
+
+    await db.commit()
+    return {"created": created}
 
 
 # NOTE: declared before /{po_id} — "summary" must not be parsed as a po_id.
@@ -275,8 +364,34 @@ async def get_purchase_order(po_id: int, db: DB, store_id: StoreId):
 
 
 @router.post("", response_model=PurchaseOrderRead, status_code=201)
-async def create_purchase_order(body: PurchaseOrderCreate, db: DB, store_id: StoreId):
+async def create_purchase_order(body: PurchaseOrderCreate, db: DB, store_id: StoreId, user_name: CurrentUserName = None):
+    # Tenancy validation (audit M3): vendor, branch and every line-item
+    # variant must belong to this store.
+    from app.models.branch import Branch
+    from app.models.vendor import Vendor
+    vendor_ok = (await db.execute(
+        select(Vendor.id).where(Vendor.id == body.supplier_vendor_id, Vendor.store_id == store_id)
+    )).scalar_one_or_none()
+    if vendor_ok is None:
+        raise HTTPException(400, detail="指定された仕入先がこの店舗に存在しません")
+    branch_ok = (await db.execute(
+        select(Branch.id).where(Branch.id == body.destination_branch_id, Branch.store_id == store_id)
+    )).scalar_one_or_none()
+    if branch_ok is None:
+        raise HTTPException(400, detail="指定された拠点がこの店舗に存在しません")
+    if body.items:
+        wanted = {i.variant_id for i in body.items}
+        found = set((await db.execute(
+            select(ProductVariant.id).where(
+                ProductVariant.id.in_(wanted), ProductVariant.store_id == store_id
+            )
+        )).scalars().all())
+        missing = wanted - found
+        if missing:
+            raise HTTPException(400, detail=f"この店舗に存在しない商品が含まれています (variant {sorted(missing)})")
+
     po = PurchaseOrder(
+        created_by=user_name,
         store_id=store_id,
         supplier_vendor_id=body.supplier_vendor_id,
         destination_branch_id=body.destination_branch_id,
@@ -408,12 +523,18 @@ async def submit_purchase_order(po_id: int, db: DB, store_id: StoreId):
         raise HTTPException(400, detail=f"Can only submit draft orders, current status: {po.status.value}")
     po.status = POStatus.ordered
     po.ordered_at = datetime.now(timezone.utc)
+    await notify(
+        db, store_id, "po_status",
+        f"発注書 PO-{po.id:06d} を送信しました",
+        f"仕入先: {po.supplier.company_name if po.supplier else '—'}　合計 ¥{po.total}",
+        link_path=f"/purchase-orders/{po.id}",
+    )
     await db.commit()
     return _po_to_read(await _get_po(po.id, store_id, db))
 
 
 @router.post("/{po_id}/receive", response_model=PurchaseOrderRead)
-async def receive_purchase_order(po_id: int, body: PurchaseOrderReceive, db: DB, store_id: StoreId):
+async def receive_purchase_order(po_id: int, body: PurchaseOrderReceive, db: DB, store_id: StoreId, user_name: CurrentUserName = None):
     """Receive items on a PO: updates quantity_received, bumps on_hand inventory."""
     po = await _get_po(po_id, store_id, db)
     if po.status not in (POStatus.ordered, POStatus.partially_received):
@@ -432,19 +553,47 @@ async def receive_purchase_order(po_id: int, body: PurchaseOrderReceive, db: DB,
 
         item.quantity_received += recv.quantity_received
 
-        # Bump on_hand on the variant
+        # Bump on_hand at the PO's destination branch — atomic + store-scoped
+        # (services/stock.py; fixes the audit's M4 cross-tenant receive).
         variant = (
             await db.execute(
-                select(ProductVariant).where(ProductVariant.id == item.variant_id)
+                select(ProductVariant).where(
+                    ProductVariant.id == item.variant_id,
+                    ProductVariant.store_id == store_id,
+                ).options(selectinload(ProductVariant.product))
             )
-        ).scalar_one()
-        variant.on_hand += recv.quantity_received
+        ).scalar_one_or_none()
+        if variant is None:
+            raise HTTPException(400, detail=f"明細の商品がこの店舗に存在しません (variant {item.variant_id})")
+        # Archived products are out of catalog — no stock movements (audit M8).
+        if variant.product is not None and str(variant.product.status.value) == "archived":
+            raise HTTPException(400, detail=f"アーカイブ済み商品には入荷できません: {variant.product.name}")
+        try:
+            recv_branch = await apply_stock_delta(
+                db, store_id=store_id, variant_id=item.variant_id,
+                branch_id=po.destination_branch_id, field=InventoryField.on_hand,
+                delta=recv.quantity_received,
+            )
+        except StockError as e:
+            await db.rollback()
+            raise HTTPException(400, detail=e.message)
+
+        # Per-lot capture (migration 014) — only when the receiver typed a
+        # lot number or expiry for this line.
+        await receive_into_lot(
+            db, store_id=store_id, variant_id=item.variant_id, branch_id=recv_branch,
+            qty=recv.quantity_received, lot_number=recv.lot_number,
+            expiry_date=recv.expiry_date, po_id=po.id,
+        )
 
         # The reorder is fulfilled — clear the product's 再発注済 flag so the
         # 商品一覧 chip stops surfacing it.
         product = (
             await db.execute(
-                select(Product).where(Product.id == variant.product_id)
+                select(Product).where(
+                    Product.id == variant.product_id,
+                    Product.store_id == store_id,
+                )
             )
         ).scalar_one_or_none()
         if product is not None and product.reorder_requested_at is not None:
@@ -452,8 +601,10 @@ async def receive_purchase_order(po_id: int, body: PurchaseOrderReceive, db: DB,
 
         # Log adjustment
         adj = InventoryAdjustment(
+        created_by=user_name,
             store_id=store_id,
             variant_id=item.variant_id,
+            branch_id=recv_branch,
             field=InventoryField.on_hand,
             delta=recv.quantity_received,
             reason=AdjustmentReason.purchase_order_received,
@@ -470,6 +621,12 @@ async def receive_purchase_order(po_id: int, body: PurchaseOrderReceive, db: DB,
     else:
         po.status = POStatus.partially_received
 
+    await notify(
+        db, store_id, "po_status",
+        f"発注書 PO-{po.id:06d} が{'入荷済み' if all_received else '一部入荷'}になりました",
+        f"納品先: {po.destination_branch.name if po.destination_branch else '—'}",
+        link_path=f"/purchase-orders/{po.id}",
+    )
     await db.commit()
     return _po_to_read(await _get_po(po.id, store_id, db))
 
@@ -482,5 +639,45 @@ async def cancel_purchase_order(po_id: int, db: DB, store_id: StoreId):
     if po.status == POStatus.cancelled:
         raise HTTPException(400, detail="Purchase order is already cancelled")
     po.status = POStatus.cancelled
+    await notify(
+        db, store_id, "po_status",
+        f"発注書 PO-{po.id:06d} をキャンセルしました",
+        None,
+        link_path=f"/purchase-orders/{po.id}",
+    )
     await db.commit()
     return _po_to_read(await _get_po(po.id, store_id, db))
+
+# ── Comments (feedback batch C) ─────────────────────────────────────
+
+@router.get("/{po_id}/comments", summary="発注書のコメント一覧")
+async def list_po_comments(po_id: int, db: DB, store_id: StoreId):
+    await _get_po(po_id, store_id, db)  # 404 + tenancy check
+    rows = (await db.execute(
+        select(POComment)
+        .where(POComment.purchase_order_id == po_id, POComment.store_id == store_id)
+        .order_by(POComment.created_at.asc(), POComment.id.asc())
+    )).scalars().all()
+    return {"items": [{
+        "id": c.id,
+        "author": c.author,
+        "body": c.body,
+        "created_at": c.created_at.isoformat() if c.created_at else None,
+    } for c in rows]}
+
+
+@router.post("/{po_id}/comments", status_code=201, summary="発注書にコメントを追加")
+async def add_po_comment(po_id: int, body: dict, db: DB, store_id: StoreId, user_name: CurrentUserName = None):
+    await _get_po(po_id, store_id, db)
+    text = str(body.get("body") or "").strip()
+    if not text:
+        raise HTTPException(400, detail="コメントを入力してください")
+    if len(text) > 1000:
+        raise HTTPException(400, detail="コメントは1000文字以内で入力してください")
+    c = POComment(store_id=store_id, purchase_order_id=po_id, author=user_name, body=text)
+    db.add(c)
+    await db.commit()
+    await db.refresh(c)
+    return {"id": c.id, "author": c.author, "body": c.body,
+            "created_at": c.created_at.isoformat() if c.created_at else None}
+

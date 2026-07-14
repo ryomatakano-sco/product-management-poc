@@ -29,6 +29,8 @@ class Category(Base, TimestampMixin):
     store_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("stores.id"), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     name_kana: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    name_en: Mapped[str | None] = mapped_column(String(160), nullable=True,
+        comment="Optional English label — EN mode shows this, falls back to name")
     parent_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("categories.id"), nullable=True
     )

@@ -37,6 +37,14 @@ class NotificationsSettings(BaseModel):
     po_status_change: bool = True
     daily_summary_time: str = "08:00"
     recipient_user_ids: list[int] = []
+    # Email delivery (heavy-tier item 3). PoC: SMTP creds live in the settings
+    # blob like the other PoC secrets. Empty smtp_host / notify_email = in-app only.
+    notify_email: str = ""
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
 
 
 # ── tax_rates ──────────────────────────────────────────────────────

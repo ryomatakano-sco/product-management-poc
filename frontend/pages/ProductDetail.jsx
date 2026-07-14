@@ -4,6 +4,9 @@ function ProductDetail({ productId }) {
   const productQ = useFetch(() => api.getProduct(productId), [productId]);
   const [tab, setTab] = React.useState("variants");
   const [adjustVariant, setAdjustVariant] = React.useState(null);
+  // Bumped after each adjustment so the 在庫履歴 tab refetches (audit F5).
+  const [histKey, setHistKey] = React.useState(0);
+  const [showQuickSale, setShowQuickSale] = React.useState(false);
   const [publishing, setPublishing] = React.useState(false);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
@@ -69,6 +72,15 @@ function ProductDetail({ productId }) {
   const canPublish = canPublishProduct(p);
   const headerRight = (
     <div style={{ display: "flex", gap: 8 }}>
+      {p && p.status === "active" && heroVariant && (
+        <button
+          onClick={() => setShowQuickSale(true)}
+          style={btnSecondary}
+          title="この商品の販売をその場で記録します"
+        >
+          ＋ 販売を記録
+        </button>
+      )}
       <button
         onClick={() => setConfirmDelete(true)}
         style={{ ...btnGhost, color: "#B91C1C" }}
@@ -118,6 +130,7 @@ function ProductDetail({ productId }) {
       }}>
         <div>
           <ProductThumb url={p.images?.[0]?.url} size={160} iconSize={56} alt={p.name} />
+          <ProductImageManager product={p} onChanged={() => productQ.refetch()} />
         </div>
 
         <div style={{ minWidth: 0 }}>
@@ -147,6 +160,7 @@ function ProductDetail({ productId }) {
             display: "flex", flexDirection: "column", gap: 9,
           }}>
             <BasicRow k="仕入先" v={p.vendor_name ?? "—"} />
+            <BasicRow k="社内コード" v={p.internal_code ?? "—"} mono />
             <BasicRow k="主要 SKU" v={heroVariant?.sku ?? "—"} mono />
             <BasicRow k="JAN" v={heroVariant?.barcode ?? "—"} mono />
             <BasicRow
@@ -287,18 +301,46 @@ function ProductDetail({ productId }) {
           <VariantsTable variants={variants} onAdjust={setAdjustVariant}
             onEdit={() => navigate(`/products/${p.id}/edit`)} />
         )}
-        {tab === "history" && variants[0] && <InventoryHistory variantId={variants[0].id} />}
+        {tab === "history" && variants.length > 0 && (
+          <InventoryHistory
+            variantId={(variants.find((v) => v.is_default) || variants[0]).id}
+            refreshKey={histKey}
+          />
+        )}
         {tab === "lots" && p.item_type === "consumable" && <LotHistory product={p} />}
         {tab === "sales" && sales && (
           <SalesChart productId={p.id} quantity={sales.last_90_days_quantity} revenue={sales.last_90_days_revenue} />
         )}
       </div>
 
+      {showQuickSale && heroVariant && (
+        <PlxManualSaleModal
+          initialProduct={{
+            variant_id: heroVariant.id,
+            name: p.name,
+            sku: heroVariant.sku,
+            on_hand: heroVariant.on_hand,
+            price: heroVariant.price,
+          }}
+          onClose={() => setShowQuickSale(false)}
+          onSaved={() => {
+            setShowQuickSale(false);
+            window.PLX_TOAST?.success("販売を記録しました");
+            productQ.refetch();
+            setHistKey((k) => k + 1);
+          }}
+        />
+      )}
+
       {adjustVariant && (
         <InventoryAdjustModal
           variant={adjustVariant}
           onClose={() => setAdjustVariant(null)}
-          onApplied={() => { setAdjustVariant(null); productQ.refetch(); }}
+          onApplied={(res) => {
+            setAdjustVariant(null);
+            if (res?.pending_approval) window.PLX_TOAST?.warn("管理者の承認待ちになりました（在庫はまだ変更されていません）");
+            productQ.refetch(); setHistKey((k) => k + 1);
+          }}
         />
       )}
 
@@ -506,11 +548,11 @@ function VariantsTable({ variants, onAdjust, onEdit }) {
   );
 }
 
-function InventoryHistory({ variantId }) {
-  const q = useFetch(() => api.inventoryHistory(variantId, 50, 0), [variantId]);
+function InventoryHistory({ variantId, refreshKey }) {
+  const q = useFetch(() => api.inventoryHistory(variantId, 50, 0), [variantId, refreshKey]);
   const reasonLabels = {
     manual: "手動", sale: "販売", purchase_order_received: "仕入",
-    correction: "修正", damage: "破損", other: "その他",
+    correction: "修正", damage: "破損", transfer: "拠点間移動", other: "その他",
   };
   const fieldLabels = { on_hand: "在庫", committed: "引当", unavailable: "使用不可" };
 
@@ -544,7 +586,7 @@ function InventoryHistory({ variantId }) {
           <span style={{
             textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums",
             color: h.delta > 0 ? PLX_GREEN : PLX_WARN,
-          }}>{h.delta > 0 ? "+" : ""}{h.delta}</span>
+          }}>{h.delta > 0 ? `▲ +${h.delta}` : h.delta < 0 ? `▼ ${Math.abs(h.delta)}` : h.delta}</span>
           <span>{reasonLabels[h.reason]}</span>
           <span style={{ color: PLX_MUTED }}>{h.note ?? ""}</span>
         </div>
@@ -634,12 +676,26 @@ function InventoryAdjustModal({ variant, onClose, onApplied }) {
   const [note, setNote]     = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError]   = React.useState(null);
+  // Per-branch inventory (migration 012): pick which branch the stock moves
+  // at. Defaults to the main branch; hidden when the store has one branch.
+  const branchesQ = useFetch(() => api.listBranches(), []);
+  const branches = branchesQ.data?.items ?? [];
+  const [branchId, setBranchId] = React.useState("");
+  React.useEffect(() => {
+    if (branches.length > 0 && !branchId) {
+      const main = branches.find((b) => b.branch_type === "main") || branches[0];
+      setBranchId(String(main.id));
+    }
+  }, [branchesQ.data]);
 
   const submit = async () => {
     setSubmitting(true); setError(null);
     try {
-      await api.adjustInventory(variant.id, { field, delta, reason, note: note || null });
-      onApplied();
+      const res = await api.adjustInventory(variant.id, {
+        field, delta, reason, note: note || null,
+        branch_id: branchId ? Number(branchId) : null,
+      });
+      onApplied(res);
     } catch (e) {
       setError(e.body?.detail || e.message);
     } finally {
@@ -668,6 +724,14 @@ function InventoryAdjustModal({ variant, onClose, onApplied }) {
         <div style={{ fontSize: 12, color: PLX_MUTED, marginBottom: 18 }}>
           {variant.sku ?? "—"} · {variant.option1_value ?? "標準"}
         </div>
+
+        {branches.length > 1 && (
+          <FormRow label="拠点">
+            <select value={branchId} onChange={(e) => setBranchId(e.target.value)} style={formInput}>
+              {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </FormRow>
+        )}
 
         <FormRow label="項目">
           <SegmentedControl value={field} onChange={setField} options={[
@@ -722,25 +786,16 @@ function InventoryAdjustModal({ variant, onClose, onApplied }) {
   );
 }
 
-// Lot history tab (Yoshioka 2026-05-11). The PoC tracks one expiry per product;
-// real per-lot tracking is future scope. We synthesize a current/depleted/expired
-// row set from the product's current expiry + lot number so the tab isn't empty.
+// Lot history tab — REAL per-lot rows since migration 014 (GET /products/:id/lots).
+// Lots are created on PO receive (optional ロット番号/使用期限 per line) and
+// consumed FEFO by sales. Unlotted stock is possible — noted in the footer.
 function LotHistory({ product }) {
-  const rows = [
-    {
-      lot: product.lot_number || "—",
-      date: product.expiry_date,
-      qty: product.variants.reduce((s, v) => s + v.on_hand, 0),
-      status: "current",
-      arrived: null,
-    },
-    { lot: "LOT-2026A-012", date: "2026-04-02", qty: 0, status: "depleted", arrived: "2025-12-08" },
-    { lot: "LOT-2025D-091", date: "2025-12-20", qty: 0, status: "expired",  arrived: "2025-08-15" },
-  ];
+  const lotsQ = useFetch(() => api.getProductLots(product.id), [product.id]);
+  const rows = lotsQ.data?.items ?? [];
   return (
     <div>
       <div style={{
-        display: "grid", gridTemplateColumns: "160px 140px 100px 1fr 140px",
+        display: "grid", gridTemplateColumns: "160px 130px 90px 1fr 120px 130px",
         padding: "12px 22px", fontSize: 11, fontWeight: 700, color: PLX_MUTED,
         background: PLX_GREEN_50, letterSpacing: ".03em",
         borderBottom: `1px solid ${PLX_BORDER}`, gap: 10,
@@ -749,29 +804,41 @@ function LotHistory({ product }) {
         <span>使用期限</span>
         <span style={{ textAlign: "right" }}>残数</span>
         <span>ステータス</span>
+        <span>拠点</span>
         <span>入荷日</span>
       </div>
+      {lotsQ.loading && (
+        <div style={{ padding: 30, textAlign: "center", color: PLX_MUTED, fontSize: 12 }}>読み込み中…</div>
+      )}
+      {!lotsQ.loading && rows.length === 0 && (
+        <div style={{ padding: "30px 22px", textAlign: "center", color: PLX_MUTED, fontSize: 12 }}>
+          この商品のロットはまだ登録されていません。<br/>
+          発注書の「入荷を記録」でロット番号・使用期限を入力すると、ここに実データが表示されます。
+        </div>
+      )}
       {rows.map((r, i) => (
-        <div key={i} style={{
-          display: "grid", gridTemplateColumns: "160px 140px 100px 1fr 140px",
+        <div key={r.id} style={{
+          display: "grid", gridTemplateColumns: "160px 130px 90px 1fr 120px 130px",
           padding: "12px 22px", alignItems: "center", fontSize: 12, gap: 10,
           borderBottom: i < rows.length - 1 ? `1px solid ${PLX_BORDER}` : "none",
         }}>
-          <span style={{ fontFamily: "ui-monospace,SFMono-Regular,monospace", fontSize: 11, fontWeight: 700 }}>{r.lot}</span>
-          <span style={{ fontFamily: "ui-monospace,SFMono-Regular,monospace" }}>{formatJpDate(r.date)}</span>
-          <span style={{ textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums", color: r.qty === 0 ? PLX_MUTED : PLX_TEXT }}>{r.qty}</span>
+          <span style={{ fontFamily: "ui-monospace,SFMono-Regular,monospace", fontSize: 11, fontWeight: 700 }}>{r.lot_number}</span>
+          <span style={{ fontFamily: "ui-monospace,SFMono-Regular,monospace" }}>{r.expiry_date ? formatJpDate(r.expiry_date) : "—"}</span>
+          <span style={{ textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums", color: r.qty_on_hand === 0 ? PLX_MUTED : PLX_TEXT }}>{r.qty_on_hand}</span>
           <span>
             {r.status === "current"  && <Pill color={PLX_GREEN} bg={PLX_GREEN_LIGHT}>● 使用中</Pill>}
             {r.status === "depleted" && <Pill color={PLX_MUTED} bg="#F3F4F6">使い切り</Pill>}
             {r.status === "expired"  && <Pill color={PLX_RED} bg={PLX_RED_LIGHT}>期限切れ</Pill>}
           </span>
+          <span style={{ fontSize: 11, color: PLX_MUTED }}>{r.branch_name}</span>
           <span style={{ fontSize: 11, color: PLX_MUTED, fontFamily: "ui-monospace,SFMono-Regular,monospace" }}>
-            {r.arrived ? formatJpDate(r.arrived) : "—"}
+            {r.received_at ? formatJpDate(r.received_at) : "—"}
           </span>
         </div>
       ))}
       <div style={{ padding: "14px 22px", fontSize: 11, color: PLX_MUTED, lineHeight: 1.6 }}>
-        ※ ロット単位の在庫追跡は今後対応予定です（FUTURE SCOPE — see CHANGES.md）。現状は商品単位の使用期限のみ管理しています。
+        ※ 販売は使用期限の近いロットから消費されます（FEFO）。手動在庫調整はロットに反映されないため、
+        ロット合計が拠点在庫より少ないことがあります（未追跡分）。
       </div>
     </div>
   );
@@ -779,3 +846,66 @@ function LotHistory({ product }) {
 
 window.ProductDetail = ProductDetail;
 window.PlxInventoryAdjustModal = InventoryAdjustModal;  // reused by the 在庫 page's adjust flow
+
+// 商品画像 — upload (PNG/JPEG/WebP ≤4MB) + thumbnails with delete.
+// First image (position 0) is the hero/thumbnail everywhere.
+function ProductImageManager({ product, onChanged }) {
+  const inputRef = React.useRef(null);
+  const [busy, setBusy] = React.useState(false);
+  const images = product.images || [];
+  const upload = async (file) => {
+    if (!file || busy) return;
+    setBusy(true);
+    try {
+      await api.uploadProductImage(product.id, file);
+      window.PLX_TOAST?.success("画像をアップロードしました");
+      onChanged?.();
+    } catch (e) {
+      window.PLX_TOAST?.error(e?.body?.detail || "画像のアップロードに失敗しました");
+    } finally { setBusy(false); }
+  };
+  const remove = async (img) => {
+    try {
+      await api.deleteProductImage(product.id, img.id);
+      window.PLX_TOAST?.success("画像を削除しました");
+      onChanged?.();
+    } catch (e) {
+      window.PLX_TOAST?.error(e?.body?.detail || "画像の削除に失敗しました");
+    }
+  };
+  return (
+    <div style={{ marginTop: 8, width: 160 }}>
+      <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" style={{ display: "none" }}
+        onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ""; }} />
+      <button onClick={() => inputRef.current?.click()} disabled={busy} style={{
+        width: "100%", padding: "6px 0", borderRadius: 8, fontSize: 11, fontWeight: 700,
+        border: `1px dashed ${PLX_BORDER}`, background: "transparent", color: PLX_MUTED,
+        cursor: "pointer", opacity: busy ? 0.6 : 1,
+      }}>{busy ? "アップロード中…" : "＋ 画像を追加"}</button>
+      {images.length > 1 && (
+        <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+          {images.slice(1).map((img) => (
+            <div key={img.id} style={{ position: "relative" }}>
+              <img src={img.url} alt="" style={{
+                width: 46, height: 46, objectFit: "cover", borderRadius: 8,
+                border: `1px solid ${PLX_BORDER}`,
+              }} />
+              <button onClick={() => remove(img)} title="この画像を削除" style={{
+                position: "absolute", top: -6, right: -6, width: 18, height: 18,
+                borderRadius: "50%", border: "none", background: T.PLX_RED_600, color: "#fff",
+                fontSize: 10, lineHeight: "18px", cursor: "pointer", padding: 0,
+              }}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {images.length > 0 && (
+        <button onClick={() => remove(images[0])} style={{
+          width: "100%", marginTop: 6, padding: "4px 0", borderRadius: 8, fontSize: 10,
+          border: "none", background: "transparent", color: T.PLX_RED_600, cursor: "pointer",
+        }}>メイン画像を削除</button>
+      )}
+    </div>
+  );
+}
+

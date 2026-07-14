@@ -164,6 +164,7 @@ class ProductUpdate(BaseModel):
 
 
 class ProductListItem(BaseModel):
+    internal_code: str | None = None
     """Lightweight product for list view.
 
     Includes derived fields (default variant SKU/price, total available stock)
@@ -208,6 +209,7 @@ class ProductListItem(BaseModel):
 
 
 class ProductDetail(BaseModel):
+    internal_code: str | None = None
     """Full product detail view."""
     model_config = ConfigDict(from_attributes=True)
 

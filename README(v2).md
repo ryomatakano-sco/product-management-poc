@@ -344,3 +344,278 @@ The last medium item — and the app's **first real file-upload plumbing** (ever
 3. Try a non-image or >2MB file → Japanese validation error toast.
 
 The logo is stored and served; wiring it into the receipt/PO print headers is a natural follow-up.
+
+---
+
+## 認証・ユーザー管理 (Auth & user management) — heavy tier 1
+
+Branch: `feature/sales-records` · Migration **011**
+
+PoC-grade session auth: the app now has a real login. Unauthenticated visitors see a
+paylight X login page; sessions are HttpOnly HMAC-signed cookies (7 days, stateless — they
+survive server restarts). Passwords are hashed with stdlib **scrypt** (no new dependency).
+
+| Piece | Where |
+|---|---|
+| `users` table + dev admin | Migration `011_users_auth.py` inserts **admin@example.com / admin** for existing DBs; `seed.py` creates the same on fresh installs |
+| Token/hash primitives | `backend/app/services/auth.py` (secret: `AUTH_SECRET` env, fixed dev default) |
+| Endpoints | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`, admin-only `GET/POST /auth/users` + `PATCH /auth/users/{id}` (duplicate email → 409; self-demotion/deactivation → 400) |
+| Store resolution | `deps.get_store_id`: session cookie wins; **`X-Store-Id` header kept as dev fallback** so curl/DevPanel keep working (remove in production) |
+| UI | `pages/Login.jsx` + auth gate in `app.jsx` (the `#/scan` phone page stays ungated); AdminShell footer shows the real user + ⎋ logout; 設定 › ユーザー管理 is now a real pane (list / add / role / enable-disable; staff see a polite notice) |
+
+**How to test:** log out via the sidebar ⎋ → login page appears → sign in with
+admin/admin → footer shows your name; 設定 › ユーザー管理 → add a staff user, log in as
+them in an incognito window → ユーザー管理 shows "管理者のみ".
+
+---
+
+## 拠点別在庫 (Per-branch inventory) — heavy tier 2
+
+Branch: `feature/sales-records` · Migration **012**
+
+Stock is now tracked **per branch**. New table `variant_branch_stock` holds one row per
+(variant, branch); existing stock was backfilled to each store's 本院. The variant's old
+counters remain as **denormalized store-wide totals**, so every existing read kept working.
+
+The new `services/stock.py` is the single choke point for ALL stock movement — it validates
+the branch belongs to the store, upserts the branch row, and applies the delta **atomically
+in SQL with a non-negative guard** at both the branch and total level. This also fixes three
+audit findings in one stroke: the C3 oversell race, M2/M4 cross-tenant branch/variant writes,
+and per-path negative-stock gaps.
+
+| Rewired path | Behavior now |
+|---|---|
+| `POST /sales` | decrements at the sale's 拠点 (validated); oversell at that branch → 400 「この拠点の在庫が不足しています」 |
+| `POST /sales/:id/refund` | restores stock at the original sale's branch |
+| `POST /variants/:id/inventory-adjust` | accepts optional `branch_id` (default = 本院); rejects archived products (audit M8) |
+| `POST /purchase-orders/:id/receive` | stock lands at the PO's 納品先拠点; variant/product lookups store-scoped |
+| `POST /purchase-orders` | validates vendor / branch / every line variant belong to the store (audit M3) → 400 |
+| `GET /inventory?branch_id=` | **finally real** — counters come from that branch's rows (0 when absent); 棚卸しCSV follows |
+| `GET /branches/:id/inventory-snapshot` | true per-branch numbers (was store-wide duplicated on every card) |
+| `inventory_adjustments.branch_id` | audit trail records WHERE stock moved |
+
+UI: 在庫 page gains a 拠点 filter select; the shared 在庫調整 modal gains a 拠点 select
+(hidden for single-branch stores, defaults to 本院).
+
+**Verified end-to-end:** backfill (本院 348 items / 梅田 0) → +3 adjust at 梅田 → oversell 5
+blocked with per-branch message → sell 2 → 梅田 1・本院 unchanged・total consistent → refund
+restores 3 → PO received into 梅田 → 4; foreign-variant PO → 400; invalid branch → 400.
+Totals remained exactly equal to branch-row sums throughout — including during concurrent
+real edits from the product edit screen.
+
+**Unlocked next (cheap now):** branch-to-branch transfer = one endpoint creating a paired
+±delta via `apply_stock_delta` with a new `transfer` reason.
+
+---
+
+## 通知配信 (Notification delivery) — heavy tier 3
+
+Branch: `feature/sales-records` · Migration **013**
+
+The 設定 › 通知 toggles finally DO something. Notifications are real: an in-app feed behind
+the topbar bell, plus optional email when SMTP is configured.
+
+| Piece | Where |
+|---|---|
+| `notifications` table | Migration `013_notifications.py` — kind / title / body / link_path / read_at, per-store |
+| Dispatch service | `backend/app/services/notifier.py` — `notify()` writes the row and (when `email_enabled` + SMTP configured) fires a plain-text email in a background thread. **Never raises** — a notification failure can't break a sale. Unread duplicates (same kind + link) are suppressed, so a product below threshold doesn't spam a row per sale |
+| Emitters | Sales create + downward inventory adjust → `check_low_stock` (re-reads counters post-atomic-update; fires when available ≤ per-variant threshold). PO submit / receive / cancel → `po_status`. Daily loop in `main.py` fires a 日次サマリー (low-stock + expiring counts) at each store's `daily_summary_time` (JST, deduped per day) |
+| Endpoints | `GET /notifications` (items + unread_count), `POST /notifications/{id}/read`, `POST /notifications/read-all` |
+| Bell UI | `AdminShell.jsx` `NotificationBell` — 30s poll, unread count badge, dropdown with kind icons + relative time, click = mark read + navigate, すべて既読 |
+| SMTP settings | New fields in the notifications namespace (`notify_email`, `smtp_host/port/user/password/from`) + inputs in 設定 › 通知. Empty = in-app only |
+
+**Honored toggles:** `low_stock`, `expiring_soon`, `po_status_change` gate their kinds;
+`email_enabled` gates email. PoC notes: read state is per-store (not per-user); SMTP
+password sits in the settings blob like other PoC secrets.
+
+**Verified:** low-stock fires on a threshold-crossing sale (「在庫低下: test 6 — 利用可能在庫が
+4 個…」) with dedupe (second sale → still one unread row); PO cancel/submit/receive rows with
+correct titles + links; read / read-all → unread_count 0; stock-affecting test sales refunded.
+
+**How to test:** sell a low-stock product → bell shows a badge within 30s → click the row →
+lands on the product page, row marked read. Configure SMTP + 宛先 in 設定 › 通知 to also
+receive emails.
+
+---
+
+## ロット管理 (FEFO lot tracking) — heavy tier 4
+
+Branch: `feature/sales-records` · Migration **014**
+
+The ロット履歴 tab shows **real data** now — the fabricated LOT-2026A-012 sample rows are gone
+(the last "mock data" item from the gap analysis).
+
+- `product_lots`: one row per received lot of a variant at a branch. Lots are a **tracking
+  layer** — `variant_branch_stock` remains the stock source of truth, and all lot movement
+  helpers (`services/lots.py`) are best-effort: a lot hiccup can never break a sale.
+- **Capture:** the PO 入荷を記録 modal gains optional ロット番号 + 使用期限 per line →
+  creates/merges a lot at the PO's 納品先拠点. Existing consumables with lot/expiry data were
+  backfilled (one lot per stocked branch).
+- **FEFO:** sales consume lots earliest-expiry-first (NULL expiry last) at the sale's branch;
+  refunds restock the newest lot. Manual adjustments deliberately don't touch lots
+  (documented PoC gap — the tab footer explains 未追跡分).
+- `GET /products/{id}/lots` → rows with status (使用中/期限切れ/使い切り), branch, received date.
+
+**Verified:** backfill created lots for the 4 seeded consumables (expired one correctly
+flagged); receive with LOT-TEST-A + expiry → appears in the tab; sale dropped it 3→2 (FEFO);
+refund restored 3.
+
+---
+
+## 実AIサマリー (Real AI dashboard summary) — heavy tier 5
+
+Branch: `feature/sales-records`
+
+The dashboard's 再生成 button now calls a **real LLM** (gpt-4.1-nano via the OpenAI API).
+
+- Cost design: **only the 再生成 click spends tokens** (~¥0.1–0.2). The narrative is cached
+  per (store, JST-day); plain GETs serve the cached text — or the free deterministic
+  template when nothing was generated today. No key / `MOCK_AI=1` / API failure → silent
+  template fallback, so the dashboard always renders.
+- The prompt receives **aggregates only** (KPI counts, top-5 attention names, month sales) —
+  no raw rows leave the DB.
+- Response gains `ai_generated: bool`; the card shows a **✨ AI生成** badge when the narrative
+  is live-generated.
+
+**Verified with a real call:** regenerate produced a coherent Japanese morning-brief
+(「…**4 件**が在庫低下のため早急な対応が必要です…」), and the follow-up GET served it from
+cache with `ai_generated: true`.
+
+---
+
+## Phase 0 — 監査指摘の修正 + EN翻訳カバレッジ
+
+Branch: `feature/sales-records`
+
+The remaining fixes from `docs/audits/full_system_audit_2026-07-09.md`, plus an EN-mode
+translation pass.
+
+**Backend**
+| Fix | What changed |
+|---|---|
+| C1/C2/M9 timezone skew | New `services/tz.py` (`jst_to_utc_naive` / `any_to_utc_naive`). Applied to sales summary boundaries, sales list/CSV `date_from/date_to`, and the dashboard 今月の売上 month start. **Verified:** a sale at 01:00 JST now counts toward *today* (pre-fix it landed in yesterday). PO endpoints untouched — their `created_at` is JST-naive and was already correct. |
+| C4 transaction-id 500 | `_next_transaction_id` now probes for a free id (counts drift when rows are deleted / refunds inflate the day) instead of blindly using count+1; bails to a 409 after 200 probes. |
+| M6 cross-field invariant | `apply_stock_delta` rejects committed/unavailable moves that would push branch *available* negative (verified: `利用可能: -99994` → 400 + rollback). |
+| M8 receive guard | PO receive rejects archived products. |
+| m1 default variant | Multi-variant API create with no `is_default` now really marks the first variant default (was a `pass`). |
+| C5 refund fail-closed | Refund 400s when the variant's product record is missing. |
+
+**Frontend (F1–F6)**
+- F1: EN dashboard date no longer leaks `${["Sun",…]}` — the date is built locale-aware in
+  Dashboard.jsx; the fragile dictionary template was removed. Verified: "Today is Mon, July 13, 2026".
+- F2: `T.PLX_INK_050` (nonexistent token) → `T.PLX_SURFACE_50` in SalesRecords (stock badge + 小計 box).
+- F3: bulk-bar category select now readable in dark mode (fixed dark-on-white pair).
+- F4: PO submit/cancel/save-edit toasts now show the real server message (`e.body.detail`).
+- F5/F6: 在庫履歴 tab refetches after an adjustment and follows the *default* variant.
+
+**EN translation coverage**
+- ~110 new dictionary entries covering everything shipped since May: login page, notification
+  bell, users pane, SMTP section, per-branch filters/adjust flow, PO create modal + lot
+  capture, lots tab, bulk bar, duplicate-detection banners, AI badge, CSV/export buttons.
+- Fixed a live mistranslation: 「あと 17 日」 rendered as "あと 17 **Sun**" (the bare 日 counter
+  hit the weekday entry). The indicator is now a single template child with its own entry →
+  "17 days left". **Pattern note for future strings:** keep counter phrases as ONE template
+  child (`{\`あと ${days} 日\`}`), never `あと {days} 日` split across children.
+- Data values (category/vendor/product names) intentionally stay Japanese in EN mode.
+
+
+## 最終バッチ — 移動・棚卸取込・自動発注・商品CSV取込・クイック販売・APIパネル
+
+Branch: `feature/sales-records`
+
+**Backend**
+| Feature | Endpoint | Notes |
+|---|---|---|
+| 拠点間在庫移動 | `POST /inventory/transfer` | migration 015 が `inventory_adjustments.reason` に `'transfer'` を追加。移動元 −qty / 移動先 +qty を `apply_stock_delta` でアトミックに適用し、reason=`transfer` の監査行を 2 本記録。同一拠点は 400、在庫不足も 400。バリアント合計は不変（検証済み: 50 = 48+2 → 戻し）。 |
+| 棚卸しCSV取込 | `POST /inventory/stocktake.csv?branch_id=` | エクスポートCSV（UTF-8 BOM / cp932 両対応）の「実地棚卸数」列を読み、システム在庫との差分を reason=`correction`・メモ「棚卸し取込 <日付>」の調整として適用。`{adjusted, unchanged, errors[]}` を返す（検証: 1 件修正 / 11 件変更なし）。 |
+| 低在庫から自動発注 | `POST /purchase-orders/auto-draft` | 有効・仕入先設定済み・利用可能≦しきい値・未発注（オープンPOなし）のデフォルトバリアントを仕入先ごとにまとめ、下書きPOを作成。数量 = max(1, しきい値×2 − 利用可能)。再実行は重複を作らない（検証: 2 → 0 件）。 |
+| 商品CSVインポート | `GET /products/import-template.csv` + `POST /products/import.csv` | ヘッダー名でマッピング（name 必須）。カテゴリ・仕入先は**名前**で解決、未知は行エラー。JAN 重複も行エラー。取込商品は下書き、初期在庫は `apply_stock_delta` で拠点別に整合（検証: 1 件取込 + 2 行エラー、branch 行と variant 合計一致）。 |
+
+**Frontend**
+- 在庫: `⇄ 拠点間移動` モーダル（商品→バリアント→移動元/先→数量→メモ）と `⬆ 棚卸しCSV取込`（hidden file input → 結果トースト）。調整履歴の transfer は「拠点間移動」ラベルで表示。
+- 発注書: `⚡ 低在庫から自動作成` ボタン（作成件数をトースト）。
+- 商品一覧: `⬆ インポート` モーダル（テンプレDL / ファイル選択 / 行エラーテーブル表示）。
+- 商品詳細: `＋ 販売を記録` — SalesRecords の ManualSaleModal を `window.PlxManualSaleModal` として共有化し、`initialProduct` で商品プリフィル・担当者はログインユーザー名。
+- 設定 > API・Webhooks: 実情パネル（ベースURL / Swagger `/docs` リンク / セッションクッキー + `X-Store-Id` の説明 / curl 例 / APIキー・Webhook は本番スコープの注記）。
+
+**EN 翻訳の追加修正（ユーザー指摘: 「en 版で日本語が残る」）**
+- 最終バッチ全 UI 文言 + 既存の抜け（在庫テーブルヘッダー、ページネーション、調整履歴ヘッダー、サイドバーフッター、検索プレースホルダー等）を辞書に追加（約 90 エントリ）。
+- **i18n_autotr.js の実バグ修正**: テンプレートの優先順位が「キー全長」ソートだったため、スロット名が長い汎用キー（`${b.low_stock_threshold} 件`）が具体的なテンプレート（`${a} - ${b} 件 / 全 ${c} 件`）に勝ってしまい、末尾「件」が欠落する誤訳が発生。**リテラル部分の長さ**でソートするよう修正。
+- ページネーション等の複数子 JSX は単一テンプレート子（`{`...`}`）に統一（Phase 0 のパターン規則に準拠）。
+
+
+## フィードバック改善 A — 部分入荷の導線・返品理由・検索付きピッカー・増減の視覚化
+
+Branch: `feature/sales-records`（ユーザーフィードバック 2026-07-13 反映）
+
+| 指摘 | 対応 |
+|---|---|
+| 「部分入荷ができない」 | 調査の結果、API・モーダルとも部分入荷は**元々動作**（検証: 4/10 → 一部入荷 → +6 → 入荷済み）。ハマりどころは**下書きPOには入荷ボタンが出ない**こと（自動作成POは下書き）。下書きPO詳細に琥珀色のヒントバナー「先に 📤送信 で発注済みにすると部分入荷も記録できます」を追加。 |
+| 返品理由の記録 | `POST /sales/{id}/refund` が任意 body `{reason}` を受付。返品行 note =「返品: <取引ID>｜理由: <理由>」、監査調整行 note =「理由: <理由>」。フロントは confirm() を廃止し、理由テキストエリア付きの返品モーダル（一覧・詳細の両方から共通の `RefundReasonModal`）。理由なしでも従来どおり動作（検証済み）。 |
+| 在庫調整の商品選択が長い | 在庫調整ピッカーと拠点間移動モーダルに検索ボックスを追加 — `GET /products?q=` によるサーバー側絞り込みなので商品が増えても機能する（検証: 「グローブ」→ 1 件）。 |
+| マイナス表記を色+方向で | 調整履歴（在庫ページ・商品詳細）の増減を `▲ +n`（緑）/ `▼ n`（赤）表記に変更。PO の KPI 前月比は既存の ↑/↓ ピル形式を踏襲。 |
+
+EN 辞書: 返品モーダル・絞り込みプレースホルダー・下書きヒントの各文言を追加。
+
+
+## フィードバック改善 B — 操作者の記録・監査ログ・税率編集・カテゴリ英語名・社内コード
+
+Branch: `feature/sales-records`（migration 016）
+
+| 機能 | 実装 |
+|---|---|
+| 誰が操作したかの記録 | `deps.CurrentUserName`（セッションクッキー → users.display_name のスナップショット）を全書き込み系に注入。`created_by` 列を sales_records / inventory_adjustments / purchase_orders に追加（mig 016）。販売作成・返品・在庫調整・移動・棚卸取込・PO作成/自動作成/入荷・商品CSV取込の全パスでスタンプ。表示: 調整履歴の「by 山田 花子」、販売詳細の「記録者」行、在庫一覧の 最終調整者。X-Store-Id 開発ヘッダー経由は NULL（匿名）。 |
+| 監査ログ | `audit_events` テーブル + `services/audit.py log_event()`（呼び出し元のトランザクションに同乗、絶対に raise しない）。記録: ユーザー追加/無効化/有効化/権限変更/パスワード再設定、設定変更（namespace付き）。`GET /auth/audit-events`（管理者のみ）+ 設定 > ユーザー管理の下に監査ログパネル（最新15件）。 |
+| 税率の編集 | 設定 > 税率が読み取り専用 → 完全編集可能に（名前・%・標準ラジオ・追加・削除・保存）。保存は既存の `PUT /settings/tax_rates`（スキーマ検証つき全置換）。変更は監査ログに記録。 |
+| カテゴリ英語名 | `categories.name_en`（任意）。カテゴリ追加/編集モーダルに「英語名（任意）」欄。**表示の仕組み**: app.jsx がログイン後にカテゴリを取得し `name_en` を EN 辞書へ動的マージ → チップ・セレクト・テーブル等すべての描画箇所が自動で翻訳される（未設定カテゴリは日本語のまま = フォールバック）。 |
+| 社内コード | `products.internal_code`: 消耗品 CA####、物販 PR####（店舗ごと連番）。mig 016 で既存商品をバックフィル、新規作成・CSVインポートでも自動採番（`_next_internal_code`）。商品一覧（名前下のモノスペース表記）と商品詳細（社内コード行）に表示。 |
+
+検証: cookie ログイン → 調整で created_by=山田 花子、PR0001 表示、カテゴリ「歯ブラシ」に Toothbrush 設定 → EN モードで全画面 Toothbrush 表示、税率 PUT → audit_events に settings_updated 記録。
+
+
+## フィードバック改善 C — 商品画像・POコメント・月別チャート・KPIローテーション
+
+Branch: `feature/sales-records`（migration 017）
+
+| 機能 | 実装 |
+|---|---|
+| 商品画像アップロード | `POST /products/{id}/images`（multipart, PNG/JPEG/WebP ≤4MB, ロゴと同じ /media 保存）+ `DELETE .../images/{image_id}`（DB 行 + ファイルを削除）。既存 `product_images` テーブルを利用、position は追記順で先頭がサムネイル。商品詳細のサムネ下に「＋ 画像を追加」ボタン + サブ画像サムネ（×で削除）。 |
+| PO コメント | mig 017 `po_comments`（author = ログインユーザー名スナップショット, body ≤1000字, CASCADE削除）。`GET/POST /purchase-orders/{id}/comments`。PO 詳細下部にスレッド UI（Enter 送信）— 編集権がなくても注意喚起・提案を残せる。空コメントは 400。 |
+| 月別 入荷 vs 販売チャート | `GET /dashboard/monthly-flow?months=`：inventory_adjustments を JST 月で集計（in = purchase_order_received の Σdelta、out = sale の Σ(−delta)、負値はノイズとして 0 クランプ）。ダッシュボード下部に 2 色棒グラフ（緑=入荷 / 青=販売、凡例・欠損月は 0 表示）。 |
+| KPI ローテーション | ダッシュボードの KPI 4 枚が 7 秒ごとに第2セットとクロスフェード：登録商品数↔総在庫点数、在庫低下↔要対応件数、期限間近↔今月の入荷点数、今月の販売額↔今月の販売点数。在庫・PO ページの KPI は保有情報を既に全て表示しているため対象外（追加データができたら同パターンを適用）。 |
+
+検証: 画像アップロード→ /media 配信 200 →削除 204、コメント投稿（author=山田 花子）+空ガード 400、monthly-flow が 2026-02〜07 の連続軸で 7月 = 入荷66/販売15、KPI が 7 秒後に第2セットへ切替。
+
+
+## フィードバック改善 D — 権限管理 + 承認ワークフロー（heavy）
+
+Branch: `feature/sales-records`（migration 018）
+
+**権限（ロールベース）**
+- `deps.CurrentUser`（セッションの User 行）+ `ensure_admin()`：ログイン中の非管理者が管理者専用の書き込みを叩くと 403「この操作には管理者権限が必要です」。
+- 管理者専用: 設定 PUT（全 namespace・税率含む）・ロゴ、カテゴリ/仕入先/拠点の作成・更新・削除、ユーザー管理（既存）。スタッフは閲覧 + 販売記録 + PO 操作 + （承認制の）在庫調整。
+- `X-Store-Id` 開発ヘッダー経由（ユーザーなし）は従来どおり素通し（curl テスト用、PoC 限定）。
+
+**承認ワークフロー（mig 018 `approval_requests`）**
+- スタッフが手動在庫調整を送信 → **在庫は変更されず** pending の承認リクエストになり、管理者へ通知（ベル）。
+- 在庫ページに「⏳ 承認待ちの在庫調整」パネル：管理者は ✓承認 / ✕却下、スタッフは自分の申請状態を確認。
+- 承認 = 保存済みペイロードを通常の `apply_stock_delta` 経路で再生 → ガード（マイナス在庫等）が承認時点でも効く。調整行の created_by は**申請者**、note に「｜承認: <管理者>」を追記。却下は在庫に触れない（任意の却下理由を保存）。
+- 監査ログに approval_approved / approval_rejected を記録。
+
+**重要な学び（CONTEXT.md にも追記）**: `from __future__ import annotations` 下では、未 import の型を FastAPI パラメータ注釈に使っても **ImportError にならず silently Any 扱い**になり依存が解決されない（`CurrentUser` を import し忘れて承認分岐が動かなかった）。新しい deps 型を使うときは import を必ず確認。
+
+検証: スタッフ調整→pending（在庫不変）→スタッフ approve 403→管理者 approve 200 → +5 / created_by=佐藤 太郎 / note に承認者、reject は在庫不変、通知 kind=approval_request、UI で却下ボタン→キュー消滅。
+
+
+## バグ・翻訳フローの総点検（sweep 2026-07-14）
+
+静的アナライザ（辞書 + i18n_autotr のマッチングを Node で再現し、全 JSX の文字列リテラル・テンプレート・JSX テキストを照合）で EN 未訳を機械的に洗い出し。**未訳 173 件 → 37 件**（残りは意図的: 印刷レシート本文・スマホスキャン画面の日英併記・データ文字列・JA 専用コード分岐のみ）。
+
+**修正内容**
+- 辞書 +約 210 エントリ: 販売記録ページ全体、PO 一覧/詳細/編集ビュー、支店・仕入先・カテゴリ・サポート・工事中ページ、コマンドパレット、AI 商品アシスト一式、レシート発行の操作 UI、設定のトースト類、共通語（読み込み中…・詳細・備考 等）。
+- **ネイティブ confirm() ダイアログは React フックで翻訳不可** → i18n_autotr が `window.PLX_TR`（exact→trimmed→template の同一マッチャ）を公開し、4 箇所の confirm（一括アーカイブ / PO キャンセル / ロゴ削除 / ユーザー無効化）が表示前に翻訳を通すようにした。
+- ProductCreate の文中 `<b>` 分割 5 箇所（AI 案内文・キャッシュ注記・再検索件数・QR 手順・localhost 注意）を単一テンプレート子に再構成し全文キーで翻訳。
+- バグ修正 2 件: `POST /approvals/{id}/reject` が body 必須で bodyless curl が 422 になっていた（optional 化、確認: 400 業務エラーが正しく返る）。設定保存の失敗トーストがサーバー detail（403 の「管理者権限が必要です」等）を握りつぶしていた。
+- 辞書の重複キー 8 件の値衝突を確認 — いずれも同文脈（後勝ちで一貫）。esbuild で全変更 JSX の構文検証、主要 14 エンドポイントの回帰スモーク全 200。
+
+**既知の残り（意図的）**: レシート印字本文は日本語文書のまま／スマホスキャン画面は日英併記デザイン／会社形態サフィックス（株式会社等）はデータ照合用リテラル。

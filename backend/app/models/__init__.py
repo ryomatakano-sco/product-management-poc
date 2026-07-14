@@ -7,9 +7,14 @@ from app.models.vendor import Vendor  # noqa: F401
 from app.models.category import Category  # noqa: F401
 from app.models.product import Product, ProductVariant, ProductImage  # noqa: F401
 from app.models.tag import Tag, ProductTag  # noqa: F401
-from app.models.inventory import InventoryAdjustment  # noqa: F401
+from app.models.inventory import InventoryAdjustment, VariantBranchStock  # noqa: F401
 from app.models.sale import SalesRecord  # noqa: F401
 from app.models.purchase_order import PurchaseOrder, PurchaseOrderItem, PurchaseOrderTag  # noqa: F401
 from app.models.ai_session import AiSuggestionSession, AiSuggestionFieldOption  # noqa: F401
 from app.models.support import SupportTicket  # noqa: F401
 from app.models.settings_kv import SettingsKV  # noqa: F401
+from app.models.user import User  # noqa: F401
+from app.models.notification import Notification  # noqa: F401
+from app.models.lot import ProductLot  # noqa: F401
+from app.models.audit import AuditEvent  # noqa: F401
+from app.models.approval import ApprovalRequest  # noqa: F401

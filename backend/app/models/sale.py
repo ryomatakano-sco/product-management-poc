@@ -53,6 +53,9 @@ class SalesRecord(Base):
         String(255), nullable=True, comment="Free-text patient name/reference",
     )
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Display-name snapshot of the logged-in user who performed the write
+    # (mig 016). sold_by stays the user-entered staff field.
+    created_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
     refunded_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True,
         comment="Set on the original sale when it has been refunded",

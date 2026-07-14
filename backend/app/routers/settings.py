@@ -21,7 +21,7 @@ from fastapi import APIRouter, HTTPException, Path, UploadFile
 from sqlalchemy import select
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 
-from app.deps import DB, StoreId
+from app.deps import DB, StoreId, CurrentUserName, CurrentUser, ensure_admin
 from app.models.settings_kv import SettingsKV
 from app.schemas.settings import (
     NAMESPACE_SCHEMAS,
@@ -103,8 +103,11 @@ async def put_settings(
     body: dict,
     db: DB,
     store_id: StoreId,
+    user: CurrentUser = None,
+    user_name: CurrentUserName = None,
     namespace: str = Path(..., description="general | notifications | tax_rates | ai | integrations"),
 ):
+    ensure_admin(user)
     if namespace not in NAMESPACE_SCHEMAS:
         raise HTTPException(
             404, detail={"detail": "未知の名前空間です", "code": "RESOURCE_NOT_FOUND"},
@@ -147,6 +150,10 @@ async def put_settings(
     )
     stmt = stmt.on_duplicate_key_update(data_json=validated)
     await db.execute(stmt)
+    from app.services.audit import log_event
+    log_event(db, store_id=store_id, user_name=user_name,
+              action="settings_updated", entity_type="settings",
+              detail=f"namespace={namespace}")
     await db.commit()
 
     row = (await db.execute(
@@ -212,7 +219,8 @@ async def _save_general_logo_url(db, store_id: int, logo_url: str | None) -> Non
 
 
 @router.post("/logo", summary="表示ロゴをアップロード")
-async def upload_logo(file: UploadFile, db: DB, store_id: StoreId):
+async def upload_logo(file: UploadFile, db: DB, store_id: StoreId, user: CurrentUser = None):
+    ensure_admin(user)
     ext = _LOGO_TYPES.get((file.content_type or "").lower())
     if ext is None:
         raise HTTPException(
@@ -240,7 +248,8 @@ async def upload_logo(file: UploadFile, db: DB, store_id: StoreId):
 
 
 @router.delete("/logo", status_code=204, summary="表示ロゴを削除")
-async def delete_logo(db: DB, store_id: StoreId):
+async def delete_logo(db: DB, store_id: StoreId, user: CurrentUser = None):
+    ensure_admin(user)
     row = await _load_general_row(db, store_id)
     old_url = (row.data_json or {}).get("logo_url") if row else None
     await _save_general_logo_url(db, store_id, None)

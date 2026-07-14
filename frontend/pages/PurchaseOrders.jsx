@@ -96,8 +96,34 @@ function PurchaseOrders() {
     } finally { setExporting(false); }
   }
 
+  // ⚡ auto-draft: one draft PO per vendor for low-stock products not yet on
+  // an open PO (POST /purchase-orders/auto-draft).
+  const [autoDrafting, setAutoDrafting] = React.useState(false);
+  async function handleAutoDraft() {
+    if (autoDrafting) return;
+    setAutoDrafting(true);
+    try {
+      const r = await api.autoDraftPurchaseOrders();
+      if ((r.created || []).length === 0) {
+        window.PLX_TOAST.warn(r.message || "自動作成の対象がありません");
+      } else {
+        window.PLX_TOAST.success(`発注書ドラフトを ${r.created.length} 件作成しました`);
+        posQ.refetch();
+        if (summaryQ.refetch) summaryQ.refetch();
+      }
+    } catch (e) {
+      window.PLX_TOAST.error(e?.body?.detail || "自動作成に失敗しました");
+    } finally { setAutoDrafting(false); }
+  }
+
   const headerRight = (
     <div style={{ display: "inline-flex", gap: 8 }}>
+      <button onClick={handleAutoDraft} disabled={autoDrafting} style={{
+        ...btnSecondary, display: "inline-flex", alignItems: "center", gap: 6,
+        opacity: autoDrafting ? 0.6 : 1,
+      }} title="在庫低下の商品を仕入先ごとにまとめてドラフト化します">
+        {autoDrafting ? "作成中…" : "⚡ 低在庫から自動作成"}
+      </button>
       <button onClick={handleExport} disabled={exporting} style={{
         ...btnSecondary, display: "inline-flex", alignItems: "center", gap: 6,
         opacity: exporting ? 0.6 : 1,
@@ -255,7 +281,7 @@ function PurchaseOrders() {
               </select>
             </div>
             <div style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
-              <span>{(page - 1) * pageSize + 1} - {Math.min(page * pageSize, allRows.length)} 件 / 全 {allRows.length} 件</span>
+              <span>{`${(page - 1) * pageSize + 1} - ${Math.min(page * pageSize, allRows.length)} 件 / 全 ${allRows.length} 件`}</span>
               <button
                 type="button" onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
@@ -462,7 +488,7 @@ function PurchaseOrderDetail({ id }) {
       cancelEdit();
       poQ.refetch();
     } catch (e) {
-      window.PLX_TOAST.error(e?.detail ?? "更新に失敗しました");
+      window.PLX_TOAST.error(e?.body?.detail ?? "更新に失敗しました");
     } finally { setBusy(false); }
   }
 
@@ -474,20 +500,20 @@ function PurchaseOrderDetail({ id }) {
       window.PLX_TOAST.success("発注書を送信しました");
       poQ.refetch();
     } catch (e) {
-      window.PLX_TOAST.error(e?.detail ?? "送信に失敗しました");
+      window.PLX_TOAST.error(e?.body?.detail ?? "送信に失敗しました");
     } finally { setBusy(false); }
   }
 
   async function handleCancel() {
     if (busy) return;
-    if (!window.confirm("この発注書をキャンセルしますか？この操作は元に戻せません。")) return;
+    if (!window.confirm((window.PLX_TR || String)("この発注書をキャンセルしますか？この操作は元に戻せません。"))) return;
     setBusy(true);
     try {
       await api.cancelPurchaseOrder(Number(id));
       window.PLX_TOAST.success("発注書をキャンセルしました");
       poQ.refetch();
     } catch (e) {
-      window.PLX_TOAST.error(e?.detail ?? "キャンセルに失敗しました");
+      window.PLX_TOAST.error(e?.body?.detail ?? "キャンセルに失敗しました");
     } finally { setBusy(false); }
   }
 
@@ -608,6 +634,15 @@ function PurchaseOrderDetail({ id }) {
             </div>
           </div>
 
+          {po.status === "draft" && (
+            <div style={{
+              padding: "9px 14px", borderRadius: T.RADIUS_MD, marginBottom: 10,
+              background: T.PLX_AMBER_100, border: `1px solid ${T.PLX_AMBER_300 || "#fcd34d"}`,
+              color: T.PLX_AMBER_700 || "#b45309", fontSize: 12, lineHeight: 1.6,
+            }}>
+              {"下書きの発注書は入荷を記録できません。「📤 送信」で発注済みにすると、部分入荷（一部だけ届いた場合）も含めて入荷を記録できます。"}
+            </div>
+          )}
           {/* Line items */}
           <div style={{
             background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
@@ -687,6 +722,9 @@ function PurchaseOrderDetail({ id }) {
               )}
             </div>
           )}
+
+          {/* コメント — 編集権がなくても連絡・注意喚起を残せる (batch C) */}
+          <POCommentsSection poId={po.id} />
 
           {/* Receive modal */}
           {showReceiveModal && (
@@ -1299,20 +1337,28 @@ function POReceiveModal({ po, onClose, onDone }) {
   const [qtys, setQtys] = React.useState(() =>
     Object.fromEntries(items.map((it) => [it.id, it.quantity_ordered - it.quantity_received]))
   );
+  // Optional per-line lot capture (migration 014) — creates a real lot row.
+  const [lots, setLots] = React.useState({});     // item_id -> lot number string
+  const [expiries, setExpiries] = React.useState({}); // item_id -> YYYY-MM-DD
   const [busy, setBusy] = React.useState(false);
 
   async function handleReceive() {
     setBusy(true);
     try {
       const payload = items
-        .map((it) => ({ item_id: it.id, quantity_received: Number(qtys[it.id] ?? 0) }))
+        .map((it) => ({
+          item_id: it.id,
+          quantity_received: Number(qtys[it.id] ?? 0),
+          lot_number: (lots[it.id] || "").trim() || null,
+          expiry_date: expiries[it.id] || null,
+        }))
         .filter((x) => x.quantity_received > 0);
       if (payload.length === 0) { window.PLX_TOAST.warn("入荷数を1以上入力してください"); setBusy(false); return; }
       await api.receivePurchaseOrder(po.id, payload);
       window.PLX_TOAST.success("入荷を記録しました");
       onDone();
     } catch (e) {
-      window.PLX_TOAST.error(e?.detail ?? "入荷記録に失敗しました");
+      window.PLX_TOAST.error(e?.body?.detail ?? "入荷記録に失敗しました");
     } finally { setBusy(false); }
   }
 
@@ -1333,28 +1379,55 @@ function POReceiveModal({ po, onClose, onDone }) {
         {items.map((it) => {
           const remaining = it.quantity_ordered - it.quantity_received;
           return (
-            <div key={it.id} style={{
-              display: "grid", gridTemplateColumns: "1fr 100px 100px", gap: 12, alignItems: "center",
-              padding: "10px 0", borderBottom: `1px solid ${T.PLX_LINE_100}`,
-            }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{it.product_name || `商品 ID: ${it.variant_id}`}</div>
-                <div style={{ fontSize: 11, color: T.PLX_INK_400 }}>
-                  {it.sku && <span style={{ fontFamily: T.FONT_MONO, marginRight: 8 }}>{it.sku}</span>}
-                  発注数: {it.quantity_ordered}　入荷済: {it.quantity_received}　残: {remaining}
+            <div key={it.id} style={{ padding: "10px 0", borderBottom: `1px solid ${T.PLX_LINE_100}` }}>
+              <div style={{
+                display: "grid", gridTemplateColumns: "1fr 100px 100px", gap: 12, alignItems: "center",
+              }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{it.product_name || `商品 ID: ${it.variant_id}`}</div>
+                  <div style={{ fontSize: 11, color: T.PLX_INK_400 }}>
+                    {it.sku && <span style={{ fontFamily: T.FONT_MONO, marginRight: 8 }}>{it.sku}</span>}
+                    発注数: {it.quantity_ordered}　入荷済: {it.quantity_received}　残: {remaining}
+                  </div>
                 </div>
+                <div style={{ fontSize: 11, color: T.PLX_INK_500, textAlign: "center" }}>今回の入荷数</div>
+                <input
+                  type="number" min={0} max={remaining}
+                  value={qtys[it.id] ?? 0}
+                  onChange={(e) => setQtys((prev) => ({ ...prev, [it.id]: e.target.value }))}
+                  style={{
+                    width: "100%", height: 34, padding: "0 10px", borderRadius: T.RADIUS_MD,
+                    border: `1px solid ${T.PLX_LINE_200}`, fontSize: 13, textAlign: "right",
+                    boxSizing: "border-box",
+                  }}
+                />
               </div>
-              <div style={{ fontSize: 11, color: T.PLX_INK_500, textAlign: "center" }}>今回の入荷数</div>
-              <input
-                type="number" min={0} max={remaining}
-                value={qtys[it.id] ?? 0}
-                onChange={(e) => setQtys((prev) => ({ ...prev, [it.id]: e.target.value }))}
-                style={{
-                  width: "100%", height: 34, padding: "0 10px", borderRadius: T.RADIUS_MD,
-                  border: `1px solid ${T.PLX_LINE_200}`, fontSize: 13, textAlign: "right",
-                  boxSizing: "border-box",
-                }}
-              />
+              {/* Optional lot capture — fills the real ロット履歴 tab (migration 014) */}
+              <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
+                <span style={{ fontSize: 10, color: T.PLX_INK_400, flexShrink: 0 }}>ロット (任意)</span>
+                <input
+                  type="text" placeholder="LOT-2026-001"
+                  value={lots[it.id] || ""}
+                  onChange={(e) => setLots((p) => ({ ...p, [it.id]: e.target.value }))}
+                  style={{
+                    flex: 1, height: 30, padding: "0 10px", borderRadius: T.RADIUS_MD,
+                    border: `1px solid ${T.PLX_LINE_200}`, fontSize: 11,
+                    fontFamily: T.FONT_MONO, boxSizing: "border-box", background: T.PLX_CARD_BG,
+                    color: T.PLX_INK_900,
+                  }}
+                />
+                <input
+                  type="date"
+                  value={expiries[it.id] || ""}
+                  onChange={(e) => setExpiries((p) => ({ ...p, [it.id]: e.target.value }))}
+                  title="使用期限 (任意)"
+                  style={{
+                    height: 30, padding: "0 8px", borderRadius: T.RADIUS_MD,
+                    border: `1px solid ${T.PLX_LINE_200}`, fontSize: 11,
+                    boxSizing: "border-box", background: T.PLX_CARD_BG, color: T.PLX_INK_900,
+                  }}
+                />
+              </div>
             </div>
           );
         })}
@@ -1385,3 +1458,67 @@ window.PurchaseOrders = PurchaseOrders;
 window.PurchaseOrderDetail = PurchaseOrderDetail;
 window.PlxDetailKV = DetailKV;
 window.POStatusPill = POStatusPill;  // reused by the vendor detail 発注履歴 tab
+
+// コメントスレッド — GET/POST /purchase-orders/{id}/comments.
+// author はログインユーザー名のスナップショット（開発ヘッダー経由は匿名）。
+function POCommentsSection({ poId }) {
+  const q = useFetch(() => api.listPoComments(poId), [poId]);
+  const [text, setText] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const items = q.data?.items || [];
+  const submit = async () => {
+    const body = text.trim();
+    if (!body || busy) return;
+    setBusy(true);
+    try {
+      await api.addPoComment(poId, body);
+      setText("");
+      q.refetch();
+    } catch (e) {
+      window.PLX_TOAST?.error(e?.body?.detail || "コメントの投稿に失敗しました");
+    } finally { setBusy(false); }
+  };
+  return (
+    <div style={{
+      background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
+      boxShadow: T.SHADOW_SM, padding: "14px 16px",
+    }}>
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
+        {`コメント (${items.length})`}
+      </div>
+      {items.length === 0 && (
+        <div style={{ fontSize: 12, color: T.PLX_INK_400, marginBottom: 10 }}>
+          まだコメントはありません。気づいた点や提案を残せます。
+        </div>
+      )}
+      {items.map((c) => (
+        <div key={c.id} style={{ padding: "8px 0", borderBottom: `1px solid ${T.PLX_LINE_100}` }}>
+          <div style={{ fontSize: 11, color: T.PLX_INK_500, marginBottom: 3 }}>
+            <b style={{ color: T.PLX_INK_700 }}>{c.author || "匿名"}</b>
+            <span style={{ marginLeft: 8, fontFamily: T.FONT_MONO, fontSize: 10 }}>
+              {c.created_at ? new Date(c.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}
+            </span>
+          </div>
+          <div style={{ fontSize: 13, color: T.PLX_INK_900, whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{c.body}</div>
+        </div>
+      ))}
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <input
+          value={text} onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
+          placeholder="コメントを入力…（Enter で送信）"
+          style={{
+            flex: 1, height: 36, padding: "0 12px", borderRadius: T.RADIUS_MD,
+            border: `1px solid ${T.PLX_LINE_200}`, fontSize: 13,
+            background: T.PLX_CARD_BG, color: T.PLX_INK_900, boxSizing: "border-box",
+          }}
+        />
+        <button onClick={submit} disabled={busy || !text.trim()} style={{
+          ...btnPrimary, fontSize: 12, padding: "0 16px",
+          opacity: busy || !text.trim() ? 0.5 : 1,
+        }}>投稿</button>
+      </div>
+    </div>
+  );
+}
+

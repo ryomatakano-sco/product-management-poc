@@ -10,11 +10,49 @@ function App() {
   usePlxLocale();
   const route = useHashRoute();
 
+  // ── Auth gate (PoC session cookie) ────────────────────────────────
+  // GET /auth/me decides: 401 → Login page; success → normal app, with the
+  // user exposed on window.PLX_ME for AdminShell / Settings. The phone scan
+  // page stays ungated (the phone has no session; the relay API validates
+  // its own tokens).
+  const meQ = useFetch(() => api.me(), []);
+  window.PLX_ME = meQ.data || null;
+
+  // Category EN names (mig 016): merge each category's optional name_en into
+  // the live EN dictionary so every render site (chips, selects, tables)
+  // translates data-level names automatically. Fallback stays the JA name —
+  // categories without name_en simply have no dict entry.
+  React.useEffect(() => {
+    if (!meQ.data) return;
+    api.listCategories().then((res) => {
+      const dict = window._PLX_DICT_EN;
+      if (!dict) return;
+      const walk = (nodes) => (nodes || []).forEach((c) => {
+        if (c.name && c.name_en) dict[c.name] = c.name_en;
+        walk(c.children);
+      });
+      walk(res?.items || res || []);
+    }).catch(() => {});
+  }, [meQ.data]);
+
   // Standalone phone scan view (Option 2). Render it bare — no sidebar, no
   // command palette / dev panel — so a phone opening the pairing QR sees only
-  // the camera. Early-return before the admin chrome is composed.
+  // the camera. Early-return before the admin chrome is composed (and before
+  // the auth gate — the phone is a companion device, not a logged-in user).
   if (route.name === "scan") {
     return <ScanReceiver token={route.query.token} />;
+  }
+
+  if (meQ.loading) {
+    return (
+      <div style={{
+        minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+        color: T.PLX_INK_500, fontFamily: "'Inter','Noto Sans JP',sans-serif", fontSize: 13,
+      }}>読み込み中…</div>
+    );
+  }
+  if (meQ.error) {
+    return <Login onLoggedIn={() => meQ.refetch()} />;
   }
 
   let page;
