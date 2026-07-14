@@ -226,10 +226,22 @@ function formatJpDate(dateStr) {
   return `${parts[0]}年${parts[1]}月${parts[2]}日`;
 }
 
+// YYYY-MM-DDTHH:MM(:SS) → adds a HH:MM time to formatJpDate's date part.
+// Locale-aware; tolerant of naive and offset timestamps. (Was referenced by
+// Support.jsx but never defined globally — crashed 系統ステータス.)
+function formatJpDateTime(value) {
+  if (!value) return "—";
+  const datePart = formatJpDate(value);
+  const s = String(value);
+  const m = s.match(/[T ](\d{2}):(\d{2})/);
+  if (!m) return datePart;
+  return `${datePart} ${m[1]}:${m[2]}`;
+}
+
 const PLX_VERSION = { channel: "Alpha", number: "0.8.0" };
 
 Object.assign(window, {
   T,
   PLX_VERSION,
-  available, formatYen, daysUntil, expiryTone, formatJpDate,
+  available, formatYen, daysUntil, expiryTone, formatJpDate, formatJpDateTime,
 });

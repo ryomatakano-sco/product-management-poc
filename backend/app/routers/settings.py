@@ -257,12 +257,16 @@ async def delete_logo(db: DB, store_id: StoreId, user: CurrentUser = None):
 
 
 @router.post("/ai/test", summary="OpenAI 接続テスト")
-async def test_ai_connection(db: DB, store_id: StoreId):
+async def test_ai_connection(db: DB, store_id: StoreId, user: CurrentUser = None):
     """Ping the OpenAI API with the effective key (settings-stored key first,
     env `OPENAI_API_KEY` as fallback) and report success/failure.
 
+    Admin-only: this call spends the tenant's OpenAI quota, so an anonymous
+    caller must not be able to trigger it.
+
     The key itself is never echoed back — only which source supplied it.
     """
+    ensure_admin(user)
     from app.config import settings as app_settings
 
     row = (await db.execute(

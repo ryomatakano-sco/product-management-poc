@@ -44,7 +44,7 @@ function ProductList({ initialQuery }) {
       expiring_within_days: quickFilters.includes("expire") ? 30 : undefined,
       // "再発注済" chip = products whose 再発注する was clicked (migration 010).
       reorder_requested: quickFilters.includes("reorder") ? true : undefined,
-      limit: 100,
+      limit: 200,
     }),
     [searchQ, categoryFilter, vendorFilter, statusFilter, kindFilter, activeTags.join(","), quickFilters.join(",")],
   );

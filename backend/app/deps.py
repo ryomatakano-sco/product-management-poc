@@ -24,9 +24,10 @@ async def get_store_id(
     Order of precedence (PoC — see CONTEXT.md §8.1):
       1. A valid session cookie (set by POST /auth/login) — the store id is
          embedded in the signed token, so no DB hit here.
-      2. The legacy ``X-Store-Id`` header — kept as a dev fallback so curl
-         testing and the DevPanel store switcher keep working. A production
-         build would remove this branch.
+      2. The legacy ``X-Store-Id`` header — a dev fallback so curl testing and
+         the DevPanel store switcher keep working. Restricted to loopback
+         clients: a remote request with no session can no longer reach
+         store-scoped data by guessing the header (review 2026-07-14).
     """
     from app.services.auth import COOKIE_NAME, parse_session_token
 
@@ -34,7 +35,9 @@ async def get_store_id(
     if tok is not None:
         return tok["store_id"]
     if x_store_id is None:
-        raise HTTPException(status_code=400, detail="X-Store-Id header is required")
+        raise HTTPException(status_code=400, detail="ログインが必要です")
+    if not dev_fallback_allowed(request):
+        raise HTTPException(status_code=401, detail="ログインが必要です")
     return x_store_id
 
 
@@ -92,3 +95,12 @@ def ensure_admin(user) -> None:
 
     if user is not None and user.role != UserRole.admin:
         raise HTTPException(status_code=403, detail="この操作には管理者権限が必要です")
+
+
+def dev_fallback_allowed(request: Request) -> bool:
+    """Whether the anonymous X-Store-Id header path is permitted for this
+    request. Only from loopback (curl on the dev box) — a remote client with
+    no session must not reach store-scoped writes via the dev header.
+    """
+    host = request.client.host if request.client else None
+    return host in ("127.0.0.1", "::1", "localhost", None)

@@ -4,6 +4,20 @@
 
 const STORE_KEY = "sco.storeId";
 
+// Coerce any FastAPI error `detail` into a safe display string. FastAPI 422
+// validation errors return an ARRAY of {loc,msg,...} objects — rendering that
+// straight into JSX throws "Objects are not valid as a React child". Always
+// route caught error bodies through this before showing them.
+function errText(err, fallback) {
+  const d = err?.body?.detail ?? err?.body ?? err?.message;
+  if (d == null) return fallback || "エラーが発生しました";
+  if (typeof d === "string") return d;
+  if (Array.isArray(d)) return d.map((e) => e?.msg || String(e)).join(" / ") || (fallback || "入力を確認してください");
+  if (typeof d === "object") return d.detail || d.msg || fallback || "エラーが発生しました";
+  return String(d);
+}
+window.errText = errText;
+
 function getStoreId() {
   const v = localStorage.getItem(STORE_KEY);
   const n = v ? parseInt(v, 10) : NaN;
@@ -79,7 +93,7 @@ const api = {
 
   // --- ref data ---
   listCategories: () => request(`/categories?limit=100`),
-  listVendors:    () => request(`/vendors?limit=100`),
+  listVendors:    (params) => request(`/vendors${qs({ limit: 200, ...(params || {}) })}`),
   listTags:       () => request(`/tags?limit=100`),
   listStores:     () => request(`/stores?limit=100`),
 

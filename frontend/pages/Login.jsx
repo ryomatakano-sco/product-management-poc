@@ -17,7 +17,7 @@ function Login({ onLoggedIn }) {
       await api.login(email.trim(), password);
       onLoggedIn();
     } catch (err) {
-      setError(err?.body?.detail || "ログインに失敗しました");
+      setError(window.errText(err, "ログインに失敗しました"));
       setBusy(false);
     }
   };

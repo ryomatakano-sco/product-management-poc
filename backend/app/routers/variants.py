@@ -4,8 +4,10 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import func, select
 
 from app.deps import DB, StoreId
+from app.models.inventory import InventoryField
 from app.models.product import Product, ProductVariant
 from app.schemas.product import VariantCreate, VariantRead, VariantUpdate
+from app.services.stock import StockError, apply_stock_delta
 
 router = APIRouter(tags=["variants"])
 
@@ -19,8 +21,40 @@ async def create_variant(product_id: int, body: VariantCreate, db: DB, store_id:
     ).scalar_one_or_none()
     if not product:
         raise HTTPException(404, detail="Product not found")
-    variant = ProductVariant(product_id=product_id, store_id=store_id, **body.model_dump())
+
+    data = body.model_dump()
+    # Any opening stock must flow through the stock service so the per-branch
+    # mirror (variant_branch_stock) stays consistent with the denormalized
+    # total — writing on_hand directly here caused branch/total drift.
+    seed_on_hand = int(data.pop("on_hand", 0) or 0)
+
+    # A new default variant must demote the product's existing default —
+    # otherwise a product ends up with two is_default variants.
+    if data.get("is_default"):
+        existing = (await db.execute(
+            select(ProductVariant).where(
+                ProductVariant.product_id == product_id,
+                ProductVariant.store_id == store_id,
+                ProductVariant.is_default.is_(True),
+            )
+        )).scalars().all()
+        for ev in existing:
+            ev.is_default = False
+
+    variant = ProductVariant(product_id=product_id, store_id=store_id, on_hand=0, **data)
     db.add(variant)
+    await db.flush()  # assign variant.id before the stock delta
+
+    if seed_on_hand > 0:
+        try:
+            await apply_stock_delta(
+                db, store_id=store_id, variant_id=variant.id,
+                branch_id=None, field=InventoryField.on_hand, delta=seed_on_hand,
+            )
+        except StockError as e:
+            await db.rollback()
+            raise HTTPException(400, detail=e.message)
+
     await db.commit()
     await db.refresh(variant)
     return variant

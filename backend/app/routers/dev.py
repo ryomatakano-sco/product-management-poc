@@ -17,16 +17,25 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import text
 
 from app.config import ENV_FILES, settings
 from app.db import engine
+from app.deps import dev_fallback_allowed
 from app.services.ai_agent import EXTRACTION_MODEL, FALLBACK_SEARCH_MODEL, SEARCH_MODEL
 
 
-router = APIRouter(prefix="/dev", tags=["dev"])
+def _local_only(request: Request) -> None:
+    """Dev panel endpoints write .env to disk and report DB host/user — they
+    must only be reachable from the local machine, never a remote client
+    (review 2026-07-14)."""
+    if not dev_fallback_allowed(request):
+        raise HTTPException(status_code=404, detail="Not found")
+
+
+router = APIRouter(prefix="/dev", tags=["dev"], dependencies=[Depends(_local_only)])
 
 # Keys that the dev panel is allowed to edit. We intentionally keep this small
 # — DB_* changes need a process restart to re-create the SQLAlchemy engine, so

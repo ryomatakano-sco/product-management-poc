@@ -122,7 +122,7 @@ def _compute_totals(items: list[PurchaseOrderItem], shipping_cost: Decimal) -> t
 async def list_purchase_orders(
     db: DB,
     store_id: StoreId,
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=500),
     offset: int = Query(0, ge=0),
     status: POStatus | None = Query(None),
     supplier_vendor_id: int | None = Query(None),
@@ -306,6 +306,7 @@ async def export_purchase_orders_csv(
     destination_branch_id: int | None = Query(None),
     date_from: datetime | None = Query(None),
     date_to: datetime | None = Query(None),
+    q: str | None = Query(None),
 ):
     """CSV of the same rows the list endpoint returns, minus pagination."""
     STATUS_JA = {
@@ -326,6 +327,15 @@ async def export_purchase_orders_csv(
         stmt = stmt.where(PurchaseOrder.created_at >= _to_naive_jst(date_from))
     if date_to is not None:
         stmt = stmt.where(PurchaseOrder.created_at < _to_naive_jst(date_to))
+    if q and q.strip():
+        like = f"%{q.strip()}%"
+        from sqlalchemy import or_ as _or
+        clauses = []
+        for attr in ("po_number", "reference_number", "tracking_number", "note"):
+            if hasattr(PurchaseOrder, attr):
+                clauses.append(getattr(PurchaseOrder, attr).ilike(like))
+        if clauses:
+            stmt = stmt.where(_or(*clauses))
     rows = (await db.execute(stmt.order_by(PurchaseOrder.id.desc()))).scalars().unique().all()
 
     buf = io.StringIO()
@@ -521,6 +531,8 @@ async def submit_purchase_order(po_id: int, db: DB, store_id: StoreId):
     po = await _get_po(po_id, store_id, db)
     if po.status != POStatus.draft:
         raise HTTPException(400, detail=f"Can only submit draft orders, current status: {po.status.value}")
+    if not po.items:
+        raise HTTPException(400, detail="明細のない発注書は送信できません")
     po.status = POStatus.ordered
     po.ordered_at = datetime.now(timezone.utc)
     await notify(
@@ -545,6 +557,8 @@ async def receive_purchase_order(po_id: int, body: PurchaseOrderReceive, db: DB,
         item = item_map.get(recv.item_id)
         if not item:
             raise HTTPException(400, detail=f"Item {recv.item_id} not found on this PO")
+        if recv.quantity_received <= 0:
+            raise HTTPException(400, detail=f"Item {recv.item_id}: 入荷数は1以上を指定してください")
         if item.quantity_received + recv.quantity_received > item.quantity_ordered:
             raise HTTPException(
                 400,
@@ -632,12 +646,40 @@ async def receive_purchase_order(po_id: int, body: PurchaseOrderReceive, db: DB,
 
 
 @router.post("/{po_id}/cancel", response_model=PurchaseOrderRead)
-async def cancel_purchase_order(po_id: int, db: DB, store_id: StoreId):
+async def cancel_purchase_order(po_id: int, db: DB, store_id: StoreId, user_name: CurrentUserName = None):
     po = await _get_po(po_id, store_id, db)
     if po.status == POStatus.received:
         raise HTTPException(400, detail="Cannot cancel a fully received purchase order")
     if po.status == POStatus.cancelled:
         raise HTTPException(400, detail="Purchase order is already cancelled")
+
+    # Reverse any stock already received on a partially-received PO — otherwise
+    # cancelling leaves the received units in inventory with no PO backing them.
+    if po.status == POStatus.partially_received:
+        for item in po.items:
+            if item.quantity_received > 0:
+                try:
+                    rev_branch = await apply_stock_delta(
+                        db, store_id=store_id, variant_id=item.variant_id,
+                        branch_id=po.destination_branch_id, field=InventoryField.on_hand,
+                        delta=-item.quantity_received,
+                    )
+                except StockError as e:
+                    await db.rollback()
+                    raise HTTPException(
+                        400,
+                        detail=f"キャンセルできません（入荷済み在庫を戻せません）: {e.message}",
+                    )
+                db.add(InventoryAdjustment(
+                    created_by=user_name,
+                    store_id=store_id, variant_id=item.variant_id, branch_id=rev_branch,
+                    field=InventoryField.on_hand, delta=-item.quantity_received,
+                    reason=AdjustmentReason.correction,
+                    reference_type="purchase_order", reference_id=po.id,
+                    note=f"PO-{po.id:06d} キャンセルによる入荷戻し",
+                ))
+                item.quantity_received = 0
+
     po.status = POStatus.cancelled
     await notify(
         db, store_id, "po_status",

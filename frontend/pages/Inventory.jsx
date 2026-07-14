@@ -118,7 +118,8 @@ function Inventory({ query }) {
           tone={kpis.expiring > 0 ? "red" : "muted"}
           onClick={() => setStatusFilter("expiring_soon")} clickable/>
         <KpiTile label="在庫切れ" value={kpis.outOfStock} unit="件"
-          tone={kpis.outOfStock > 0 ? "red" : "muted"}/>
+          tone={kpis.outOfStock > 0 ? "red" : "muted"}
+          onClick={() => setStatusFilter("out_of_stock")} clickable/>
       </div>
 
       {/* Filter card */}
@@ -145,8 +146,8 @@ function Inventory({ query }) {
           { value: "out_of_stock", label: "在庫切れ" },
         ]} />
         <div style={{ flex: 1 }} />
-        {(statusFilter || itemTypeFilter || q) && (
-          <button onClick={() => { setStatusFilter(""); setItemTypeFilter(""); setQ(""); }}
+        {(statusFilter || itemTypeFilter || q || branchFilter) && (
+          <button onClick={() => { setStatusFilter(""); setItemTypeFilter(""); setQ(""); setBranchFilter(""); }}
             style={btnGhost}>フィルタをクリア</button>
         )}
       </div>

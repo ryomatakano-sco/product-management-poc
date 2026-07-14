@@ -295,7 +295,13 @@ function ToggleRow({ label, on, onChange }) {
 function TaxRatesSettings() {
   const f = useSettingsForm("tax_rates");
   const [rows, setRows] = React.useState(null);
-  React.useEffect(() => { if (f.form.rates && rows === null) setRows(f.form.rates); }, [f.form]);
+  // Re-sync local editing state whenever the server payload changes (initial
+  // load AND after a save's refetch) — a `rows === null` one-shot guard left
+  // the UI showing stale rows after saving (review 2026-07-14).
+  const serverSig = JSON.stringify(f.form.rates ?? null);
+  React.useEffect(() => {
+    if (f.form.rates) setRows(f.form.rates);
+  }, [serverSig]);
   if (f.loading || rows === null) return <SettingsCard title="税率"><div style={{ color: T.PLX_INK_500 }}>読み込み中…</div></SettingsCard>;
 
   const upd = (i, k, v) => setRows(rows.map((r, j) => j === i ? { ...r, [k]: v } : r));

@@ -10,7 +10,7 @@ function Vendors() {
   const [q, setQ] = React.useState("");
   const [showAddModal, setShowAddModal] = React.useState(false);
   const [exporting, setExporting] = React.useState(false);
-  const vendorsQ = useFetch(() => api.listVendors(), []);
+  const vendorsQ = useFetch(() => api.listVendors({ limit: 200 }), []);
   const allRows = vendorsQ.data?.items ?? [];
   const rows = q
     ? allRows.filter((v) => v.company_name.toLowerCase().includes(q.toLowerCase())

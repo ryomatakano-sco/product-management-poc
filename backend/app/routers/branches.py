@@ -12,6 +12,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 from app.deps import DB, StoreId, CurrentUser, ensure_admin
 from app.models.branch import Branch, BranchStatus
@@ -90,21 +91,39 @@ async def delete_branch(branch_id: int, db: DB, store_id: StoreId, user: Current
     )).scalar_one_or_none()
     if not branch:
         raise HTTPException(404, detail={"detail": "拠点が見つかりません", "code": "RESOURCE_NOT_FOUND"})
-    # If any adjustment references the branch we soft-delete (status=inactive)
-    # rather than orphan the audit log.
-    adj_count = (await db.execute(
+    # If anything references this branch (adjustments — mig 012 gave them a
+    # branch_id — or per-branch stock rows) we soft-delete (status=inactive)
+    # rather than orphan the audit log or hit an FK IntegrityError.
+    from app.models.inventory import VariantBranchStock
+
+    adj_refs = (await db.execute(
         select(func.count(InventoryAdjustment.id)).where(
             InventoryAdjustment.store_id == store_id,
-            # InventoryAdjustment doesn't yet have branch_id in our schema —
-            # treating this as: any history exists at all blocks hard delete.
+            InventoryAdjustment.branch_id == branch_id,
         )
     )).scalar_one()
-    if adj_count > 0:
+    stock_refs = (await db.execute(
+        select(func.count(VariantBranchStock.id)).where(
+            VariantBranchStock.store_id == store_id,
+            VariantBranchStock.branch_id == branch_id,
+        )
+    )).scalar_one()
+    if adj_refs + stock_refs > 0:
         branch.status = BranchStatus.inactive
         await db.commit()
         return
-    await db.delete(branch)
-    await db.commit()
+    try:
+        await db.delete(branch)
+        await db.commit()
+    except IntegrityError:
+        # A reference we didn't count still points at this branch — degrade to
+        # a soft delete instead of surfacing a raw 500.
+        await db.rollback()
+        branch = (await db.execute(
+            select(Branch).where(Branch.id == branch_id, Branch.store_id == store_id)
+        )).scalar_one()
+        branch.status = BranchStatus.inactive
+        await db.commit()
 
 
 @router.get(
