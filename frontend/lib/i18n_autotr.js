@@ -137,6 +137,11 @@
     return out || props;
   }
 
+  // Escape hatch for strings that never pass through createElement —
+  // native confirm()/alert() dialogs. Same matching rules (exact →
+  // trimmed → template); no-op in JA.
+  window.PLX_TR = _translate;
+
   React.createElement = function patchedCreateElement(type, props, ...children) {
     const newProps = _trProps(props);
     if (children.length === 0) {

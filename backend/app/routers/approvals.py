@@ -132,7 +132,7 @@ async def approve_request(req_id: int, db: DB, store_id: StoreId, user: CurrentU
 
 
 @router.post("/{req_id}/reject", summary="却下する（管理者）")
-async def reject_request(req_id: int, body: dict | None, db: DB, store_id: StoreId, user: CurrentUser = None):
+async def reject_request(req_id: int, db: DB, store_id: StoreId, body: dict | None = None, user: CurrentUser = None):
     ensure_admin(user)
     req = await _get_pending(req_id, store_id, db)
     admin_name = user.display_name if user is not None else None

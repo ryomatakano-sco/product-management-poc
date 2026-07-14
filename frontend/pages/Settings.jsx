@@ -98,7 +98,7 @@ function useSettingsForm(namespace) {
       window.PLX_TOAST.success("設定を保存しました");
       q.refetch();
     } catch (e) {
-      window.PLX_TOAST.error("設定の保存に失敗しました");
+      window.PLX_TOAST.error(e?.body?.detail?.detail || e?.body?.detail || "設定の保存に失敗しました");
     } finally {
       setSaving(false);
     }
@@ -168,7 +168,7 @@ function LogoUploader({ logoUrl, onChanged }) {
 
   const doDelete = async () => {
     if (busy) return;
-    if (!window.confirm("ロゴを削除しますか？")) return;
+    if (!window.confirm((window.PLX_TR || String)("ロゴを削除しますか？"))) return;
     setBusy(true);
     try {
       await api.deleteLogo();
@@ -529,7 +529,7 @@ function UsersSettings() {
 
   const toggleStatus = async (u) => {
     const next = u.status === "active" ? "inactive" : "active";
-    if (next === "inactive" && !window.confirm(`「${u.display_name}」を無効化しますか？ログインできなくなります。`)) return;
+    if (next === "inactive" && !window.confirm((window.PLX_TR || String)(`「${u.display_name}」を無効化しますか？ログインできなくなります。`))) return;
     try {
       await api.updateUser(u.id, { status: next });
       window.PLX_TOAST.success(next === "active" ? "有効化しました" : "無効化しました");

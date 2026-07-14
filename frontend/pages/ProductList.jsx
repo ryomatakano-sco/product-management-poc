@@ -97,7 +97,7 @@ function ProductList({ initialQuery }) {
 
   async function bulkArchive() {
     if (bulkBusy) return;
-    if (!window.confirm(`選択した ${selected.length} 件の商品をアーカイブしますか？`)) return;
+    if (!window.confirm((window.PLX_TR || String)(`選択した ${selected.length} 件の商品をアーカイブしますか？`))) return;
     setBulkBusy(true);
     let ok = 0, failed = 0;
     for (const id of selected) {

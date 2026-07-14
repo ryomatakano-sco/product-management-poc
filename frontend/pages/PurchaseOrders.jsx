@@ -506,7 +506,7 @@ function PurchaseOrderDetail({ id }) {
 
   async function handleCancel() {
     if (busy) return;
-    if (!window.confirm("この発注書をキャンセルしますか？この操作は元に戻せません。")) return;
+    if (!window.confirm((window.PLX_TR || String)("この発注書をキャンセルしますか？この操作は元に戻せません。"))) return;
     setBusy(true);
     try {
       await api.cancelPurchaseOrder(Number(id));

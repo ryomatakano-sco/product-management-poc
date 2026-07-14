@@ -509,8 +509,7 @@ function ProductCreate({ editId }) {
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 14, fontWeight: 700 }}>AI でサクッと商品情報を入力</div>
               <div style={{ fontSize: 12, color: PLX_MUTED, marginTop: 2, lineHeight: 1.6 }}>
-                JAN コードまたは商品名を入力すると、AI が公開情報から候補を取得します。
-                手入力の手間を約 <span style={{ color: PLX_GREEN, fontWeight: 700 }}>80%</span> 削減できます。
+                {"JAN コードまたは商品名を入力すると、AI が公開情報から候補を取得します。手入力の手間を約 80% 削減できます。"}
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -1442,7 +1441,7 @@ function AiAssistModal({ onClose, onApply, seed }) {
                 }}>
                   <span style={{ fontSize: 15 }}>🗄️</span>
                   <span style={{ flex: 1, minWidth: 160, lineHeight: 1.5 }}>
-                    これは<b>以前の検索結果（キャッシュ）</b>です。最新ではない可能性があります。
+                    {"これは以前の検索結果（キャッシュ）です。最新ではない可能性があります。"}
                   </span>
                   <button onClick={reSearch} style={{
                     height: 32, padding: "0 14px", borderRadius: 9999, border: "none",
@@ -1459,7 +1458,7 @@ function AiAssistModal({ onClose, onApply, seed }) {
                   borderRadius: 10, padding: "9px 14px", fontSize: 12, color: PLX_GREEN,
                   fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 8,
                 }}>
-                  🆕 再検索で <b style={{ margin: "0 2px" }}>{newCount}</b> 件の新しい候補が見つかりました（下に「新規」表示）。
+                  {`🆕 再検索で ${newCount} 件の新しい候補が見つかりました（下に「新規」表示）。`}
                 </div>
               )}
 
@@ -1750,8 +1749,7 @@ function PhoneScanSession({ onClose }) {
         {phase === "ready" && (
           <>
             <div style={{ fontSize: 12, color: PLX_MUTED, marginBottom: 10, lineHeight: 1.6 }}>
-              QRをスマホで読み取り、商品のバーコードを<b>続けて</b>スキャンしてください。
-              スキャンした商品の結果がここに表示されます。
+              {"QRをスマホで読み取り、商品のバーコードを続けてスキャンしてください。スキャンした商品の結果がここに表示されます。"}
             </div>
             <div ref={qrBoxRef} style={{
               display: "inline-block", padding: 10, background: "#fff", borderRadius: 12,
@@ -1768,8 +1766,7 @@ function PhoneScanSession({ onClose }) {
                 marginTop: 10, background: PLX_WARN_BG, borderRadius: 8,
                 padding: "8px 10px", fontSize: 10.5, color: PLX_WARN, lineHeight: 1.6,
               }}>
-                このQRはこのPC（localhost）を指しています。スマホからは同じWi‑Fiで
-                <b> http://（このPCのIP）:8000/app/</b> を開いてからお試しください。
+                {"このQRはこのPC（localhost）を指しています。スマホからは同じWi‑Fiで http://（このPCのIP）:8000/app/ を開いてからお試しください。"}
               </div>
             )}
             <div style={{
