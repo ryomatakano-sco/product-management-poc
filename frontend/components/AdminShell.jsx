@@ -452,7 +452,14 @@ function NotificationBell() {
 
   const relTime = (iso) => {
     if (!iso) return "";
-    const mins = Math.max(0, Math.floor((Date.now() - new Date(iso + (iso.endsWith("Z") ? "" : "Z")).getTime()) / 60000));
+    // created_at from MySQL NOW() is naive JST with no tz marker; append Z
+    // only when the string carries NO offset already (a "+09:00" or "Z"
+    // suffix must be left alone or Date() returns NaN → "NaN分前").
+    const hasTz = /[Zz]$|[+-]\d{2}:?\d{2}$/.test(iso);
+    const parsed = new Date(hasTz ? iso : iso + "Z");
+    const ms = parsed.getTime();
+    if (Number.isNaN(ms)) return "";
+    const mins = Math.max(0, Math.floor((Date.now() - ms) / 60000));
     if (mins < 1) return "たった今";
     if (mins < 60) return `${mins}分前`;
     if (mins < 1440) return `${Math.floor(mins / 60)}時間前`;

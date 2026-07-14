@@ -38,7 +38,7 @@ function PurchaseOrders() {
         date_from: range.from ? range.from.toISOString() : undefined,
         date_to: range.to ? range.to.toISOString() : undefined,
         q: search || undefined,
-        limit: 100,
+        limit: 200,
       });
     },
     [statusFilter, vendorFilter, branchFilter, period, search],
@@ -88,6 +88,7 @@ function PurchaseOrders() {
         status: statusFilter || undefined,
         supplier_vendor_id: vendorFilter || undefined,
         destination_branch_id: branchFilter || undefined,
+        q: search || undefined,  // honor the active search box (review 2026-07-14)
         date_from: range.from ? range.from.toISOString() : undefined,
         date_to: range.to ? range.to.toISOString() : undefined,
       });

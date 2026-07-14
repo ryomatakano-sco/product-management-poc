@@ -186,8 +186,10 @@ function renderInlineMarkdown(text) {
 }
 
 function AiSummaryCard({ summary, onRegenerate }) {
-  const isOk = summary.ai_status === "ok";
-  const paragraphs = summary.ai_summary.split(/\n{2,}/);
+  // Guard against a missing / errored summary payload — the dashboard should
+  // degrade to an empty card, not white-screen (review 2026-07-14).
+  const isOk = summary?.ai_status === "ok";
+  const paragraphs = (summary?.ai_summary || "").split(/\n{2,}/).filter(Boolean);
   const [busy, setBusy] = React.useState(false);
   const regen = async () => {
     if (busy) return;
@@ -267,10 +269,10 @@ function AiSummaryCard({ summary, onRegenerate }) {
         justifyContent: "space-between", alignItems: "center",
       }}>
         <span style={{ fontSize: 12, color: T.PLX_INK_500 }}>
-          最終更新: {new Date(summary.generated_at).toLocaleString("ja-JP", {
+          {`${(window.PLX_I18N?.get?.() || "ja") === "en" ? "Last updated" : "最終更新"}: ${new Date(summary.generated_at).toLocaleString((window.PLX_I18N?.get?.() || "ja") === "en" ? "en-US" : "ja-JP", {
             year: "numeric", month: "2-digit", day: "2-digit",
             hour: "2-digit", minute: "2-digit",
-          })}
+          })}`}
         </span>
         {!isOk && (
           <a href="#" onClick={(e) => { e.preventDefault(); navigate("/products?stock=low"); }}

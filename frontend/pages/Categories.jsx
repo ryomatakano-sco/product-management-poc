@@ -307,7 +307,7 @@ function CategoryFormModal({ editing, allCategories, onClose, onSaved }) {
       }
       onSaved();
     } catch (e) {
-      window.PLX_TOAST.error("保存に失敗しました");
+      window.PLX_TOAST.error(window.errText(e, "保存に失敗しました"));
     } finally {
       setSaving(false);
     }

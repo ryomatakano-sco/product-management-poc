@@ -505,7 +505,11 @@ function ManualSaleModal({ onClose, onSaved, initialProduct }) {
       unit_price: Number(unitPrice),
       payment_method: paymentMethod,
     };
-    if (soldAt) body.sold_at = new Date(soldAt).toISOString();
+    // soldAt is a datetime-local wall-clock (no zone). Tag it as JST (+09:00)
+    // explicitly so the recorded instant is correct even when the browser
+    // runs in another timezone (review 2026-07-14) — new Date(x).toISOString()
+    // would have used the browser's local zone.
+    if (soldAt) body.sold_at = `${soldAt}:00+09:00`;
     if (soldBy.trim()) body.sold_by = soldBy.trim();
     if (patientRef.trim()) body.patient_ref = patientRef.trim();
     if (note.trim()) body.note = note.trim();

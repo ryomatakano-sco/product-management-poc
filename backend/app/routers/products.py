@@ -160,7 +160,7 @@ def _build_list_item(p: Product, match_reasons: list[str] | None = None) -> Prod
 async def list_products(
     db: DB,
     store_id: StoreId,
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=500),
     offset: int = Query(0, ge=0),
     q: str | None = Query(None, description="Search name or name_kana"),
     category_id: int | None = Query(None),

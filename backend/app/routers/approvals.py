@@ -67,10 +67,13 @@ async def list_approvals(
 
 
 async def _get_pending(req_id: int, store_id: int, db) -> ApprovalRequest:
+    # SELECT ... FOR UPDATE: a second concurrent approve/reject blocks here
+    # until the first commits, then sees status != pending and 400s — so a
+    # request can never be applied twice.
     req = (await db.execute(
         select(ApprovalRequest).where(
             ApprovalRequest.id == req_id, ApprovalRequest.store_id == store_id
-        )
+        ).with_for_update()
     )).scalar_one_or_none()
     if req is None:
         raise HTTPException(404, detail="承認リクエストが見つかりません")

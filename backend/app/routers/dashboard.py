@@ -88,18 +88,33 @@ async def get_dashboard_summary(db: DB, store_id: StoreId) -> dict:
     )).scalar_one()
     monthly_sales = Decimal(str(sales_row))
 
-    # ── needs_attention: top-5 lowest-available products ──
-    attention_products = (await db.execute(
-        select(Product)
+    # ── needs_attention: the 5 genuinely lowest-available products ──
+    # Rank in SQL over the whole catalog (summing the variants' available =
+    # on_hand−committed−unavailable) so we don't miss the actual lowest by
+    # sampling an arbitrary 50 (review 2026-07-14).
+    avail_expr = func.coalesce(
+        func.sum(ProductVariant.on_hand - ProductVariant.committed - ProductVariant.unavailable),
+        0,
+    )
+    ranked = (await db.execute(
+        select(Product.id, avail_expr.label("avail"))
+        .join(ProductVariant, ProductVariant.product_id == Product.id)
         .where(Product.store_id == store_id, Product.status == ProductStatus.active)
-        .options(selectinload(Product.variants))
-        .limit(50)  # over-fetch then sort in-Python for the available calc
-    )).scalars().all()
+        .group_by(Product.id)
+        .order_by(avail_expr.asc())
+        .limit(5)
+    )).all()
+    low_ids = [pid for pid, _ in ranked]
+    attention_sorted = []
+    if low_ids:
+        by_id = {p.id: p for p in (await db.execute(
+            select(Product).where(Product.id.in_(low_ids))
+            .options(selectinload(Product.variants))
+        )).scalars().all()}
+        attention_sorted = [by_id[pid] for pid in low_ids if pid in by_id]
 
     def available(p: Product) -> int:
         return sum(v.on_hand - v.committed - v.unavailable for v in p.variants)
-
-    attention_sorted = sorted(attention_products, key=available)[:5]
     needs_attention = []
     for p in attention_sorted:
         avail = available(p)

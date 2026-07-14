@@ -206,7 +206,7 @@ function ProductDetail({ productId }) {
                         // chip; cleared automatically when a PO is received.
                         api.updateProduct(p.id, { reorder_requested_at: new Date().toISOString() })
                           .then(() => { window.PLX_TOAST?.success?.("再発注済としてマークしました"); productQ.refetch(); })
-                          .catch(() => {});
+                          .catch((e) => window.PLX_TOAST?.error?.(window.errText(e, "再発注済にできませんでした")));
                       }}
                       style={{
                         height: 30, padding: "0 12px", borderRadius: 9999,
@@ -252,15 +252,15 @@ function ProductDetail({ productId }) {
           }}>
             <span style={{ color: PLX_MUTED }}>在庫数 (on_hand)</span>
             <span style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-              {variants.reduce((s, v) => s + v.on_hand, 0)}
+              {variants.reduce((s, v) => s + (Number(v.on_hand) || 0), 0)}
             </span>
             <span style={{ color: PLX_MUTED }}>引当中 (committed)</span>
             <span style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-              −{variants.reduce((s, v) => s + v.committed, 0)}
+              −{variants.reduce((s, v) => s + (Number(v.committed) || 0), 0)}
             </span>
             <span style={{ color: PLX_MUTED }}>使用不可</span>
             <span style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-              −{variants.reduce((s, v) => s + v.unavailable, 0)}
+              −{variants.reduce((s, v) => s + (Number(v.unavailable) || 0), 0)}
             </span>
           </div>
         </div>

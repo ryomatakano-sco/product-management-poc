@@ -144,8 +144,12 @@ function BranchFormModal({ editing, onClose, onSaved }) {
         address: form.address.trim() || null,
         phone: form.phone.trim() || null,
         manager_name: form.manager_name.trim() || null,
-        low_stock_threshold: Number(form.low_stock_threshold) || 10,
-        default_tax_rate: Number(form.default_tax_rate) || 10,
+        // `|| 10` would corrupt a deliberately-entered 0 into 10 — only fall
+        // back when the field is blank / non-numeric (review 2026-07-14).
+        low_stock_threshold: Number.isFinite(Number(form.low_stock_threshold)) && String(form.low_stock_threshold).trim() !== ""
+          ? Number(form.low_stock_threshold) : 10,
+        default_tax_rate: Number.isFinite(Number(form.default_tax_rate)) && String(form.default_tax_rate).trim() !== ""
+          ? Number(form.default_tax_rate) : 10,
         status: form.status,
       };
       const b = editing
