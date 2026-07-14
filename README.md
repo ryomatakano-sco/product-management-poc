@@ -52,6 +52,31 @@ That's it. Open <http://localhost:8000>. The browser will redirect to `/app/` (t
 
 > **Where's the data?** Your local MySQL, in the `product_management_dev` database. **Your existing data (e.g. in `maindb`) is untouched** — we deliberately use a separate database so the PoC tables can't collide with anything else.
 
+**Pulling the latest?** The schema now goes up to migration **018**. If you started the DB on an older revision, run:
+```cmd
+cd backend && .venv\Scripts\python -m alembic upgrade head
+```
+`scripts\setup.bat` / `scripts\reset-db.bat` already do this for you.
+
+### First-time user tutorial
+
+The first time a user logs in, a short **guided tour** starts automatically on the dashboard — a spotlight highlights each key button (sidebar, search, notifications, and the main action on Products / Inventory / Purchase orders / Sales / Settings) with a one-line explanation. Press **次へ / スキップ** or **Esc** to move through or exit; once seen (or skipped) it won't fire again.
+
+To replay or control it without creating a new user, open the **Dev menu** (see below) → **Tutorial** section:
+- **▶ チュートリアルを開始** — replay the tour now.
+- **フラグをリセット** — clear the "seen" flag so it auto-starts again on the next dashboard visit.
+- **Auto-start ON/OFF** — the "tutorial mode" switch. Turn it **OFF** to stop the tour auto-firing for first-time users (e.g. during a demo where you'll trigger it manually).
+
+### Dev menu (`</>`, bottom-left) — now password-protected
+
+The developer panel (DB/AI status, store switcher, env editor, model comparison, and the tutorial controls above) opens with the **`</>` button at the bottom-left** or **Ctrl+`**.
+
+It's protected by a password. Set it in `backend\.env`:
+```
+DEV_PANEL_PASSWORD=sco-dev
+```
+(default `sco-dev`; leave the line out to disable the password entirely). The panel asks for it once per browser session. Every `/dev/*` API call is checked **server-side** against this value, so it can't be bypassed by calling the API directly — and the endpoints are already restricted to localhost.
+
 ---
 
 ## Run it (Docker — alternative)
