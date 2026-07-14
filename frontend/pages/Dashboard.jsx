@@ -46,6 +46,8 @@ function Dashboard() {
     : `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日（${"日月火水木金土"[today.getDay()]}）`;
   const hour = today.getHours();
   const greet = hour < 11 ? "おはようございます" : hour < 18 ? "こんにちは" : "こんばんは";
+  const greetEn = hour < 11 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const meName = window.PLX_ME?.display_name || "山田 花子";
 
   return (
     <AdminShell currentNav="dashboard" breadcrumbs={["ホーム"]}>
@@ -58,7 +60,7 @@ function Dashboard() {
           <h1 style={{
             margin: 0, fontSize: 28, fontWeight: 700,
             color: T.PLX_INK_900, letterSpacing: "-0.01em",
-          }}>{greet}、山田さん 👋</h1>
+          }}>{isEn ? `${greetEn}, ${meName} 👋` : `${greet}、${meName}さん 👋`}</h1>
           <div style={{ marginTop: 6, fontSize: 14, color: T.PLX_INK_500 }}>
             本日は {jpDate}。本院の商品管理サマリーをお届けします。
           </div>
@@ -74,10 +76,6 @@ function Dashboard() {
             <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
           </svg>
           本日
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.PLX_INK_500}
-            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="6 9 12 15 18 9"/>
-          </svg>
         </div>
       </div>
 
@@ -189,7 +187,11 @@ function AiSummaryCard({ summary, onRegenerate }) {
   // Guard against a missing / errored summary payload — the dashboard should
   // degrade to an empty card, not white-screen (review 2026-07-14).
   const isOk = summary?.ai_status === "ok";
-  const paragraphs = (summary?.ai_summary || "").split(/\n{2,}/).filter(Boolean);
+  // Serve the English narrative in EN mode when the backend provided one
+  // (the summary body is dynamic text the auto-translator can't cover).
+  const isEn = (window.PLX_I18N?.get?.() || "ja") === "en";
+  const bodyText = (isEn && summary?.ai_summary_en) || summary?.ai_summary || "";
+  const paragraphs = bodyText.split(/\n{2,}/).filter(Boolean);
   const [busy, setBusy] = React.useState(false);
   const regen = async () => {
     if (busy) return;

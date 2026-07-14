@@ -173,7 +173,7 @@ function PurchaseOrders() {
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={handleSearchKey}
             onBlur={() => setSearch(searchInput)}
-            placeholder="発注番号・仕入先で検索"
+            placeholder="発注番号・仕入先・商品名で検索"
             style={{
               width: "100%", height: 34, paddingLeft: 32, paddingRight: 10,
               borderRadius: T.RADIUS_MD, border: `1px solid ${T.PLX_LINE_200}`,

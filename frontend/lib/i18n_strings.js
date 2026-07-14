@@ -392,6 +392,7 @@ window._PLX_DICT_EN = {
   // Templates (with ${...} slots preserved verbatim)
   "${diffH} 時間前": "${diffH}h ago",
   "${diffMin} 分前": "${diffMin}m ago",
+  "${name} の在庫を ${delta} 件調整": "Stock of ${name} adjusted by ${delta}",
   "AI 検索に失敗しました": "AI search failed",
   "API・Webhooks": "API & Webhooks",
   "OpenAI APIキー": "OpenAI API key",
@@ -721,6 +722,12 @@ window._PLX_DICT_EN = {
   "送信済み": "Sent",
   "確認推奨": "Needs attention",
   "発注番号・仕入先で検索": "Search by PO number or vendor",
+  "発注番号・仕入先・商品名で検索": "Search by PO number, vendor, or product",
+  "接続済み（保存済みキー）": "Connected (saved key)",
+  "接続済み（サーバー既定キー）": "Connected (server default key)",
+  "接続に成功しました（保存済みキー）。": "Connection succeeded (saved key).",
+  "接続に成功しました（サーバー既定キー）。この店舗のAPIキーは未設定です。":
+    "Connection succeeded (server default key). This store has no API key of its own saved.",
   "発注日": "Order date",
   "合計金額（税込）": "Total (tax incl.)",
   "単価": "Unit price",

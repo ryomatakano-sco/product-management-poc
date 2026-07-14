@@ -61,7 +61,13 @@ class TaxRate(BaseModel):
 
 
 class TaxRatesSettings(BaseModel):
-    rates: list[TaxRate]
+    # Default set mirrors Japanese consumption tax so a store that has never
+    # saved this namespace still gets a valid GET response (never-saved stores
+    # previously 500'd because `rates` had no default).
+    rates: list[TaxRate] = [
+        TaxRate(id=1, name="標準税率", rate=Decimal("10"), is_default=True),
+        TaxRate(id=2, name="軽減税率", rate=Decimal("8")),
+    ]
 
 
 # ── ai ─────────────────────────────────────────────────────────────

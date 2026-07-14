@@ -67,7 +67,10 @@ function ProductList({ initialQuery }) {
     const low = list.filter((p) => (p.total_available ?? 0) <= 10).length;
     const expire = list.filter((p) => {
       const d = daysUntil(p.expiry_date);
-      return p.item_type === "consumable" && d != null && d <= 30;
+      // 0 <= d: already-expired items are NOT "expiring soon" (they get the
+      // red 期限切れ row badge instead) — keeps this count in sync with the
+      // dashboard KPI, which bounds expiry >= today.
+      return p.item_type === "consumable" && d != null && d >= 0 && d <= 30;
     }).length;
     const reorder = list.filter((p) => p.reorder_requested_at).length;
     return { low, expire, reorder };

@@ -302,6 +302,15 @@ function TaxRatesSettings() {
   React.useEffect(() => {
     if (f.form.rates) setRows(f.form.rates);
   }, [serverSig]);
+  if (f.error) return (
+    <SettingsCard title="税率">
+      <div style={{ color: T.PLX_INK_500, marginBottom: 10 }}>税率の読み込みに失敗しました。</div>
+      <button onClick={f.reload} style={{
+        padding: "7px 14px", borderRadius: T.RADIUS_MD, border: `1px solid ${T.PLX_LINE_200}`,
+        background: "transparent", fontSize: 12, fontWeight: 700, color: T.PLX_INK_700, cursor: "pointer",
+      }}>再読み込み</button>
+    </SettingsCard>
+  );
   if (f.loading || rows === null) return <SettingsCard title="税率"><div style={{ color: T.PLX_INK_500 }}>読み込み中…</div></SettingsCard>;
 
   const upd = (i, k, v) => setRows(rows.map((r, j) => j === i ? { ...r, [k]: v } : r));
@@ -416,7 +425,9 @@ function AiSettings() {
           }}>{testing ? "テスト中…" : "接続テスト"}</button>
           {testResult && (
             testResult.ok
-              ? <Pill color={T.PLX_GREEN_700} bg={T.PLX_GREEN_100}>接続済み</Pill>
+              ? <Pill color={T.PLX_GREEN_700} bg={T.PLX_GREEN_100}>
+                  {testResult.source === "env" ? "接続済み（サーバー既定キー）" : "接続済み（保存済みキー）"}
+                </Pill>
               : <Pill color={T.PLX_RED_600} bg={T.PLX_RED_100}>失敗</Pill>
           )}
         </div>

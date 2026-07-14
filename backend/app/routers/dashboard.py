@@ -27,10 +27,26 @@ from app.models.sale import SalesRecord
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
-# Real-LLM summary cache: store_id -> (JST date iso, narrative text).
+# Real-LLM summary cache: store_id -> (JST date iso, JA narrative, EN narrative).
 # Populated ONLY by POST /summary/regenerate (which costs tokens); plain GETs
 # serve today's cached narrative or fall back to the free template.
-_AI_SUMMARY_CACHE: dict[int, tuple[str, str]] = {}
+_AI_SUMMARY_CACHE: dict[int, tuple[str, str, str]] = {}
+
+
+def _split_ja_en(text: str) -> tuple[str, str]:
+    """Split an LLM reply of the form "JA:\\n…\\nEN:\\n…" into (ja, en).
+
+    Tolerates missing markers: with no EN marker the whole reply is treated as
+    Japanese and EN comes back empty (caller falls back to the template EN).
+    """
+    import re
+    m = re.search(r"^\s*EN\s*[:：]\s*$|\bEN\s*[:：]", text, flags=re.MULTILINE)
+    if not m:
+        return text.strip(), ""
+    ja = text[:m.start()]
+    en = text[m.end():]
+    ja = re.sub(r"\bJA\s*[:：]", "", ja, count=1)
+    return ja.strip(), en.strip()
 
 
 @router.get("/summary", summary="ダッシュボードサマリーを取得")
@@ -186,27 +202,41 @@ async def get_dashboard_summary(db: DB, store_id: StoreId) -> dict:
         for cid, cname, stock, value in cat_rows
     ]
 
-    # ── canned AI summary (deterministic template) ──
+    # ── canned AI summary (deterministic template, JA + EN) ──
     sentences = []
+    sentences_en = []
     if low_stock > 0:
         sentences.append(
             f"本日、在庫が補充ポイントを下回る商品が **{low_stock} 件** あります。"
             "在庫一覧から「在庫低下」フィルターで確認してください。"
+        )
+        sentences_en.append(
+            f"Today, **{low_stock} product(s)** are below their restock point. "
+            "Check them with the \"Low stock\" filter on the inventory list."
         )
     if expiring_soon > 0:
         sentences.append(
             f"使用期限が 30 日以内に切れる消耗品が **{expiring_soon} 件** あります。"
             "早めの使い切りまたは廃棄の判断をお願いします。"
         )
+        sentences_en.append(
+            f"**{expiring_soon} consumable(s)** will expire within 30 days. "
+            "Please plan to use them up or discard them soon."
+        )
     if monthly_sales > 0:
         sentences.append(
             f"今月の販売は累計 ¥{int(monthly_sales):,} です。"
         )
+        sentences_en.append(
+            f"Sales this month total ¥{int(monthly_sales):,}."
+        )
     if not sentences:
         ai_summary = "本日、対応が必要な項目はありません。すべて順調です。お疲れさまです 🌿"
+        ai_summary_en = "Nothing needs your attention today. Everything looks good 🌿"
         ai_status = "ok"
     else:
         ai_summary = "\n\n".join(sentences)
+        ai_summary_en = "\n\n".join(sentences_en)
         ai_status = "alert"
 
     # Serve today's REAL LLM narrative when 再生成 produced one (never spend
@@ -215,6 +245,10 @@ async def get_dashboard_summary(db: DB, store_id: StoreId) -> dict:
     _cached = _AI_SUMMARY_CACHE.get(store_id)
     if _cached is not None and _cached[0] == datetime.now(timezone(timedelta(hours=9))).date().isoformat():
         ai_summary = _cached[1]
+        # EN slot may be empty when the LLM reply couldn't be split — keep the
+        # template EN text in that case rather than showing Japanese under EN.
+        if _cached[2]:
+            ai_summary_en = _cached[2]
         ai_generated = True
 
     # Asia/Tokyo offset for the demo's expected timezone.
@@ -222,6 +256,7 @@ async def get_dashboard_summary(db: DB, store_id: StoreId) -> dict:
     return {
         "generated_at": datetime.now(jst).isoformat(),
         "ai_summary": ai_summary,
+        "ai_summary_en": ai_summary_en,
         # Keep both spellings so old + new frontend code paths work.
         "ai_status": ai_status,
         "ai_summary_status": ai_status,
@@ -269,9 +304,12 @@ async def regenerate_summary(db: DB, store_id: StoreId):
     jst_now = datetime.now(timezone(timedelta(hours=9)))
     prompt = (
         f"あなたは歯科クリニックの物品管理アシスタントです。本日 {jst_now.strftime('%m月%d日')} の"
-        f"朝会向けに、以下のデータから日本語で2〜3文の簡潔なサマリーを書いてください。"
+        f"朝会向けに、以下のデータから簡潔なサマリー（2〜3文）を日本語と英語の両方で書いてください。"
         f"数字は太字(**N 件**のように)で強調し、最後に一言だけ前向きな行動提案を添えてください。"
-        f"箇条書きや見出しは使わないでください。\n\n"
+        f"箇条書きや見出しは使わないでください。\n"
+        f"出力は必ず次の形式にしてください（マーカー行をそのまま使うこと）:\n"
+        f"JA:\n<日本語のサマリー>\n"
+        f"EN:\n<英語のサマリー>\n\n"
         f"- 登録商品数: {kpis['total_products']} 件\n"
         f"- 在庫低下: {kpis['low_stock']} 件（要対応: {attention}）\n"
         f"- 期限間近(30日以内)の消耗品: {kpis['expiring_soon']} 件\n"
@@ -287,15 +325,18 @@ async def regenerate_summary(db: DB, store_id: StoreId):
                 json={
                     "model": "gpt-4.1-nano",
                     "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 220,
+                    "max_tokens": 440,
                     "temperature": 0.5,
                 },
             )
         if res.status_code == 200:
             text = (res.json()["choices"][0]["message"]["content"] or "").strip()
             if text:
-                _AI_SUMMARY_CACHE[store_id] = (jst_now.date().isoformat(), text)
-                base["ai_summary"] = text
+                text_ja, text_en = _split_ja_en(text)
+                _AI_SUMMARY_CACHE[store_id] = (jst_now.date().isoformat(), text_ja, text_en)
+                base["ai_summary"] = text_ja
+                if text_en:
+                    base["ai_summary_en"] = text_en
                 base["ai_generated"] = True
     except (httpx.HTTPError, KeyError, ValueError):
         pass  # keep the template — the dashboard must always render

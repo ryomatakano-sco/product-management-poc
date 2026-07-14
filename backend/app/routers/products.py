@@ -211,7 +211,13 @@ async def list_products(
         stmt = stmt.where(Product.item_type == item_type)
     if expiring_within_days is not None:
         cutoff = date.today() + timedelta(days=expiring_within_days)
-        stmt = stmt.where(Product.expiry_date.is_not(None), Product.expiry_date <= cutoff)
+        # Lower bound: already-expired products are excluded, matching the
+        # dashboard expiring_soon KPI (expiry >= today).
+        stmt = stmt.where(
+            Product.expiry_date.is_not(None),
+            Product.expiry_date >= date.today(),
+            Product.expiry_date <= cutoff,
+        )
     if reorder_requested is not None:
         stmt = stmt.where(
             Product.reorder_requested_at.is_not(None)

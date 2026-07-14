@@ -41,7 +41,7 @@ function PlxSidebar({ current }) {
       label: "オペレーション",
       items: [
         { id: "inventory",  label: "在庫",     icon: "boxes",   to: "/inventory" },
-        { id: "po",         label: "発注書",   icon: "file",    to: "/purchase-orders", badge: 5 },
+        { id: "po",         label: "発注書",   icon: "file",    to: "/purchase-orders" },
         { id: "sales",      label: "販売記録", icon: "receipt", to: "/sales" },
       ],
     },
@@ -100,7 +100,6 @@ function PlxSidebar({ current }) {
           }}>ペイライト歯科クリニック</div>
           <div style={{ fontSize: 10, color: T.PLX_SIDEBAR_INK_DIM }}>本院 / 管理者</div>
         </div>
-        <ChevronDown color={T.PLX_SIDEBAR_INK_DIM} size={14} />
       </div>
 
       {/* Nav groups */}
@@ -292,15 +291,6 @@ function NavIcon({ name, color }) {
   }
 }
 
-function ChevronDown({ color, size = 14 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
-      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
-  );
-}
-
 function ChevronRight({ color, size = 14 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
@@ -344,7 +334,7 @@ function PlxTopBar({ title, breadcrumbs, headerRight }) {
       height: 56, background: T.PLX_SURFACE_0, borderBottom: `1px solid ${T.PLX_LINE_200}`,
       padding: "0 32px", display: "flex", alignItems: "center", gap: 16, flexShrink: 0,
     }}>
-      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6 }}>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
         {breadcrumbs && breadcrumbs.length > 0 ? (
           breadcrumbs.map((b, i) => {
             const isLast = i === breadcrumbs.length - 1;
@@ -380,7 +370,11 @@ function PlxTopBar({ title, breadcrumbs, headerRight }) {
           <span style={{ fontSize: 14, fontWeight: 600, color: T.PLX_INK_900 }}>{title}</span>
         ) : null}
       </div>
-      {headerRight}
+      {headerRight && (
+        <span style={{ display: "inline-flex", alignItems: "center", flexShrink: 0, whiteSpace: "nowrap" }}>
+          {headerRight}
+        </span>
+      )}
       {/* Global search — opens the Ctrl+K command palette. We render this
           as a button shaped like an input so the affordance still reads as
           "search box", but clicking (or Ctrl+K) opens the palette which
@@ -390,7 +384,7 @@ function PlxTopBar({ title, breadcrumbs, headerRight }) {
         title="横断検索 (Ctrl+K)"
         data-tour="global-search"
         style={{
-          position: "relative", width: 280, height: 36,
+          position: "relative", width: 280, height: 36, flexShrink: 0,
           padding: "0 12px 0 36px", fontSize: 13, fontFamily: "inherit",
           background: T.PLX_SURFACE_50, border: `1px solid ${T.PLX_LINE_200}`,
           borderRadius: T.RADIUS_MD, outline: "none", color: T.PLX_INK_500,
@@ -412,7 +406,7 @@ function PlxTopBar({ title, breadcrumbs, headerRight }) {
           fontFamily: "ui-monospace, monospace",
         }}>Ctrl+K</kbd>
       </button>
-      <span data-tour="lang-theme" style={{ display: "inline-flex", gap: 8 }}>
+      <span data-tour="lang-theme" style={{ display: "inline-flex", gap: 8, flexShrink: 0 }}>
         <PlxLocaleToggle />
         <PlxThemeToggle />
       </span>

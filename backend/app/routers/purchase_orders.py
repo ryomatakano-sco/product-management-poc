@@ -118,6 +118,39 @@ def _compute_totals(items: list[PurchaseOrderItem], shipping_cost: Decimal) -> t
     return subtotal, subtotal + shipping_cost
 
 
+def _po_search_clauses(q: str) -> list:
+    """OR-clauses for the free-text PO search, shared by the list and CSV
+    export routes so the two stay in sync.
+
+    Matches PO scalar text columns, the supplier's company name, and the
+    names/SKUs of products on the PO's line items.
+    """
+    from sqlalchemy import exists
+    from app.models.vendor import Vendor
+
+    like = f"%{q.strip()}%"
+    clauses = []
+    for attr in ("po_number", "reference_number", "tracking_number", "note"):
+        if hasattr(PurchaseOrder, attr):
+            clauses.append(getattr(PurchaseOrder, attr).ilike(like))
+    clauses.append(exists(
+        select(Vendor.id).where(
+            Vendor.id == PurchaseOrder.supplier_vendor_id,
+            Vendor.company_name.ilike(like),
+        )
+    ))
+    clauses.append(exists(
+        select(PurchaseOrderItem.id)
+        .join(ProductVariant, ProductVariant.id == PurchaseOrderItem.variant_id)
+        .join(Product, Product.id == ProductVariant.product_id)
+        .where(
+            PurchaseOrderItem.purchase_order_id == PurchaseOrder.id,
+            (Product.name.ilike(like)) | (ProductVariant.sku.ilike(like)),
+        )
+    ))
+    return clauses
+
+
 @router.get("", response_model=PaginatedResponse[PurchaseOrderRead])
 async def list_purchase_orders(
     db: DB,
@@ -129,7 +162,7 @@ async def list_purchase_orders(
     destination_branch_id: int | None = Query(None),
     date_from: datetime | None = Query(None, description="created_at >= (aware datetimes compared in JST)"),
     date_to: datetime | None = Query(None, description="created_at < (aware datetimes compared in JST)"),
-    q: str | None = Query(None, description="Search by PO number, reference, tracking, or note"),
+    q: str | None = Query(None, description="Search by PO number, reference, tracking, note, supplier, or product name/SKU"),
 ):
     stmt = select(PurchaseOrder).where(PurchaseOrder.store_id == store_id).options(*_po_load_options())
     if status:
@@ -143,21 +176,8 @@ async def list_purchase_orders(
     if date_to is not None:
         stmt = stmt.where(PurchaseOrder.created_at < _to_naive_jst(date_to))
     if q and q.strip():
-        like = f"%{q.strip()}%"
         from sqlalchemy import or_ as _or
-        # The PO model historically used `po_number` as a short identifier;
-        # fall back to the integer id for older PoC data without a po_number.
-        clauses = []
-        if hasattr(PurchaseOrder, "po_number"):
-            clauses.append(PurchaseOrder.po_number.ilike(like))
-        if hasattr(PurchaseOrder, "reference_number"):
-            clauses.append(PurchaseOrder.reference_number.ilike(like))
-        if hasattr(PurchaseOrder, "tracking_number"):
-            clauses.append(PurchaseOrder.tracking_number.ilike(like))
-        if hasattr(PurchaseOrder, "note"):
-            clauses.append(PurchaseOrder.note.ilike(like))
-        if clauses:
-            stmt = stmt.where(_or(*clauses))
+        stmt = stmt.where(_or(*_po_search_clauses(q)))
     total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     rows = (await db.execute(stmt.order_by(PurchaseOrder.id.desc()).offset(offset).limit(limit))).scalars().unique().all()
     return PaginatedResponse(items=[_po_to_read(po) for po in rows], total=total)
@@ -328,14 +348,8 @@ async def export_purchase_orders_csv(
     if date_to is not None:
         stmt = stmt.where(PurchaseOrder.created_at < _to_naive_jst(date_to))
     if q and q.strip():
-        like = f"%{q.strip()}%"
         from sqlalchemy import or_ as _or
-        clauses = []
-        for attr in ("po_number", "reference_number", "tracking_number", "note"):
-            if hasattr(PurchaseOrder, attr):
-                clauses.append(getattr(PurchaseOrder, attr).ilike(like))
-        if clauses:
-            stmt = stmt.where(_or(*clauses))
+        stmt = stmt.where(_or(*_po_search_clauses(q)))
     rows = (await db.execute(stmt.order_by(PurchaseOrder.id.desc()))).scalars().unique().all()
 
     buf = io.StringIO()

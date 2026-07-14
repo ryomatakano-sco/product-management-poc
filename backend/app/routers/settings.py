@@ -303,7 +303,11 @@ async def test_ai_connection(db: DB, store_id: StoreId, user: CurrentUser = None
             model_count = len(res.json().get("data", []))
         except Exception:
             model_count = None
-        return {"ok": True, "source": source, "message": "接続に成功しました。", "model_count": model_count}
+        message = (
+            "接続に成功しました（保存済みキー）。" if source == "settings"
+            else "接続に成功しました（サーバー既定キー）。この店舗のAPIキーは未設定です。"
+        )
+        return {"ok": True, "source": source, "message": message, "model_count": model_count}
     if res.status_code == 401:
         return {"ok": False, "source": source, "message": "認証に失敗しました。APIキーが正しいか確認してください。"}
     return {"ok": False, "source": source, "message": f"OpenAI がエラーを返しました（HTTP {res.status_code}）。"}
