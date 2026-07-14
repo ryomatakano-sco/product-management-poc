@@ -30,9 +30,23 @@ from app.services.ai_agent import EXTRACTION_MODEL, FALLBACK_SEARCH_MODEL, SEARC
 def _local_only(request: Request) -> None:
     """Dev panel endpoints write .env to disk and report DB host/user — they
     must only be reachable from the local machine, never a remote client
-    (review 2026-07-14)."""
+    (review 2026-07-14).
+
+    Additionally, when ``DEV_PANEL_PASSWORD`` is set in the environment, every
+    /dev/* call must carry a matching ``X-Dev-Password`` header — the panel
+    prompts once per browser session. Unset env = no password (backwards
+    compatible for fresh checkouts). NOTE: this key must never be added to
+    EDITABLE_KEYS, or the panel could rewrite its own lock.
+    """
     if not dev_fallback_allowed(request):
         raise HTTPException(status_code=404, detail="Not found")
+    import hmac as _hmac
+
+    required = os.environ.get("DEV_PANEL_PASSWORD", "").strip()
+    if required:
+        supplied = request.headers.get("X-Dev-Password", "")
+        if not _hmac.compare_digest(supplied, required):
+            raise HTTPException(status_code=401, detail="dev password required")
 
 
 router = APIRouter(prefix="/dev", tags=["dev"], dependencies=[Depends(_local_only)])

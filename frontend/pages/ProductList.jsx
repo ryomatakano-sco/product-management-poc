@@ -129,7 +129,7 @@ function ProductList({ initialQuery }) {
   const headerRight = (
     <div style={{ display: "inline-flex", gap: 8 }}>
       <button onClick={() => setShowImport(true)} style={btnSecondary}>⬆ インポート</button>
-      <button onClick={() => navigate("/products/new")} style={{
+      <button data-tour="product-add" onClick={() => navigate("/products/new")} style={{
         height: 38, padding: "0 18px", borderRadius: 9999,
         background: PLX_GREEN, color: "#fff", border: "none",
         fontWeight: 700, fontSize: 13, cursor: "pointer",

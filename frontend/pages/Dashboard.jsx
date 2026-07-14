@@ -82,7 +82,7 @@ function Dashboard() {
       </div>
 
       {/* AI Summary card */}
-      {loading ? <AiSummarySkeleton /> : <AiSummaryCard summary={summary} onRegenerate={summaryQ.refetch} />}
+      <div data-tour="ai-summary">{loading ? <AiSummarySkeleton /> : <AiSummaryCard summary={summary} onRegenerate={summaryQ.refetch} />}</div>
 
       {/* KPI tiles */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginTop: 16 }}>

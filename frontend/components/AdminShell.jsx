@@ -104,7 +104,7 @@ function PlxSidebar({ current }) {
       </div>
 
       {/* Nav groups */}
-      <div style={{ padding: "12px 8px 8px", flex: 1, overflowY: "auto" }}>
+      <div data-tour="nav" style={{ padding: "12px 8px 8px", flex: 1, overflowY: "auto" }}>
         {groups.map((g) => (
           <div key={g.label} style={{ marginBottom: 14 }}>
             <div style={{
@@ -388,6 +388,7 @@ function PlxTopBar({ title, breadcrumbs, headerRight }) {
       <button
         onClick={() => window.PLX_CMDK && window.PLX_CMDK.open()}
         title="横断検索 (Ctrl+K)"
+        data-tour="global-search"
         style={{
           position: "relative", width: 280, height: 36,
           padding: "0 12px 0 36px", fontSize: 13, fontFamily: "inherit",
@@ -411,8 +412,10 @@ function PlxTopBar({ title, breadcrumbs, headerRight }) {
           fontFamily: "ui-monospace, monospace",
         }}>Ctrl+K</kbd>
       </button>
-      <PlxLocaleToggle />
-      <PlxThemeToggle />
+      <span data-tour="lang-theme" style={{ display: "inline-flex", gap: 8 }}>
+        <PlxLocaleToggle />
+        <PlxThemeToggle />
+      </span>
       <NotificationBell />
     </div>
   );
@@ -467,7 +470,7 @@ function NotificationBell() {
   };
 
   return (
-    <div style={{ position: "relative" }}>
+    <div data-tour="notif-bell" style={{ position: "relative" }}>
       <button onClick={() => setOpen((o) => !o)} title="通知" style={{
         width: 36, height: 36, borderRadius: T.RADIUS_MD, border: `1px solid ${T.PLX_LINE_200}`,
         background: open ? T.PLX_SURFACE_100 : T.PLX_SURFACE_0, cursor: "pointer",

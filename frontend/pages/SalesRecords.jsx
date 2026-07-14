@@ -162,7 +162,7 @@ function SalesRecords({ query, initialSaleId }) {
       }}>
         {exporting ? "書き出し中…" : "⬇ CSVエクスポート"}
       </button>
-      <button onClick={() => setShowManualEntry(true)} style={{
+      <button data-tour="sale-manual" onClick={() => setShowManualEntry(true)} style={{
         ...btnPrimary, display: "inline-flex", alignItems: "center", gap: 6,
       }}>＋ 手動入力</button>
     </div>

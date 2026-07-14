@@ -7,11 +7,23 @@
 //
 // Keyboard shortcut: Ctrl+` toggles the panel.
 
+// Server-checked password (DEV_PANEL_PASSWORD in backend/.env): every /dev/*
+// call carries X-Dev-Password. The value is remembered per browser session.
+const DEVPW_KEY = "plx.devpanel.pw";
+function devHeaders(extra) {
+  let pw = "";
+  try { pw = sessionStorage.getItem(DEVPW_KEY) || ""; } catch (_) {}
+  return { ...(extra || {}), "X-Dev-Password": pw };
+}
+
 function DevPanel() {
   const [open, setOpen] = React.useState(false);
   const [status, setStatus] = React.useState(null);
   const [error, setError] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
+  const [locked, setLocked] = React.useState(() => {
+    try { return !sessionStorage.getItem(DEVPW_KEY); } catch (_) { return true; }
+  });
   const [storeId, setStoreIdState] = React.useState(() => {
     try { return getStoreId(); } catch (_) { return 1; }
   });
@@ -22,8 +34,14 @@ function DevPanel() {
       // /dev/status doesn't need a store header but our fetcher injects it
       // anyway, which is fine — the endpoint just ignores it.
       const res = await fetch("/dev/status", {
-        headers: { "Content-Type": "application/json" },
+        headers: devHeaders({ "Content-Type": "application/json" }),
       });
+      if (res.status === 401) {
+        // Wrong / missing password — drop it and fall back to the gate.
+        try { sessionStorage.removeItem(DEVPW_KEY); } catch (_) {}
+        setLocked(true);
+        throw new Error("401 password required");
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setStatus(await res.json());
       setError(null);
@@ -37,11 +55,11 @@ function DevPanel() {
 
   // Fetch on open + poll every 5s while open. Stops when closed.
   React.useEffect(() => {
-    if (!open) return;
+    if (!open || locked) return;
     refresh();
     const t = setInterval(refresh, 5000);
     return () => clearInterval(t);
-  }, [open, refresh]);
+  }, [open, locked, refresh]);
 
   // Ctrl+` toggles the panel — handy when iterating.
   React.useEffect(() => {
@@ -58,7 +76,18 @@ function DevPanel() {
   return (
     <>
       <DevToggleButton open={open} onClick={() => setOpen((v) => !v)} />
-      {open && (
+      {open && locked && (
+        <DevPasswordGate
+          onUnlock={(pw) => {
+            try { sessionStorage.setItem(DEVPW_KEY, pw); } catch (_) {}
+            setLocked(false);
+            setError(null);
+          }}
+          onClose={() => setOpen(false)}
+          lastError={error}
+        />
+      )}
+      {open && !locked && (
         <DevPanelBody
           status={status}
           error={error}
@@ -99,6 +128,90 @@ function DevToggleButton({ open, onClick }) {
   );
 }
 
+// Small password form shown instead of the panel body until the correct
+// DEV_PANEL_PASSWORD is supplied (verified server-side by /dev/status).
+function DevPasswordGate({ onUnlock, onClose, lastError }) {
+  const [pw, setPw] = React.useState("");
+  return (
+    <div
+      role="dialog"
+      aria-label="Developer panel password"
+      style={{
+        position: "fixed", left: 16, bottom: 68, zIndex: 9999,
+        width: 300, background: T.PLX_CARD_BG, border: `1px solid ${PLX_BORDER}`,
+        borderRadius: 12, boxShadow: "0 12px 32px rgba(0,0,0,.14)",
+        fontSize: 12, color: PLX_TEXT, padding: 14,
+      }}
+    >
+      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Dev menu 🔒</div>
+      <div style={{ color: PLX_MUTED, marginBottom: 8 }}>
+        開発者パスワードを入力してください
+      </div>
+      <input
+        type="password" autoFocus value={pw}
+        onChange={(e) => setPw(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter" && pw) onUnlock(pw); }}
+        placeholder="DEV_PANEL_PASSWORD"
+        autoComplete="off" spellCheck={false}
+        style={editorInput}
+      />
+      {lastError && String(lastError).includes("401") && (
+        <div style={{ marginTop: 6, fontSize: 11, color: PLX_RED }}>パスワードが違います</div>
+      )}
+      <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+        <button onClick={() => pw && onUnlock(pw)} disabled={!pw} style={{
+          ...primaryBtnStyle, opacity: pw ? 1 : 0.5,
+        }}>Unlock</button>
+        <button onClick={onClose} style={miniBtnStyle}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+// Tutorial controls — trigger / reset the first-run tour without creating a
+// new user, and toggle whether it auto-starts for first-time users.
+function DevTutorialControls({ onClosePanel }) {
+  const T9N = window.PLX_TUTORIAL;
+  const [tick, setTick] = React.useState(0); // re-render after flag changes
+  if (!T9N) return null;
+  const done = T9N.isDone();
+  const auto = T9N.autoStartEnabled();
+  const rowStyle = { display: "flex", alignItems: "center", gap: 8, padding: "6px 0" };
+  const pillBase = {
+    padding: "4px 10px", borderRadius: 9999, fontSize: 11, fontWeight: 700,
+    cursor: "pointer", border: `1px solid ${PLX_BORDER}`,
+    background: "transparent", color: PLX_TEXT,
+  };
+  const pillActive = { ...pillBase, background: PLX_GREEN, color: "#fff", border: `1px solid ${PLX_GREEN}` };
+  return (
+    <>
+      <div style={rowStyle}>
+        <span style={{ width: 78, color: PLX_MUTED }}>First-run</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>
+          {done ? "済 (seen)" : "未 (will fire)"}
+        </span>
+        <button
+          onClick={() => { T9N.reset(); setTick(tick + 1); }}
+          style={{ ...miniBtnStyle, marginLeft: "auto" }}
+        >フラグをリセット</button>
+      </div>
+      <div style={rowStyle}>
+        <span style={{ width: 78, color: PLX_MUTED }}>Auto-start</span>
+        <button style={auto ? pillActive : pillBase}
+          onClick={() => { T9N.setAutoStart(true); setTick(tick + 1); }}>ON</button>
+        <button style={!auto ? pillActive : pillBase}
+          onClick={() => { T9N.setAutoStart(false); setTick(tick + 1); }}>OFF</button>
+      </div>
+      <div style={{ marginTop: 6 }}>
+        <button
+          onClick={() => { onClosePanel(); T9N.start(); }}
+          style={{ ...primaryBtnStyle, width: "100%" }}
+        >▶ チュートリアルを開始</button>
+      </div>
+    </>
+  );
+}
+
 function DevPanelBody({ status, error, loading, storeId, onStoreIdChange, onRefresh, onClose }) {
   return (
     <div
@@ -123,6 +236,9 @@ function DevPanelBody({ status, error, loading, storeId, onStoreIdChange, onRefr
           <div style={{ color: PLX_MUTED, padding: "12px 0" }}>読み込み中…</div>
         )}
         {status && <DevSections status={status} />}
+        <DevSection title="Tutorial">
+          <DevTutorialControls onClosePanel={onClose} />
+        </DevSection>
         <DevStoreSwitcher storeId={storeId} onChange={onStoreIdChange} />
         <DevLinks />
       </div>
@@ -460,7 +576,7 @@ function DevEnvEditor({ ai, writeTarget }) {
     try {
       const res = await fetch("/dev/env", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: devHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(body),
       });
       if (!res.ok) {
@@ -482,7 +598,7 @@ function DevEnvEditor({ ai, writeTarget }) {
     try {
       const res = await fetch("/dev/env", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: devHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ OPENAI_API_KEY: "" }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

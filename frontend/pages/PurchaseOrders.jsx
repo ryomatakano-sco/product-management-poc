@@ -129,7 +129,7 @@ function PurchaseOrders() {
         ...btnSecondary, display: "inline-flex", alignItems: "center", gap: 6,
         opacity: exporting ? 0.6 : 1,
       }}>⬇ CSVエクスポート</button>
-      <button onClick={() => setShowCreateModal(true)} style={{
+      <button data-tour="po-create" onClick={() => setShowCreateModal(true)} style={{
         ...btnPrimary, display: "inline-flex", alignItems: "center", gap: 6,
       }}>＋ 発注書を作成</button>
     </div>
