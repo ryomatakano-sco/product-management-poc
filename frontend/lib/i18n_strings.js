@@ -1220,4 +1220,12 @@ window._PLX_DICT_EN = {
     "This pane is a mock. External integrations are production scope and do not work in the PoC.",
   "営業時間（空欄 = 休診。例: 09:00-13:00 / 14:30-18:00）": "Opening hours (blank = closed; e.g. 09:00-13:00 / 14:30-18:00)",
   "営業時間の形式が正しくありません（例: 09:00-13:00 / 14:30-18:00）": "Invalid hours format (e.g. 09:00-13:00 / 14:30-18:00)",
+  // ---- Create-form images + column sorting (2026-07-15) ----
+  "商品画像": "Product images",
+  "PNG / JPEG / WebP、4MBまで。1枚目がサムネイルになります": "PNG / JPEG / WebP, up to 4MB. The first image becomes the thumbnail",
+  "保存時に ${n} 枚アップロードされます": "${n} image(s) will upload when you save",
+  "取り消す": "Undo",
+  "クリックで並び替え": "Click to sort",
+  "ファイルサイズは 4MB 以下にしてください": "File size must be 4MB or less",
+  "画像のアップロードに失敗しました: ${f}": "Image upload failed: ${f}",
 };

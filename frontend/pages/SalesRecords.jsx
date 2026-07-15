@@ -78,7 +78,20 @@ function SalesRecords({ query, initialSaleId }) {
     [period, branchFilter, paymentFilter, staffFilter, patientFilter, searchQDeb, page, pageSize],
   );
   const summaryQ = useFetch(() => api.getSalesSummary(), []);
-  const items = salesQ.data?.items ?? [];
+  // Sales are server-paged (limit/offset) — sorting applies within the
+  // currently loaded page. Good enough at PoC scale; full-dataset sort would
+  // need a server order_by param.
+  const sSorter = usePlxSort(null);
+  const items = React.useMemo(() => sSorter.apply(salesQ.data?.items ?? [], {
+    date:    (r) => r.sold_at,
+    txn:     (r) => r.transaction_id,
+    product: (r) => r.product_name,
+    qty:     (r) => r.quantity ?? 0,
+    total:   (r) => Number(r.unit_price ?? 0) * (r.quantity ?? 0),
+    payment: (r) => r.payment_method,
+    staff:   (r) => r.sold_by,
+    patient: (r) => r.patient_ref,
+  }), [salesQ.data, sSorter.sort]);
   const totalRows = salesQ.data?.total ?? 0;
   const sum = summaryQ.data ?? {
     today_count: 0, today_revenue: "0", yesterday_count: 0, yesterday_revenue: "0",
@@ -245,14 +258,14 @@ function SalesRecords({ query, initialSaleId }) {
               <tr style={{ background: T.PLX_SURFACE_50, color: T.PLX_INK_500,
                 fontSize: 10, fontWeight: 700, textAlign: "left",
                 textTransform: "uppercase", letterSpacing: "0.02em" }}>
-                <th style={{ padding: "10px 14px" }}>日時</th>
-                <th style={{ padding: "10px 14px" }}>取引ID</th>
-                <th style={{ padding: "10px 14px" }}>商品</th>
-                <th style={{ padding: "10px 14px", textAlign: "right" }}>数量</th>
-                <th style={{ padding: "10px 14px", textAlign: "right" }}>合計 (税込)</th>
-                <th style={{ padding: "10px 14px" }}>支払方法</th>
-                <th style={{ padding: "10px 14px" }}>担当者</th>
-                <th style={{ padding: "10px 14px" }}>患者</th>
+                <th style={{ padding: "10px 14px" }}><PlxSortHeader label="日時" k="date" sort={sSorter.sort} onToggle={sSorter.toggle} /></th>
+                <th style={{ padding: "10px 14px" }}><PlxSortHeader label="取引ID" k="txn" sort={sSorter.sort} onToggle={sSorter.toggle} /></th>
+                <th style={{ padding: "10px 14px" }}><PlxSortHeader label="商品" k="product" sort={sSorter.sort} onToggle={sSorter.toggle} /></th>
+                <th style={{ padding: "10px 14px", textAlign: "right" }}><PlxSortHeader label="数量" k="qty" sort={sSorter.sort} onToggle={sSorter.toggle} /></th>
+                <th style={{ padding: "10px 14px", textAlign: "right" }}><PlxSortHeader label="合計 (税込)" k="total" sort={sSorter.sort} onToggle={sSorter.toggle} /></th>
+                <th style={{ padding: "10px 14px" }}><PlxSortHeader label="支払方法" k="payment" sort={sSorter.sort} onToggle={sSorter.toggle} /></th>
+                <th style={{ padding: "10px 14px" }}><PlxSortHeader label="担当者" k="staff" sort={sSorter.sort} onToggle={sSorter.toggle} /></th>
+                <th style={{ padding: "10px 14px" }}><PlxSortHeader label="患者" k="patient" sort={sSorter.sort} onToggle={sSorter.toggle} /></th>
                 <th style={{ padding: "10px 14px", textAlign: "right" }}>操作</th>
               </tr>
             </thead>

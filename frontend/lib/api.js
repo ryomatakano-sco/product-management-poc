@@ -95,13 +95,8 @@ const api = {
   listCategories: () => request(`/categories?limit=100`),
   listVendors:    (params) => request(`/vendors${qs({ limit: 200, ...(params || {}) })}`),
   listTags:       () => request(`/tags?limit=100`),
-  // [UNUSED-SWEEP 2026-07-15] no frontend caller — keep or wire a UI button, or drop
-  listStores:     () => request(`/stores?limit=100`),
 
   // --- variants & inventory ---
-  // [UNUSED-SWEEP 2026-07-15] no frontend caller — keep or wire a UI button, or drop
-  createVariant: (productId, body) =>
-    request(`/products/${productId}/variants`, { method: "POST", body: JSON.stringify(body) }),
   updateVariant: (variantId, body) =>
     request(`/variants/${variantId}`, { method: "PATCH", body: JSON.stringify(body) }),
   adjustInventory: (variantId, body) =>
@@ -141,8 +136,6 @@ const api = {
 
   // Categories (extended)
   getCategoryTree: () => request(`/categories/tree`),
-  // [UNUSED-SWEEP 2026-07-15] no frontend caller — keep or wire a UI button, or drop
-  getCategory:     (id) => request(`/categories/${id}`),
   createCategory:  (body) => request(`/categories`, { method: "POST", body: JSON.stringify(body) }),
   updateCategory:  (id, body) => request(`/categories/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteCategory:  (id) => request(`/categories/${id}`, { method: "DELETE" }),
@@ -228,8 +221,6 @@ const api = {
 
   // Vendors detail (already there) + sub-resources (graceful fallback)
   getVendor: (id) => request(`/vendors/${id}`),
-  // [UNUSED-SWEEP 2026-07-15] no frontend caller — keep or wire a UI button, or drop
-  deleteVendor: (id) => request(`/vendors/${id}`, { method: "DELETE" }),
   createVendor: (body) => request(`/vendors`, { method: "POST", body: JSON.stringify(body) }),
   updateVendor: (id, body) => request(`/vendors/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
 
@@ -238,8 +229,6 @@ const api = {
   getBranch:    (id) => request(`/branches/${id}`),
   createBranch: (body) => request(`/branches`, { method: "POST", body: JSON.stringify(body) }),
   updateBranch: (id, body) => request(`/branches/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-  // [UNUSED-SWEEP 2026-07-15] no frontend caller — keep or wire a UI button, or drop
-  deleteBranch: (id) => request(`/branches/${id}`, { method: "DELETE" }),
   getBranchInventorySnapshot: (id) => request(`/branches/${id}/inventory-snapshot`),
 
   // Settings (5 namespaces: general/notifications/tax_rates/ai/integrations)
@@ -272,8 +261,6 @@ const api = {
   getVersion:          () => request(`/support/version`),
 };
 
-// [UNUSED-SWEEP 2026-07-15] window.PLX_API alias is never referenced
-// Prompt 04 expects `window.PLX_API.*` — alias it to our existing `api`.
 // Same object reference so calls go through the same fetch wrapper.
 window.PLX_API = api;
 

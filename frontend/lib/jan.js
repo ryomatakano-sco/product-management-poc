@@ -48,11 +48,7 @@ function plxIsValidJan(raw) {
   return plxCleanJan(raw) !== null;
 }
 
-// [UNUSED-SWEEP 2026-07-15] plxNormalizeJan / plxValidateCheckDigit window bindings have no
-// external callers (only plxCleanJan / plxIsValidJan are used by pages).
 Object.assign(window, {
-  plxNormalizeJan,
-  plxValidateCheckDigit,
   plxCleanJan,
   plxIsValidJan,
 });

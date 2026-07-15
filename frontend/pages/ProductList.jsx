@@ -76,12 +76,26 @@ function ProductList({ initialQuery }) {
     return { low, expire, reorder };
   }, [productsQ.data]);
 
+  // Column sorting (shared usePlxSort from Atoms) — applied over the FULL
+  // filtered set, before pagination, so sorting spans all pages.
+  const sorter = usePlxSort(null);
+  const sortedItems = React.useMemo(() => sorter.apply(items, {
+    name:      (p) => p.name,
+    item_type: (p) => p.item_type,
+    category:  (p) => p.category_name,
+    vendor:    (p) => p.vendor_name,
+    sku:       (p) => p.default_sku,
+    price:     (p) => (p.default_price != null ? Number(p.default_price) : null),
+    stock:     (p) => p.total_on_hand ?? 0,
+    status:    (p) => p.status,
+  }), [items, sorter.sort]);
+
   // Client-side pagination over the filtered rows (PoC scale — one fetch).
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(25);
   React.useEffect(() => { setPage(1); },
     [searchQ, categoryFilter, vendorFilter, statusFilter, kindFilter, activeTags.join(","), quickFilters.join(","), pageSize]);
-  const pagedItems = items.slice((page - 1) * pageSize, page * pageSize);
+  const pagedItems = sortedItems.slice((page - 1) * pageSize, page * pageSize);
 
   // ── Bulk selection + actions (mockup's 一括操作 bar) ─────────────────────
   const [selected, setSelected] = React.useState([]); // product ids
@@ -310,14 +324,14 @@ function ProductList({ initialQuery }) {
         }}>
           <span><input type="checkbox" checked={pageAllSelected} onChange={toggleSelectAll}
             title="このページを全選択" style={{ accentColor: PLX_GREEN, cursor: "pointer" }} /></span>
-          <span>商品名</span>
-          <span>種別</span>
-          <span>カテゴリ</span>
-          <span>仕入先</span>
-          <span>SKU</span>
-          <span style={{ textAlign: "right" }}>価格</span>
-          <span style={{ textAlign: "right" }}>在庫</span>
-          <span style={{ textAlign: "center" }}>ステータス</span>
+          <PlxSortHeader label="商品名" k="name" sort={sorter.sort} onToggle={sorter.toggle} />
+          <PlxSortHeader label="種別" k="item_type" sort={sorter.sort} onToggle={sorter.toggle} />
+          <PlxSortHeader label="カテゴリ" k="category" sort={sorter.sort} onToggle={sorter.toggle} />
+          <PlxSortHeader label="仕入先" k="vendor" sort={sorter.sort} onToggle={sorter.toggle} />
+          <PlxSortHeader label="SKU" k="sku" sort={sorter.sort} onToggle={sorter.toggle} />
+          <PlxSortHeader label="価格" k="price" sort={sorter.sort} onToggle={sorter.toggle} style={{ textAlign: "right" }} />
+          <PlxSortHeader label="在庫" k="stock" sort={sorter.sort} onToggle={sorter.toggle} style={{ textAlign: "right" }} />
+          <PlxSortHeader label="ステータス" k="status" sort={sorter.sort} onToggle={sorter.toggle} style={{ textAlign: "center" }} />
           <span />
         </div>
 

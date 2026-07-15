@@ -62,14 +62,3 @@ def validate_check_digit(jan: str) -> bool:
     return expected == check
 
 
-# [UNUSED-SWEEP 2026-07-15] callers use normalize_jan/validate_check_digit directly
-def is_valid_jan(raw: str | None) -> bool:
-    """One-shot validity check: normalises and verifies the check digit.
-
-    Use this in router argument validation when you don't care which step
-    failed — just whether the string is a usable JAN.
-    """
-    normalised = normalize_jan(raw)
-    if normalised is None:
-        return False
-    return validate_check_digit(normalised)

@@ -51,7 +51,17 @@ function PurchaseOrders() {
   const poSummary = summaryQ.data;
 
   const allRows = posQ.data?.items ?? [];
-  const rows = allRows.slice((page - 1) * pageSize, page * pageSize);
+  const poSorter = usePlxSort(null);
+  const sortedRows = React.useMemo(() => poSorter.apply(allRows, {
+    id:       (r) => r.id,
+    supplier: (r) => r.supplier_name,
+    date:     (r) => r.ordered_at || r.created_at,
+    eta:      (r) => r.estimated_arrival,
+    lines:    (r) => (r.items?.length ?? 0),
+    total:    (r) => Number(r.total ?? 0),
+    status:   (r) => r.status,
+  }), [allRows, poSorter.sort]);
+  const rows = sortedRows.slice((page - 1) * pageSize, page * pageSize);
   const vendors = vendorsQ.data?.items ?? [];
   const branches = branchesQ.data?.items ?? [];
 
@@ -220,10 +230,13 @@ function PurchaseOrders() {
           background: T.PLX_SURFACE_50, borderBottom: `1px solid ${T.PLX_LINE_200}`,
           userSelect: "none",
         }}>
-          <span>発注番号</span><span>仕入先</span><span>発注日</span>
-          <span>納品予定日</span><span style={{ textAlign: "right" }}>品目数</span>
-          <span style={{ textAlign: "right" }}>合計（税込）</span>
-          <span style={{ textAlign: "center" }}>状態</span>
+          <PlxSortHeader label="発注番号" k="id" sort={poSorter.sort} onToggle={poSorter.toggle} />
+          <PlxSortHeader label="仕入先" k="supplier" sort={poSorter.sort} onToggle={poSorter.toggle} />
+          <PlxSortHeader label="発注日" k="date" sort={poSorter.sort} onToggle={poSorter.toggle} />
+          <PlxSortHeader label="納品予定日" k="eta" sort={poSorter.sort} onToggle={poSorter.toggle} />
+          <PlxSortHeader label="品目数" k="lines" sort={poSorter.sort} onToggle={poSorter.toggle} style={{ textAlign: "right" }} />
+          <PlxSortHeader label="合計（税込）" k="total" sort={poSorter.sort} onToggle={poSorter.toggle} style={{ textAlign: "right" }} />
+          <PlxSortHeader label="状態" k="status" sort={poSorter.sort} onToggle={poSorter.toggle} style={{ textAlign: "center" }} />
           <span />
         </div>
 

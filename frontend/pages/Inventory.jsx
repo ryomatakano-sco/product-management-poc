@@ -30,7 +30,19 @@ function Inventory({ query }) {
   );
 
   const allItems = inventoryQ.data?.items ?? [];
-  const items = allItems.slice((page - 1) * pageSize, page * pageSize);
+  // Column sorting over the full set, before the page slice.
+  const sorter = usePlxSort(null);
+  const sortedAll = React.useMemo(() => sorter.apply(allItems, {
+    product:   (r) => r.product?.name,
+    item_type: (r) => r.product?.item_type,
+    on_hand:   (r) => r.on_hand ?? 0,
+    committed: (r) => r.committed ?? 0,
+    available: (r) => r.available ?? 0,
+    expiry:    (r) => r.earliest_expiry_date,
+    adjusted:  (r) => r.last_adjusted_at,
+    status:    (r) => r.status,
+  }), [allItems, sorter.sort]);
+  const items = sortedAll.slice((page - 1) * pageSize, page * pageSize);
 
   // KPI strip — compute from the loaded rows (acceptable for PoC scale).
   const kpis = React.useMemo(() => {
@@ -179,14 +191,14 @@ function Inventory({ query }) {
           background: T.PLX_SURFACE_50, borderBottom: `1px solid ${T.PLX_LINE_200}`,
           letterSpacing: ".03em",
         }}>
-          <span>商品 / SKU</span>
-          <span>種別</span>
-          <span style={{ textAlign: "right" }}>在庫</span>
-          <span style={{ textAlign: "right" }}>引当</span>
-          <span style={{ textAlign: "right" }}>利用可能</span>
-          <span>使用期限</span>
-          <span>最終調整</span>
-          <span style={{ textAlign: "center" }}>状態</span>
+          <PlxSortHeader label="商品 / SKU" k="product" sort={sorter.sort} onToggle={sorter.toggle} />
+          <PlxSortHeader label="種別" k="item_type" sort={sorter.sort} onToggle={sorter.toggle} />
+          <PlxSortHeader label="在庫" k="on_hand" sort={sorter.sort} onToggle={sorter.toggle} style={{ textAlign: "right" }} />
+          <PlxSortHeader label="引当" k="committed" sort={sorter.sort} onToggle={sorter.toggle} style={{ textAlign: "right" }} />
+          <PlxSortHeader label="利用可能" k="available" sort={sorter.sort} onToggle={sorter.toggle} style={{ textAlign: "right" }} />
+          <PlxSortHeader label="使用期限" k="expiry" sort={sorter.sort} onToggle={sorter.toggle} />
+          <PlxSortHeader label="最終調整" k="adjusted" sort={sorter.sort} onToggle={sorter.toggle} />
+          <PlxSortHeader label="状態" k="status" sort={sorter.sort} onToggle={sorter.toggle} style={{ textAlign: "center" }} />
         </div>
 
         {inventoryQ.loading && (

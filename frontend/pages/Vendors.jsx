@@ -12,10 +12,20 @@ function Vendors() {
   const [exporting, setExporting] = React.useState(false);
   const vendorsQ = useFetch(() => api.listVendors({ limit: 200 }), []);
   const allRows = vendorsQ.data?.items ?? [];
-  const rows = q
+  const filtered = q
     ? allRows.filter((v) => v.company_name.toLowerCase().includes(q.toLowerCase())
                          || (v.contact_name || "").includes(q))
     : allRows;
+  const vSorter = usePlxSort(null);
+  const rows = React.useMemo(() => vSorter.apply(filtered, {
+    company:  (v) => v.company_name,
+    contact:  (v) => v.contact_name,
+    email:    (v) => v.email,
+    products: (v) => v.product_count ?? 0,
+    ytd:      (v) => Number(v.ytd_purchase_jpy ?? 0),
+    terms:    (v) => v.payment_terms,
+    status:   (v) => v.status,
+  }), [filtered, vSorter.sort]);
 
   async function handleExport() {
     if (exporting) return;
@@ -60,11 +70,13 @@ function Vendors() {
           padding: "12px 18px", fontSize: 11, fontWeight: 700, color: T.PLX_INK_500,
           background: T.PLX_SURFACE_50, borderBottom: `1px solid ${T.PLX_LINE_200}`,
         }}>
-          <span>会社名</span><span>担当者</span><span>メール</span>
-          <span style={{ textAlign: "right" }}>取扱商品数</span>
-          <span style={{ textAlign: "right" }}>YTD仕入額</span>
-          <span>支払条件</span>
-          <span style={{ textAlign: "center" }}>状態</span>
+          <PlxSortHeader label="会社名" k="company" sort={vSorter.sort} onToggle={vSorter.toggle} />
+          <PlxSortHeader label="担当者" k="contact" sort={vSorter.sort} onToggle={vSorter.toggle} />
+          <PlxSortHeader label="メール" k="email" sort={vSorter.sort} onToggle={vSorter.toggle} />
+          <PlxSortHeader label="取扱商品数" k="products" sort={vSorter.sort} onToggle={vSorter.toggle} style={{ textAlign: "right" }} />
+          <PlxSortHeader label="YTD仕入額" k="ytd" sort={vSorter.sort} onToggle={vSorter.toggle} style={{ textAlign: "right" }} />
+          <PlxSortHeader label="支払条件" k="terms" sort={vSorter.sort} onToggle={vSorter.toggle} />
+          <PlxSortHeader label="状態" k="status" sort={vSorter.sort} onToggle={vSorter.toggle} style={{ textAlign: "center" }} />
         </div>
 
         {vendorsQ.loading && <div style={{ padding: 40, textAlign: "center", color: T.PLX_INK_500 }}>読み込み中…</div>}

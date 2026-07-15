@@ -236,6 +236,38 @@ function ProductCreate({ editId }) {
 
   // save() is the user-facing entry point. It validates, then opens the
   // ConfirmSaveModal. The modal calls _doSave(status) to actually persist.
+  // ── 商品画像 (logic-review follow-up 2026-07-15) ─────────────────
+  // The detail page had upload/delete but this form had NO image UI at all.
+  // Pending files upload AFTER save (create needs the new product id);
+  // existing images (edit mode) delete immediately via the API.
+  const [pendingImages, setPendingImages] = React.useState([]); // File[]
+  const [existingImages, setExistingImages] = React.useState([]);
+  const imgInputRef = React.useRef(null);
+  React.useEffect(() => {
+    if (isEdit && editingQ?.data?.images) setExistingImages(editingQ.data.images);
+  }, [isEdit, editingQ?.data]);
+  const addPendingImage = (file) => {
+    if (!file) return;
+    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) {
+      window.PLX_TOAST?.warn("PNG / JPEG / WebP のみアップロードできます");
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      window.PLX_TOAST?.warn("ファイルサイズは 4MB 以下にしてください");
+      return;
+    }
+    setPendingImages((p) => [...p, file]);
+  };
+  const removeExistingImage = async (img) => {
+    try {
+      await api.deleteProductImage(editId, img.id);
+      setExistingImages((p) => p.filter((x) => x.id !== img.id));
+      window.PLX_TOAST?.success("画像を削除しました");
+    } catch (e) {
+      window.PLX_TOAST?.error(window.errText(e, "画像の削除に失敗しました"));
+    }
+  };
+
   const save = (newStatus) => {
     const errs = validate(newStatus);
     setFieldErrors(errs);
@@ -336,6 +368,13 @@ function ProductCreate({ editId }) {
         });
         resultId = created.id;
       }
+      // Upload any pending images now that we have a product id. Failures
+      // warn but don't block the save — the product itself is already stored.
+      for (const f of pendingImages) {
+        try { await api.uploadProductImage(resultId, f); }
+        catch (e) { window.PLX_TOAST?.warn?.(`画像のアップロードに失敗しました: ${f.name}`); }
+      }
+
       // After saving, take the user somewhere they can see the result.
       // Edit → back to the product detail page. Create-draft → drafts list.
       // Create-active → detail page.
@@ -725,6 +764,50 @@ function ProductCreate({ editId }) {
           )}
 
           {/* Variant */}
+          <FormSection title="商品画像" subtitle="PNG / JPEG / WebP、4MBまで。1枚目がサムネイルになります">
+            <input ref={imgInputRef} type="file" accept="image/png,image/jpeg,image/webp" style={{ display: "none" }}
+              onChange={(e) => { addPendingImage(e.target.files?.[0]); e.target.value = ""; }} />
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
+              {existingImages.map((img) => (
+                <div key={`ex-${img.id}`} style={{ position: "relative" }}>
+                  <img src={img.url} alt="" style={{
+                    width: 84, height: 84, objectFit: "cover", borderRadius: 10,
+                    border: `1px solid ${PLX_BORDER}`,
+                  }} />
+                  <button type="button" onClick={() => removeExistingImage(img)} title="この画像を削除" style={{
+                    position: "absolute", top: -7, right: -7, width: 20, height: 20,
+                    borderRadius: "50%", border: "none", background: PLX_RED, color: "#fff",
+                    fontSize: 11, lineHeight: "20px", cursor: "pointer", padding: 0,
+                  }}>×</button>
+                </div>
+              ))}
+              {pendingImages.map((f, i) => (
+                <div key={`pd-${i}`} style={{ position: "relative" }}>
+                  <img src={URL.createObjectURL(f)} alt="" style={{
+                    width: 84, height: 84, objectFit: "cover", borderRadius: 10,
+                    border: `2px dashed ${PLX_GREEN}`,
+                  }} />
+                  <button type="button" onClick={() => setPendingImages((p) => p.filter((_, j) => j !== i))}
+                    title="取り消す" style={{
+                    position: "absolute", top: -7, right: -7, width: 20, height: 20,
+                    borderRadius: "50%", border: "none", background: PLX_RED, color: "#fff",
+                    fontSize: 11, lineHeight: "20px", cursor: "pointer", padding: 0,
+                  }}>×</button>
+                </div>
+              ))}
+              <button type="button" onClick={() => imgInputRef.current?.click()} style={{
+                width: 84, height: 84, borderRadius: 10, cursor: "pointer",
+                border: `2px dashed ${PLX_BORDER}`, background: "transparent",
+                color: PLX_MUTED, fontSize: 11, fontWeight: 700,
+              }}>＋ 画像を追加</button>
+            </div>
+            {pendingImages.length > 0 && (
+              <div style={{ fontSize: 11, color: PLX_MUTED, marginTop: 8 }}>
+                {`保存時に ${pendingImages.length} 枚アップロードされます`}
+              </div>
+            )}
+          </FormSection>
+
           <FormSection title="バリアント" subtitle="SKU・価格・初期在庫">
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
               <FormRow label="SKU">

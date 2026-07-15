@@ -705,3 +705,28 @@ Branch: `feature/sales-records`
 - backend ai_suggestions.py: `POST /ai-suggestions/debug`（curl 専用開発エンドポイント）、`PATCH …/options/{id}`（フロント未使用 — 削除候補）
 - backend services: `ai_agent.clear_lookup_cache` / `ai_pricing.resolve_model_rates` / `jan.is_valid_jan`（呼び出し元なし）
 - ページ・コンポーネントファイルは全て index.html から読込済み（孤児ファイルなし）。バックエンドの他エンドポイントは全てフロントから使用。
+
+
+## 商品フォームの画像・全表の並び替え・デモデータ完備・不要コード削除（2026-07-15）
+
+**商品作成/編集フォームに画像機能**（ユーザー指摘: 詳細ページにはあるのに new になかった）
+- 「商品画像」セクション: PNG/JPEG/WebP ≤4MB、複数可、1枚目がサムネイル。新規作成では**保存時にまとめてアップロード**（商品IDが必要なため）、編集では既存画像の表示・即時削除 + 追加分は保存時。アップロード失敗は警告のみで保存自体は成功扱い。
+
+**全リストページに列ソート**（クリックで ▲/▼ 切替、共有 `usePlxSort`/`PlxSortHeader` を Atoms に追加）
+- 商品一覧（名前/種別/カテゴリ/仕入先/SKU/価格/在庫/ステータス）・在庫（全8列）・発注書（全7列）・仕入先（全7列）はフィルタ後の**全件**に適用してからページ分割。
+- 販売記録（全8列）はサーバーページングのため**表示中ページ内**のソート（注記コメント済み — 全件ソートは order_by パラメータの本番課題）。
+- 数値は数値比較・文字列は日本語ロケール比較・null は末尾。
+
+**デモデータ完備** — 全状態に代表データが存在することを確認・補充（現DB）:
+- PO: draft / **ordered（PO-11: ETA・追跡番号付き）** / **partially_received（PO-12: ロット LOT-2026-072 + 期限捕捉）** / received / cancelled ＋ 未入荷金額 ¥16,440
+- 販売: 現金・**カード・PayPay**・銀行振込 / **患者紐付け（P-10422）** / 返品（理由付き）
+- **承認待ち1件**（スタッフ発・破損 -2）→ ベル通知も発火
+- カテゴリ英語名 5件 / サブカテゴリ 12件 / 再発注済フラグ 1件 / 拠点営業時間 両拠点 / ロット・PO コメント・商品画像あり
+- ※ `scriptseset-db.bat` は基本データのみ再生成 — 上記の状態データは seed 未収載（既知のフォローアップ）。
+
+**不要コード削除**（前回マーキング分を実削除）
+- frontend: `api.listStores` / `createVariant` / `getCategory` / `deleteVendor` / `deleteBranch`、`window.PLX_API`、jan.js の未使用 window バインディング2件
+- backend: `POST /ai-suggestions/debug`・`PATCH …/options/{id}` エンドポイント、孤児化した `AiSuggestionDebug` スキーマ、`clear_lookup_cache` / `resolve_model_rates` / `is_valid_jan`
+- ※ vendors/branches の DELETE エンドポイント自体は REST API 面として存続（UI ボタンは未実装のまま）。
+
+**dev.bat と dev-https.bat** — どちらも必要（削除しない）: dev.bat が通常の HTTP 開発用、dev-https.bat は**スマホカメラでのバーコードスキャン専用**（モバイルブラウザは HTTPS でないとカメラを起動しない）。用途が違う2本です。

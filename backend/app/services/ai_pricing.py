@@ -37,20 +37,6 @@ def _normalize_model_id(model: str) -> str:
     return re.sub(r"\s+", "", model.strip().lower())
 
 
-# [UNUSED-SWEEP 2026-07-15] module is used, but this function has no callers
-def resolve_model_rates(model: str) -> tuple[float, float, bool]:
-    """Return (input_per_1m_usd, output_per_1m_usd, pricing_known)."""
-    m = _normalize_model_id(model)
-    if m in _MODEL_PRICING_USD:
-        inp, out = _MODEL_PRICING_USD[m]
-        return inp, out, True
-    for key in sorted(_MODEL_PRICING_USD, key=len, reverse=True):
-        if m == key or m.startswith(f"{key}-"):
-            inp, out = _MODEL_PRICING_USD[key]
-            return inp, out, True
-    return 0.0, 0.0, False
-
-
 def estimate_token_cost_usd(
     model: str,
     *,

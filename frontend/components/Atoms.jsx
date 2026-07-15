@@ -165,8 +165,50 @@ const btnGhost = {
   fontWeight: 700, fontSize: 13, cursor: "pointer",
 };
 
+// ── Column sorting (logic-review follow-up 2026-07-15) ─────────────
+// Shared by every list page: usePlxSort holds {key, dir}; apply() sorts a
+// row array with per-key accessor functions (numbers numeric, strings via
+// ja-aware localeCompare, nulls last). PlxSortHeader renders a clickable
+// header cell with an ▲/▼ indicator.
+function usePlxSort(defaultKey, defaultDir) {
+  const [sort, setSort] = React.useState({ key: defaultKey || null, dir: defaultDir || "asc" });
+  const toggle = (key) => setSort((s) =>
+    s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" });
+  const apply = (rows, accessors) => {
+    if (!sort.key || !accessors[sort.key]) return rows;
+    const acc = accessors[sort.key];
+    const mul = sort.dir === "asc" ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      const va = acc(a), vb = acc(b);
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      if (typeof va === "number" && typeof vb === "number") return (va - vb) * mul;
+      return String(va).localeCompare(String(vb), "ja") * mul;
+    });
+  };
+  return { sort, toggle, apply };
+}
+
+function PlxSortHeader({ label, k, sort, onToggle, style }) {
+  const active = sort.key === k;
+  return (
+    <span
+      onClick={() => onToggle(k)}
+      title="クリックで並び替え"
+      style={{
+        cursor: "pointer", userSelect: "none",
+        color: active ? T.PLX_GREEN_700 : undefined,
+        ...style,
+      }}
+    >
+      {label}{active ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}
+    </span>
+  );
+}
+
 Object.assign(window, {
   SectionLabel, Pill, StatusPill, Select, SegmentedControl,
   FormRow, formInput, btnPrimary, btnSecondary, btnGhost,
-  ProductThumb,
+  ProductThumb, usePlxSort, PlxSortHeader,
 });

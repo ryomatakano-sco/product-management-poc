@@ -95,26 +95,6 @@ class AiDebugDropped(BaseModel):
     reason: str  # e.g. "missing source_url for strict-citation field"
 
 
-class AiSuggestionDebug(BaseModel):
-    """Response for POST /ai-suggestions/debug. Nothing persisted to DB."""
-
-    model_used: str
-    found: bool
-    raw_search_notes: str | None
-    candidates: list[AiDebugCandidate]
-    dropped_candidates: list[AiDebugDropped]
-    strict_citation_fields: list[str]
-    error_message: str | None = None
-
-
-# ---------------------------------------------------------------------------
-# Model arena (dev-only): POST /ai-suggestions/compare
-# Runs the same lookup against N models in parallel and returns side-by-side
-# results so we can A/B which model produces the best recall/quality for a
-# given JAN. Used by the DevPanel "🧪 AI モデル比較" tool. Not user-facing.
-# ---------------------------------------------------------------------------
-
-
 class AiSuggestionCompareRequest(BaseModel):
     jan: str | None = None
     title: str | None = None
@@ -138,7 +118,7 @@ class AiCompareStepCost(BaseModel):
 
 
 class AiSuggestionCompareResult(BaseModel):
-    """One model's lookup result. Mirrors AiSuggestionDebug per-model so the
+    """One model's lookup result. One-model mirror of the removed /debug shape so the
     frontend can reuse the same column renderer."""
 
     model: str
