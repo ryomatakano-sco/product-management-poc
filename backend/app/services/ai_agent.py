@@ -266,6 +266,7 @@ def _cache_key(
     return (jan, title, model, extraction_model, allow_fallback)
 
 
+# [UNUSED-SWEEP 2026-07-15] never wired to any endpoint or script
 def clear_lookup_cache() -> None:
     """Drop all cached lookups. Exposed for tests and manual cache busting."""
     _LOOKUP_CACHE.clear()

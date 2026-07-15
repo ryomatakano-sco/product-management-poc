@@ -65,7 +65,7 @@ const PLX_TOUR_STEPS = [
   {
     key: "nav", route: "/dashboard", target: "nav",
     title: "サイドバー",
-    body: "MAIN（ダッシュボード・商品・カテゴリ）、OPERATIONS（在庫・発注書・販売記録）、MASTER（仕入先・院/店舗）の3グループで移動します。",
+    body: "MAIN（ダッシュボード・商品）、OPERATIONS（在庫・発注書・販売記録）、MASTER（カテゴリ・仕入先・院/店舗）の3グループで移動します。",
   },
   {
     key: "search", route: "/dashboard", target: "global-search",

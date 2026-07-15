@@ -37,6 +37,7 @@ def _normalize_model_id(model: str) -> str:
     return re.sub(r"\s+", "", model.strip().lower())
 
 
+# [UNUSED-SWEEP 2026-07-15] module is used, but this function has no callers
 def resolve_model_rates(model: str) -> tuple[float, float, bool]:
     """Return (input_per_1m_usd, output_per_1m_usd, pricing_known)."""
     m = _normalize_model_id(model)

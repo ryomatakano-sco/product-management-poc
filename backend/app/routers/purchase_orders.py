@@ -306,6 +306,21 @@ async def purchase_orders_summary(db: DB, store_id: StoreId):
     )).all()
     by_status = {s.value if hasattr(s, "value") else str(s): c for s, c in status_rows}
 
+    # 未入荷金額 — value of goods ordered but not yet received across open POs
+    # (ordered + partially_received): Σ (qty_ordered − qty_received) × unit_cost.
+    # Money tied up in transit — replaces the redundant 一部入荷 KPI tile.
+    outstanding = (await db.execute(
+        select(func.coalesce(func.sum(
+            (PurchaseOrderItem.quantity_ordered - PurchaseOrderItem.quantity_received)
+            * PurchaseOrderItem.unit_cost
+        ), 0))
+        .join(PurchaseOrder, PurchaseOrder.id == PurchaseOrderItem.purchase_order_id)
+        .where(
+            PurchaseOrder.store_id == store_id,
+            PurchaseOrder.status.in_([POStatus.ordered, POStatus.partially_received]),
+        )
+    )).scalar_one()
+
     return {
         "month_count": month_count or 0,
         "month_total": str(month_total or 0),
@@ -313,6 +328,7 @@ async def purchase_orders_summary(db: DB, store_id: StoreId):
         "last_month_total": str(last_month_total or 0),
         "ordered_count": by_status.get("ordered", 0),
         "partially_received_count": by_status.get("partially_received", 0),
+        "outstanding_value": str(outstanding or 0),
     }
 
 

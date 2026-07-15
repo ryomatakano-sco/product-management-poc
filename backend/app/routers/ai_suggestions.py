@@ -275,6 +275,7 @@ async def get_ai_suggestion(session_id: int, db: DB, store_id: StoreId):
     return _session_to_read(session)
 
 
+# [UNUSED-SWEEP 2026-07-15] no frontend caller — option apply happens client-side; candidate to remove
 @router.patch("/{session_id}/options/{option_id}", response_model=AiFieldOptionRead)
 async def apply_option(session_id: int, option_id: int, body: AiOptionApply, db: DB, store_id: StoreId):
     """Mark an AI suggestion option as applied (or un-applied)."""
@@ -313,6 +314,7 @@ async def apply_option(session_id: int, option_id: int, body: AiOptionApply, db:
     )
 
 
+# [UNUSED-SWEEP 2026-07-15] dev/curl-only endpoint — no frontend caller (AiArena uses /compare)
 @router.post("/debug", response_model=AiSuggestionDebug)
 async def debug_ai_suggestion(body: AiSuggestionRequest):
     """Read-only inspection of the AI pipeline.

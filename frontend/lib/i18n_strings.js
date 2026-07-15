@@ -1170,8 +1170,8 @@ window._PLX_DICT_EN = {
   "歯科クリニックの商品・在庫・発注・販売をひとつで管理できます。主要な機能を約1分でご案内します（いつでもスキップできます）。":
     "Manage your clinic's products, stock, purchase orders and sales in one place. This one-minute tour shows the essentials (you can skip anytime).",
   "サイドバー": "Sidebar",
-  "MAIN（ダッシュボード・商品・カテゴリ）、OPERATIONS（在庫・発注書・販売記録）、MASTER（仕入先・院/店舗）の3グループで移動します。":
-    "Navigate via three groups: MAIN (dashboard, products, categories), OPERATIONS (stock, purchase orders, sales) and MASTER (vendors, branches).",
+  "MAIN（ダッシュボード・商品）、OPERATIONS（在庫・発注書・販売記録）、MASTER（カテゴリ・仕入先・院/店舗）の3グループで移動します。":
+    "Navigate via three groups: MAIN (dashboard, products), OPERATIONS (stock, purchase orders, sales) and MASTER (categories, vendors, branches).",
   "商品名・SKU・JAN・仕入先をまとめて検索できます。キーボードの Ctrl+K でも開けます。":
     "Search products, SKUs, JAN codes and vendors in one box. Ctrl+K opens it from anywhere.",
   "在庫低下・使用期限・発注書の状態変化・承認リクエストがここに届きます。":
@@ -1208,4 +1208,16 @@ window._PLX_DICT_EN = {
   "再発注済にできませんでした": "Could not mark as reordered",
   "公開時にお知らせします": "We'll let you know when it ships",
   "入力を確認してください": "Check your input",
+
+  // ---- Logic-review fixes (2026-07-15) ----
+  "親カテゴリ": "Parent category",
+  "なし（トップレベル）": "None (top level)",
+  "自分自身を親カテゴリにはできません": "A category cannot be its own parent",
+  "循環する親子関係は設定できません": "That would create a circular parent chain",
+  "未入荷金額": "Outstanding value",
+  "発注残": "On order",
+  "この画面はモック表示です。外部サービス連携は本番実装のスコープで、PoC では動作しません。":
+    "This pane is a mock. External integrations are production scope and do not work in the PoC.",
+  "営業時間（空欄 = 休診。例: 09:00-13:00 / 14:30-18:00）": "Opening hours (blank = closed; e.g. 09:00-13:00 / 14:30-18:00)",
+  "営業時間の形式が正しくありません（例: 09:00-13:00 / 14:30-18:00）": "Invalid hours format (e.g. 09:00-13:00 / 14:30-18:00)",
 };

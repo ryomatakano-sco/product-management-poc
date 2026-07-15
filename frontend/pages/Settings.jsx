@@ -3,15 +3,18 @@
 // The AI namespace masks the API key — even when typed, it's only sent on save
 // and the GET response only carries `openai_api_key_set: bool`.
 
+// Order: admin-critical config first (users right after 一般 — it also hosts
+// the 監査ログ), personal preferences (外観・言語) later, and 統合 last since
+// its content is still mock (logic review 2026-07-15).
 const SETTINGS_SECTIONS = [
   { id: "general",       label: "一般",          icon: "settings" },
-  { id: "appearance",    label: "外観・言語",    icon: "palette" },
+  { id: "users",         label: "ユーザー管理",  icon: "users" },
   { id: "notifications", label: "通知",          icon: "bell" },
   { id: "tax_rates",     label: "税率",          icon: "calc" },
   { id: "ai",            label: "AI設定",        icon: "sparkles" },
-  { id: "integrations",  label: "統合",          icon: "link" },
-  { id: "users",         label: "ユーザー管理",  icon: "users" },
+  { id: "appearance",    label: "外観・言語",    icon: "palette" },
   { id: "api",           label: "API・Webhooks", icon: "key" },
+  { id: "integrations",  label: "統合",          icon: "link" },
 ];
 
 function Settings({ query }) {
@@ -455,6 +458,13 @@ function IntegrationsSettings() {
   if (f.loading) return <SettingsCard title="統合"><div style={{ color: T.PLX_INK_500 }}>読み込み中…</div></SettingsCard>;
   return (
     <SettingsCard title="統合">
+      <div style={{
+        padding: "9px 14px", borderRadius: T.RADIUS_MD, marginBottom: 14,
+        background: T.PLX_AMBER_100, border: `1px solid ${T.PLX_AMBER_300 || "#fcd34d"}`,
+        color: T.PLX_AMBER_700 || "#b45309", fontSize: 12, lineHeight: 1.6,
+      }}>
+        {"この画面はモック表示です。外部サービス連携は本番実装のスコープで、PoC では動作しません。"}
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 14 }}>
         <IntegrationTile name="paylight X SSO"
           connected={!!f.form.paylight_x_sso?.connected} />

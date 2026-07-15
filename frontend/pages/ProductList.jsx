@@ -55,7 +55,7 @@ function ProductList({ initialQuery }) {
   const items = React.useMemo(() => {
     const list = productsQ.data?.items ?? [];
     if (!quickFilters.includes("low")) return list;
-    return list.filter((p) => (p.total_available ?? 0) <= 10);
+    return list.filter((p) => (p.total_available ?? 0) <= (p.default_low_stock_threshold ?? 10));
   }, [productsQ.data, quickFilters]);
 
   const total = productsQ.data?.total ?? 0;
@@ -64,7 +64,7 @@ function ProductList({ initialQuery }) {
   // the same rules the chips filter by, computed over the fetched rows.
   const chipCounts = React.useMemo(() => {
     const list = productsQ.data?.items ?? [];
-    const low = list.filter((p) => (p.total_available ?? 0) <= 10).length;
+    const low = list.filter((p) => (p.total_available ?? 0) <= (p.default_low_stock_threshold ?? 10)).length;
     const expire = list.filter((p) => {
       const d = daysUntil(p.expiry_date);
       // 0 <= d: already-expired items are NOT "expiring soon" (they get the

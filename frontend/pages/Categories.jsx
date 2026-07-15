@@ -19,13 +19,16 @@ function Categories() {
   const tree = treeQ.data ?? [];
   const flatMap = React.useMemo(() => {
     const out = {};
-    const walk = (nodes) => {
+    // Stamp parent_id while walking — the tree API doesn't include it, but
+    // the edit form's 親カテゴリ picker needs the current parent.
+    const walk = (nodes, parentId) => {
       for (const n of nodes) {
+        n.parent_id = parentId ?? null;
         out[n.id] = n;
-        if (n.children?.length) walk(n.children);
+        if (n.children?.length) walk(n.children, n.id);
       }
     };
-    walk(tree);
+    walk(tree, null);
     return out;
   }, [tree]);
   const selected = selectedId != null ? flatMap[selectedId] : null;
@@ -277,6 +280,17 @@ function appliesLabel(v) {
 function CategoryFormModal({ editing, allCategories, onClose, onSaved }) {
   const [name, setName] = React.useState(editing?.name || "");
   const [nameEn, setNameEn] = React.useState(editing?.name_en || "");
+  const [parentId, setParentId] = React.useState(editing?.parent_id != null ? String(editing.parent_id) : "");
+  // Parent options exclude self and all descendants (would create a cycle).
+  const forbidden = React.useMemo(() => {
+    const ids = new Set();
+    if (editing) {
+      const walk = (n) => { ids.add(n.id); (n.children || []).forEach(walk); };
+      walk(editing);
+    }
+    return ids;
+  }, [editing]);
+  const parentOptions = (allCategories || []).filter((c) => !forbidden.has(c.id));
   const [appliesTo, setAppliesTo] = React.useState(editing?.applies_to || "both");
   const [colorHex, setColorHex] = React.useState(editing?.color_hex || "#16A36C");
   const [iconName, setIconName] = React.useState(editing?.icon_name || "");
@@ -293,6 +307,7 @@ function CategoryFormModal({ editing, allCategories, onClose, onSaved }) {
     try {
       const body = {
         name, name_en: nameEn.trim() || null,
+        parent_id: parentId ? Number(parentId) : null,
         applies_to: appliesTo, color_hex: colorHex, icon_name: iconName || null,
         sort_order: Number(sortOrder) || 0,
         description: description || null,
@@ -322,6 +337,14 @@ function CategoryFormModal({ editing, allCategories, onClose, onSaved }) {
       <FormRow label="英語名（任意）">
         <input value={nameEn} onChange={(e) => setNameEn(e.target.value)} style={formInput}
           placeholder="e.g. Toothbrush — EN表示時に使用、未設定なら日本語名を表示" />
+      </FormRow>
+      <FormRow label="親カテゴリ">
+        <select value={parentId} onChange={(e) => setParentId(e.target.value)} style={formInput}>
+          <option value="">なし（トップレベル）</option>
+          {parentOptions.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
       </FormRow>
       <FormRow label="種別">
         <SegmentedControl value={appliesTo} onChange={setAppliesTo} options={[

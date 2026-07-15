@@ -130,11 +130,49 @@ function BranchFormModal({ editing, onClose, onSaved }) {
     default_tax_rate: parseFloat(editing?.default_tax_rate ?? 10),
     status: editing?.status || "active",
   });
+  // 営業時間 — editable text per day ("09:00-13:00 / 14:30-18:00", blank =
+  // 休診), parsed back into the {day: [{open, close}]} JSON shape on save.
+  // The detail card displayed these hours but the form couldn't edit them
+  // (logic review 2026-07-15).
+  const HOUR_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+  const [hours, setHours] = React.useState(() => {
+    const src = editing?.operating_hours_json || {};
+    const out = {};
+    for (const d of HOUR_DAYS) {
+      const slots = src[d];
+      out[d] = Array.isArray(slots) && slots.length
+        ? slots.map((sl) => `${sl.open}-${sl.close}`).join(" / ")
+        : "";
+    }
+    return out;
+  });
+  const parseHours = () => {
+    const out = {};
+    let any = false;
+    for (const d of HOUR_DAYS) {
+      const txt = (hours[d] || "").trim();
+      if (!txt) { out[d] = []; continue; }
+      const slots = [];
+      for (const part of txt.split("/")) {
+        const m = part.trim().match(/^(\d{1,2}:\d{2})\s*[-–〜]\s*(\d{1,2}:\d{2})$/);
+        if (!m) return { error: d };
+        slots.push({ open: m[1], close: m[2] });
+      }
+      out[d] = slots;
+      any = true;
+    }
+    return { value: any ? out : null };
+  };
   const [saving, setSaving] = React.useState(false);
   const update = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
   const submit = async () => {
     if (!form.name.trim()) { window.PLX_TOAST.warn("拠点名を入力してください"); return; }
+    const parsed = parseHours();
+    if (parsed.error) {
+      window.PLX_TOAST.warn("営業時間の形式が正しくありません（例: 09:00-13:00 / 14:30-18:00）");
+      return;
+    }
     setSaving(true);
     try {
       const body = {
@@ -151,6 +189,7 @@ function BranchFormModal({ editing, onClose, onSaved }) {
         default_tax_rate: Number.isFinite(Number(form.default_tax_rate)) && String(form.default_tax_rate).trim() !== ""
           ? Number(form.default_tax_rate) : 10,
         status: form.status,
+        operating_hours_json: parsed.value,
       };
       const b = editing
         ? await api.updateBranch(editing.id, body)
@@ -205,6 +244,19 @@ function BranchFormModal({ editing, onClose, onSaved }) {
           <input type="number" min={0} step="0.01" value={form.default_tax_rate}
             onChange={(e) => update("default_tax_rate", e.target.value)} style={formInput} />
         </FormRow>
+      </div>
+      <div style={{ marginTop: 4 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: T.PLX_INK_700, marginBottom: 6 }}>
+          {"営業時間（空欄 = 休診。例: 09:00-13:00 / 14:30-18:00）"}
+        </div>
+        {HOUR_DAYS.map((d) => (
+          <div key={d} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <span style={{ width: 26, fontSize: 12, color: T.PLX_INK_500, flexShrink: 0 }}>{dayJp(d)}</span>
+            <input value={hours[d]} onChange={(e) => setHours((p) => ({ ...p, [d]: e.target.value }))}
+              placeholder="09:00-13:00 / 14:30-18:00"
+              style={{ ...formInput, fontFamily: T.FONT_MONO, fontSize: 12 }} />
+          </div>
+        ))}
       </div>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16 }}>
         <button onClick={onClose} style={btnSecondary}>キャンセル</button>
@@ -298,7 +350,10 @@ function BranchDetail({ id }) {
 }
 
 function dayJp(d) {
-  return { mon: "月", tue: "火", wed: "水", thu: "木", fri: "金", sat: "土", sun: "日", holiday: "祝" }[d] || d;
+  const en = (window.PLX_I18N?.get?.() || "ja") === "en";
+  const ja = { mon: "月", tue: "火", wed: "水", thu: "木", fri: "金", sat: "土", sun: "日", holiday: "祝" };
+  const enMap = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun", holiday: "Hol" };
+  return (en ? enMap : ja)[d] || d;
 }
 
 window.Branches = Branches;

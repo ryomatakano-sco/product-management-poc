@@ -34,7 +34,6 @@ function PlxSidebar({ current }) {
       items: [
         { id: "dashboard",  label: "ダッシュボード", icon: "dashboard", to: "/dashboard" },
         { id: "products",   label: "商品",           icon: "package",   to: "/products" },
-        { id: "categories", label: "カテゴリ",       icon: "tags",      to: "/categories" },
       ],
     },
     {
@@ -48,8 +47,12 @@ function PlxSidebar({ current }) {
     {
       label: "マスタ",
       items: [
-        { id: "vendors",  label: "仕入先",   icon: "truck", to: "/vendors" },
-        { id: "branches", label: "院・店舗", icon: "bldg",  to: "/branches" },
+        // カテゴリ is master data (set up once, rarely touched) — it lives
+        // with 仕入先/院・店舗, not in the daily-use メイン group (logic
+        // review 2026-07-15).
+        { id: "categories", label: "カテゴリ", icon: "tags",  to: "/categories" },
+        { id: "vendors",    label: "仕入先",   icon: "truck", to: "/vendors" },
+        { id: "branches",   label: "院・店舗", icon: "bldg",  to: "/branches" },
       ],
     },
     {

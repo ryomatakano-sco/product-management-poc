@@ -155,10 +155,9 @@ function PurchaseOrders() {
           value={`${poSummary ? poSummary.ordered_count : kpis.sent}件`}
           badge="送信済み" badgeTone="blue"
           tone={(poSummary ? poSummary.ordered_count : kpis.sent) > 0 ? "amber" : "muted"} />
-        <POKpiCard label="一部入荷"
-          value={`${poSummary ? poSummary.partially_received_count : kpis.partial}件`}
-          badge="確認推奨" badgeTone="amber"
-          tone={(poSummary ? poSummary.partially_received_count : kpis.partial) > 0 ? "amber" : "muted"} />
+        <POKpiCard label="未入荷金額"
+          value={`¥${formatYen(poSummary ? poSummary.outstanding_value : 0)}`}
+          badge="発注残" badgeTone={Number(poSummary?.outstanding_value ?? 0) > 0 ? "amber" : "green"} />
       </div>
 
       {/* Search + filters */}

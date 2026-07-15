@@ -68,14 +68,17 @@ async def get_dashboard_summary(db: DB, store_id: StoreId) -> dict:
         )
     )).scalar_one()
 
-    # ── KPI 2: low_stock (any variant <= 10 available) ──
+    # ── KPI 2: low_stock — any variant at/below ITS OWN threshold ──
+    # Single source of truth with the notifier / auto-draft / inventory page
+    # (was a hardcoded 10, which disagreed with per-variant thresholds).
     low_stock = (await db.execute(
         select(func.count(func.distinct(Product.id)))
         .join(ProductVariant, ProductVariant.product_id == Product.id)
         .where(
             Product.store_id == store_id,
             Product.status == ProductStatus.active,
-            (ProductVariant.on_hand - ProductVariant.committed - ProductVariant.unavailable) <= 10,
+            (ProductVariant.on_hand - ProductVariant.committed - ProductVariant.unavailable)
+                <= func.coalesce(ProductVariant.low_stock_threshold, 10),
         )
     )).scalar_one()
 
@@ -137,7 +140,12 @@ async def get_dashboard_summary(db: DB, store_id: StoreId) -> dict:
         days_left = None
         if p.expiry_date:
             days_left = (p.expiry_date - today).days
-        if avail <= 10:
+        variant_low = any(
+            (v.on_hand - v.committed - v.unavailable)
+                <= (v.low_stock_threshold if v.low_stock_threshold is not None else 10)
+            for v in p.variants
+        )
+        if variant_low:
             status = "low_stock"
         elif days_left is not None and 0 <= days_left <= 30:
             status = "expiring_soon"
@@ -168,7 +176,7 @@ async def get_dashboard_summary(db: DB, store_id: StoreId) -> dict:
     for adj, _v, prod in recent_adjustments:
         sign = "+" if adj.delta > 0 else ""
         recent_activity.append({
-            "actor": "システム",
+            "actor": adj.created_by or "システム",
             "text": f"{prod.name} の在庫を {sign}{adj.delta} 件調整",
             "occurred_at": (
                 adj.created_at.isoformat()

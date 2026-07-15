@@ -234,7 +234,8 @@ async def list_products(
         stmt.with_only_columns(Product.id).subquery()
     )
     total = (await db.execute(count_q)).scalar_one()
-    rows = (await db.execute(stmt.order_by(Product.id).offset(offset).limit(limit))).unique().all()
+    # Newest first — a just-registered product must appear on page 1, not last.
+    rows = (await db.execute(stmt.order_by(Product.id.desc()).offset(offset).limit(limit))).unique().all()
     items: list[ProductListItem] = []
     for row in rows:
         # Each row is a (Product, match_reasons_str_or_None) tuple.

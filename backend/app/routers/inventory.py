@@ -87,9 +87,14 @@ async def _build_inventory_rows(
         unavailable = sum(t[2] for t in triples)
         available = on_hand - committed - unavailable
         is_expiring = bool(p.expiry_date and today <= p.expiry_date <= in_30)
+        variant_low = any(
+            (t[0] - t[1] - t[2])
+                <= (v.low_stock_threshold if v.low_stock_threshold is not None else 10)
+            for v, t in zip(p.variants, triples)
+        )
         if on_hand == 0:
             status = "out_of_stock"
-        elif available <= 10:
+        elif variant_low:
             status = "low_stock"
         elif is_expiring:
             status = "expiring_soon"

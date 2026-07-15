@@ -190,7 +190,26 @@ async def update_category(category_id: int, body: CategoryUpdate, db: DB, store_
     )).scalar_one_or_none()
     if not cat:
         raise HTTPException(404, detail={"detail": "カテゴリが見つかりません", "code": "RESOURCE_NOT_FOUND"})
-    for key, val in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    # parent_id guard: no self-parenting and no cycles (walking up from the
+    # proposed parent must never reach this category).
+    if data.get("parent_id") is not None:
+        new_parent = data["parent_id"]
+        if new_parent == category_id:
+            raise HTTPException(400, detail="自分自身を親カテゴリにはできません")
+        seen = set()
+        cursor = new_parent
+        while cursor is not None and cursor not in seen:
+            seen.add(cursor)
+            if cursor == category_id:
+                raise HTTPException(400, detail="循環する親子関係は設定できません")
+            row = (await db.execute(
+                select(Category.parent_id).where(
+                    Category.id == cursor, Category.store_id == store_id
+                )
+            )).scalar_one_or_none()
+            cursor = row
+    for key, val in data.items():
         setattr(cat, key, val)
     await db.commit()
     await db.refresh(cat)
