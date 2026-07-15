@@ -1228,4 +1228,15 @@ window._PLX_DICT_EN = {
   "クリックで並び替え": "Click to sort",
   "ファイルサイズは 4MB 以下にしてください": "File size must be 4MB or less",
   "画像のアップロードに失敗しました: ${f}": "Image upload failed: ${f}",
+  // ---- Warehouse-review fixes (2026-07-15) ----
+  "入荷予定（7日以内）": "Arriving (next 7 days)",
+  "遅延 ${n} 件": "${n} overdue",
+  "遅延": "Overdue",
+  "滞留在庫（60日以上販売なし）": "Dead stock (no sales in 60+ days)",
+  "滞留している在庫はありません 🎉": "No dead stock 🎉",
+  "在庫金額": "Stock value",
+  "最終販売": "Last sold",
+  "販売実績なし": "Never sold",
+  "在庫一覧 →": "Inventory →",
+  "PNG / JPEG / WebP のみアップロードできます": "Only PNG / JPEG / WebP can be uploaded",
 };

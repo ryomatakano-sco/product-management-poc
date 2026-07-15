@@ -261,7 +261,18 @@ function PurchaseOrders() {
             </span>
             <span>{po.supplier_name || "—"}</span>
             <span style={{ fontSize: 11, color: T.PLX_INK_600 }}>{po.ordered_at ? formatJpDate(po.ordered_at) : formatJpDate(po.created_at)}</span>
-            <span style={{ fontSize: 11 }}>{po.estimated_arrival ? formatJpDate(po.estimated_arrival) : "—"}</span>
+            <span style={{ fontSize: 11, display: "inline-flex", alignItems: "center", gap: 6 }}>
+              {po.estimated_arrival ? formatJpDate(po.estimated_arrival) : "—"}
+              {/* 遅延 = past ETA and still not fully received (warehouse review) */}
+              {po.estimated_arrival
+                && ["ordered", "partially_received"].includes(po.status)
+                && po.estimated_arrival < new Date().toISOString().slice(0, 10) && (
+                <span style={{
+                  fontSize: 9, fontWeight: 700, color: T.PLX_RED_600,
+                  background: T.PLX_RED_100, padding: "1px 7px", borderRadius: 9999,
+                }}>遅延</span>
+              )}
+            </span>
             <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{po.items?.length ?? 0}</span>
             <span style={{ textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>¥{formatYen(po.total)}</span>
             <span style={{ textAlign: "center" }}><POStatusPill status={po.status} /></span>

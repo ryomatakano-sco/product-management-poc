@@ -106,7 +106,7 @@ def _build_product_search(q: str):
     return filter_clause, reasons
 
 
-def _build_list_item(p: Product, match_reasons: list[str] | None = None) -> ProductListItem:
+def _build_list_item(p: Product, match_reasons: list[str] | None = None, effective_expiry: 'date | None' = None) -> ProductListItem:
     """Transform a loaded Product ORM object into a ProductListItem.
 
     Computes ``total_available`` (across all variants) and surfaces
@@ -149,7 +149,9 @@ def _build_list_item(p: Product, match_reasons: list[str] | None = None) -> Prod
         default_amount_at_payment=p.default_amount_at_payment,
         # Yoshioka 2026-05-11 additions
         item_type=p.item_type,
-        expiry_date=p.expiry_date,
+        # Effective expiry (earliest active lot, fallback manual) drives the
+        # 期限間近 chip/badge — see services/expiry.py.
+        expiry_date=(effective_expiry or p.expiry_date),
         has_reorder_url=bool(p.reorder_url),
         reorder_requested_at=p.reorder_requested_at,
         match_reasons=match_reasons or [],
@@ -210,13 +212,15 @@ async def list_products(
     if item_type is not None:
         stmt = stmt.where(Product.item_type == item_type)
     if expiring_within_days is not None:
+        from app.services.expiry import effective_expiry_expr
         cutoff = date.today() + timedelta(days=expiring_within_days)
+        eff = effective_expiry_expr()
         # Lower bound: already-expired products are excluded, matching the
         # dashboard expiring_soon KPI (expiry >= today).
         stmt = stmt.where(
-            Product.expiry_date.is_not(None),
-            Product.expiry_date >= date.today(),
-            Product.expiry_date <= cutoff,
+            eff.is_not(None),
+            eff >= date.today(),
+            eff <= cutoff,
         )
     if reorder_requested is not None:
         stmt = stmt.where(
@@ -236,13 +240,16 @@ async def list_products(
     total = (await db.execute(count_q)).scalar_one()
     # Newest first — a just-registered product must appear on page 1, not last.
     rows = (await db.execute(stmt.order_by(Product.id.desc()).offset(offset).limit(limit))).unique().all()
+    from app.services.expiry import effective_expiry_map
+    eff_map = await effective_expiry_map(db, store_id)
     items: list[ProductListItem] = []
     for row in rows:
         # Each row is a (Product, match_reasons_str_or_None) tuple.
         p = row[0]
         reasons_str = row[1]
         reasons_list = [r for r in (reasons_str or "").split(",") if r] if reasons_str else []
-        items.append(_build_list_item(p, match_reasons=reasons_list))
+        items.append(_build_list_item(p, match_reasons=reasons_list,
+                                      effective_expiry=eff_map.get(p.id)))
     return PaginatedResponse(items=items, total=total)
 
 

@@ -83,13 +83,18 @@ async def get_dashboard_summary(db: DB, store_id: StoreId) -> dict:
     )).scalar_one()
 
     # ── KPI 3: consumables expiring within 30 days ──
+    # Effective expiry = earliest ACTIVE lot, falling back to the manual
+    # field — the manual date alone goes stale as new lots arrive
+    # (services/expiry.py, warehouse review 2026-07-15).
+    from app.services.expiry import effective_expiry_expr, effective_expiry_map
+    _eff = effective_expiry_expr()
     expiring_soon = (await db.execute(
         select(func.count(Product.id)).where(
             Product.store_id == store_id,
             Product.item_type == ItemType.consumable,
-            Product.expiry_date.is_not(None),
-            Product.expiry_date <= in_30_days,
-            Product.expiry_date >= today,
+            _eff.is_not(None),
+            _eff <= in_30_days,
+            _eff >= today,
         )
     )).scalar_one()
 
@@ -135,11 +140,13 @@ async def get_dashboard_summary(db: DB, store_id: StoreId) -> dict:
     def available(p: Product) -> int:
         return sum(v.on_hand - v.committed - v.unavailable for v in p.variants)
     needs_attention = []
+    eff_map = await effective_expiry_map(db, store_id)
     for p in attention_sorted:
         avail = available(p)
         days_left = None
-        if p.expiry_date:
-            days_left = (p.expiry_date - today).days
+        eff_expiry = eff_map.get(p.id) or p.expiry_date
+        if eff_expiry:
+            days_left = (eff_expiry - today).days
         variant_low = any(
             (v.on_hand - v.committed - v.unavailable)
                 <= (v.low_stock_threshold if v.low_stock_threshold is not None else 10)
@@ -157,11 +164,34 @@ async def get_dashboard_summary(db: DB, store_id: StoreId) -> dict:
             "item_type": p.item_type.value if hasattr(p.item_type, "value") else str(p.item_type),
             "status": status,
             "stock_qty": avail,
-            "expiry_date": p.expiry_date.isoformat() if p.expiry_date else None,
+            "expiry_date": eff_expiry.isoformat() if eff_expiry else None,
             "action_hint": "reorder" if status == "low_stock" else (
                 "use_first" if status == "expiring_soon" else "review"
             ),
         })
+
+    # ── Incoming / overdue deliveries (warehouse review 2026-07-15) ──
+    # A receiving desk starts the day with "what's arriving?" and "what's
+    # late?" — open POs (ordered / partially received) grouped by ETA.
+    from app.models.purchase_order import POStatus, PurchaseOrder
+    _open = [POStatus.ordered, POStatus.partially_received]
+    incoming_pos_7d = (await db.execute(
+        select(func.count(PurchaseOrder.id)).where(
+            PurchaseOrder.store_id == store_id,
+            PurchaseOrder.status.in_(_open),
+            PurchaseOrder.estimated_arrival.is_not(None),
+            PurchaseOrder.estimated_arrival >= today,
+            PurchaseOrder.estimated_arrival <= today + timedelta(days=7),
+        )
+    )).scalar_one()
+    overdue_pos = (await db.execute(
+        select(func.count(PurchaseOrder.id)).where(
+            PurchaseOrder.store_id == store_id,
+            PurchaseOrder.status.in_(_open),
+            PurchaseOrder.estimated_arrival.is_not(None),
+            PurchaseOrder.estimated_arrival < today,
+        )
+    )).scalar_one()
 
     # ── recent_activity: 5 most recent inventory adjustments ──
     recent_adjustments = (await db.execute(
@@ -277,6 +307,8 @@ async def get_dashboard_summary(db: DB, store_id: StoreId) -> dict:
             "expiring_soon": expiring_soon,
             "expiring_soon_count": expiring_soon,
             "monthly_sales_jpy": str(monthly_sales),
+            "incoming_pos_7d": incoming_pos_7d,
+            "overdue_pos": overdue_pos,
         },
         "needs_attention": needs_attention,
         "recent_activity": recent_activity,
@@ -403,4 +435,53 @@ async def monthly_flow(db: DB, store_id: StoreId, months: int = 6):
         if m == 13:
             y, m = y + 1, 1
     return {"months": out}
+
+@router.get("/slow-movers", summary="滞留在庫（一定期間販売なし・在庫あり）")
+async def slow_movers(db: DB, store_id: StoreId, days: int = 60, limit: int = 8):
+    """Active products holding stock with NO sale in the last `days` days —
+    the money-sitting-on-shelves view (warehouse review 2026-07-15).
+
+    last_sold_at is UTC-naive (sold_at storage convention); products that have
+    never sold rank first, then oldest last-sale.
+    """
+    days = max(7, min(days, 365))
+    limit = max(1, min(limit, 50))
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
+
+    last_sale = (
+        select(func.max(SalesRecord.sold_at))
+        .join(ProductVariant, ProductVariant.id == SalesRecord.variant_id)
+        .where(
+            ProductVariant.product_id == Product.id,
+            SalesRecord.quantity > 0,  # refunds don't count as movement
+        )
+        .correlate(Product)
+        .scalar_subquery()
+    )
+    stock_expr = func.coalesce(
+        func.sum(ProductVariant.on_hand - ProductVariant.committed - ProductVariant.unavailable), 0)
+    value_expr = func.coalesce(
+        func.sum(ProductVariant.on_hand * func.coalesce(ProductVariant.price, 0)), 0)
+
+    rows = (await db.execute(
+        select(Product.id, Product.name, Product.item_type,
+               stock_expr.label("stock"), value_expr.label("value"),
+               last_sale.label("last_sold_at"))
+        .join(ProductVariant, ProductVariant.product_id == Product.id)
+        .where(Product.store_id == store_id, Product.status == ProductStatus.active)
+        .group_by(Product.id)
+        .having(stock_expr > 0)
+        .having(func.coalesce(last_sale, datetime(1970, 1, 1)) < cutoff)
+        .order_by(func.coalesce(last_sale, datetime(1970, 1, 1)).asc())
+        .limit(limit)
+    )).all()
+
+    return {"days": days, "items": [{
+        "id": pid,
+        "name": name,
+        "item_type": it.value if hasattr(it, "value") else str(it),
+        "stock": int(stock or 0),
+        "value_jpy": str(value or 0),
+        "last_sold_at": ls.isoformat() if ls else None,
+    } for pid, name, it, stock, value, ls in rows]}
 

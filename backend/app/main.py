@@ -135,13 +135,15 @@ async def _start_daily_notification_tick() -> None:
                         <= _func.coalesce(_PV.low_stock_threshold, 10),
                     )
                 )).scalar_one()
+                from app.services.expiry import effective_expiry_expr as _eff_expr
+                _eff = _eff_expr()
                 expiring = (await db.execute(
                     _select(_func.count(_Product.id)).where(
                         _Product.store_id == sid,
                         _Product.item_type == _ItemType.consumable,
-                        _Product.expiry_date.is_not(None),
-                        _Product.expiry_date <= (now_jst.date() + timedelta(days=30)),
-                        _Product.expiry_date >= now_jst.date(),
+                        _eff.is_not(None),
+                        _eff <= (now_jst.date() + timedelta(days=30)),
+                        _eff >= now_jst.date(),
                     )
                 )).scalar_one()
                 await _notify(

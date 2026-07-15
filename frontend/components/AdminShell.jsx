@@ -101,7 +101,9 @@ function PlxSidebar({ current }) {
             fontSize: 12, fontWeight: 600, color: "#fff",
             whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           }}>ペイライト歯科クリニック</div>
-          <div style={{ fontSize: 10, color: T.PLX_SIDEBAR_INK_DIM }}>本院 / 管理者</div>
+          <div style={{ fontSize: 10, color: T.PLX_SIDEBAR_INK_DIM }}>
+            {window.PLX_ME?.role === "admin" ? "管理者" : "スタッフ"}
+          </div>
         </div>
       </div>
 

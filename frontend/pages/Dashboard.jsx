@@ -11,6 +11,7 @@ const DASH_RED_LIGHT = "#FEE2E2";
 function Dashboard() {
   const summaryQ = useFetch(() => api.getDashboardSummary(), []);
   const flowQ = useFetch(() => api.getMonthlyFlow(6), []);
+  const slowQ = useFetch(() => api.getSlowMovers(60), []);
   // KPI tiles alternate between two metric sets every 7s (feedback batch C).
   const [kpiAlt, setKpiAlt] = React.useState(false);
   React.useEffect(() => {
@@ -108,9 +109,10 @@ function Dashboard() {
               <React.Fragment {...{ key: fade.key }}>
                 <div style={fade.style}><KpiTile icon="box" label="総在庫点数" value={String(totalUnits)} unit="点" tone="green"
                   onClick={() => navigate("/inventory")} clickable /></div>
-                <div style={fade.style}><KpiTile icon="alert" label="要対応の商品" value={String(attention.length)} unit="件"
-                  tone={attention.length > 0 ? "amber" : "muted"}
-                  onClick={() => navigate("/products?stock=low")} clickable /></div>
+                <div style={fade.style}><KpiTile icon="alert" label="入荷予定（7日以内）" value={String(kpis.incoming_pos_7d ?? 0)} unit="件"
+                  tone={(kpis.overdue_pos ?? 0) > 0 ? "red" : "green"}
+                  delta={(kpis.overdue_pos ?? 0) > 0 ? `遅延 ${kpis.overdue_pos} 件` : undefined}
+                  onClick={() => navigate("/purchase-orders")} clickable /></div>
                 <div style={fade.style}><KpiTile icon="calendar" label="今月の入荷点数" value={String(thisMonth.received)} unit="点" tone="green"
                   onClick={() => navigate("/purchase-orders")} clickable /></div>
                 <div style={fade.style}><KpiTile icon="card" label="今月の販売点数" value={String(thisMonth.sold)} unit="点" tone="green"
@@ -139,10 +141,16 @@ function Dashboard() {
         {loading ? <CategorySkeleton /> : <CategoryBars rows={summary?.category_breakdown || []} />}
       </div>
 
-      {/* 月別 入荷 vs 販売 (feedback batch C) */}
-      <div style={{ ...dashCard, marginTop: 14 }}>
-        <DashCardHeader title="月別 入荷・販売点数（直近6ヶ月）" />
-        {flowQ.loading ? <CategorySkeleton /> : <MonthlyFlowBars months={flowQ.data?.months || []} />}
+      {/* 月別 入荷 vs 販売 (feedback batch C) + 滞留在庫 (warehouse review) */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 14, marginTop: 14 }}>
+        <div style={dashCard}>
+          <DashCardHeader title="月別 入荷・販売点数（直近6ヶ月）" />
+          {flowQ.loading ? <CategorySkeleton /> : <MonthlyFlowBars months={flowQ.data?.months || []} />}
+        </div>
+        <div style={dashCard}>
+          <DashCardHeader title="滞留在庫（60日以上販売なし）" right="在庫一覧 →" onRight={() => navigate("/inventory")} />
+          {slowQ.loading ? <CategorySkeleton /> : <SlowMoversTable items={slowQ.data?.items || []} />}
+        </div>
       </div>
 
       <style>{`@keyframes plxshimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
@@ -727,6 +735,44 @@ function MonthlyFlowBars({ months }) {
         <span><span style={{ display: "inline-block", width: 10, height: 10, background: T.PLX_GREEN_600, borderRadius: 2, marginRight: 5 }} />入荷</span>
         <span><span style={{ display: "inline-block", width: 10, height: 10, background: T.PLX_BLUE_600 || "#2E7BD6", borderRadius: 2, marginRight: 5 }} />販売</span>
       </div>
+    </div>
+  );
+}
+
+// 滞留在庫 — active products holding stock with no sale in 60+ days.
+// The opposite of the low-stock alarms: money sitting on the shelf.
+function SlowMoversTable({ items }) {
+  if (!items.length) {
+    return <div style={{ fontSize: 12, color: PLX_MUTED, padding: "18px 0" }}>滞留している在庫はありません 🎉</div>;
+  }
+  return (
+    <div>
+      <div style={{
+        display: "grid", gridTemplateColumns: "1.8fr 0.5fr 0.8fr 0.9fr",
+        fontSize: 10, fontWeight: 700, color: PLX_MUTED, padding: "4px 0 8px",
+        textTransform: "uppercase", letterSpacing: ".03em",
+      }}>
+        <span>商品</span>
+        <span style={{ textAlign: "right" }}>在庫</span>
+        <span style={{ textAlign: "right" }}>在庫金額</span>
+        <span style={{ textAlign: "right" }}>最終販売</span>
+      </div>
+      {items.map((r) => (
+        <div key={r.id} onClick={() => navigate(`/products/${r.id}`)} style={{
+          display: "grid", gridTemplateColumns: "1.8fr 0.5fr 0.8fr 0.9fr",
+          padding: "7px 0", fontSize: 12, alignItems: "center", cursor: "pointer",
+          borderTop: `1px solid ${PLX_BORDER}`,
+        }}
+          onMouseEnter={(e) => e.currentTarget.style.background = T.PLX_SURFACE_50}
+          onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+          <span style={{ fontWeight: 600, color: T.PLX_INK_900, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</span>
+          <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.stock}</span>
+          <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>¥{formatYen(r.value_jpy)}</span>
+          <span style={{ textAlign: "right", fontSize: 11, color: PLX_MUTED }}>
+            {r.last_sold_at ? formatJpDate(r.last_sold_at) : "販売実績なし"}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }

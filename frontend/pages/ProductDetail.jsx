@@ -254,14 +254,21 @@ function ProductDetail({ productId }) {
             <span style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
               {variants.reduce((s, v) => s + (Number(v.on_hand) || 0), 0)}
             </span>
-            <span style={{ color: PLX_MUTED }}>引当中 (committed)</span>
-            <span style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-              −{variants.reduce((s, v) => s + (Number(v.committed) || 0), 0)}
-            </span>
-            <span style={{ color: PLX_MUTED }}>使用不可</span>
-            <span style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-              −{variants.reduce((s, v) => s + (Number(v.unavailable) || 0), 0)}
-            </span>
+            {/* 引当/使用不可 shown only when nonzero — no business flow writes
+                them (manual adjustment only), so a permanent 0 row just
+                implies a reservation feature that doesn't exist. */}
+            {variants.reduce((s, v) => s + (Number(v.committed) || 0), 0) > 0 && (<>
+              <span style={{ color: PLX_MUTED }}>引当中 (committed)</span>
+              <span style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                −{variants.reduce((s, v) => s + (Number(v.committed) || 0), 0)}
+              </span>
+            </>)}
+            {variants.reduce((s, v) => s + (Number(v.unavailable) || 0), 0) > 0 && (<>
+              <span style={{ color: PLX_MUTED }}>使用不可</span>
+              <span style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                −{variants.reduce((s, v) => s + (Number(v.unavailable) || 0), 0)}
+              </span>
+            </>)}
           </div>
         </div>
       </div>

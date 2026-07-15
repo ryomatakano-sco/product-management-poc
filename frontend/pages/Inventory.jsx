@@ -185,7 +185,7 @@ function Inventory({ query }) {
       }}>
         <div style={{
           display: "grid",
-          gridTemplateColumns: "2.2fr 0.7fr 0.6fr 0.6fr 0.6fr 0.9fr 1fr 0.8fr",
+          gridTemplateColumns: "2.2fr 0.7fr 0.7fr 0.7fr 0.9fr 1fr 0.8fr",
           columnGap: 16,
           padding: "12px 18px", fontSize: 11, fontWeight: 700, color: T.PLX_INK_500,
           background: T.PLX_SURFACE_50, borderBottom: `1px solid ${T.PLX_LINE_200}`,
@@ -194,7 +194,6 @@ function Inventory({ query }) {
           <PlxSortHeader label="商品 / SKU" k="product" sort={sorter.sort} onToggle={sorter.toggle} />
           <PlxSortHeader label="種別" k="item_type" sort={sorter.sort} onToggle={sorter.toggle} />
           <PlxSortHeader label="在庫" k="on_hand" sort={sorter.sort} onToggle={sorter.toggle} style={{ textAlign: "right" }} />
-          <PlxSortHeader label="引当" k="committed" sort={sorter.sort} onToggle={sorter.toggle} style={{ textAlign: "right" }} />
           <PlxSortHeader label="利用可能" k="available" sort={sorter.sort} onToggle={sorter.toggle} style={{ textAlign: "right" }} />
           <PlxSortHeader label="使用期限" k="expiry" sort={sorter.sort} onToggle={sorter.toggle} />
           <PlxSortHeader label="最終調整" k="adjusted" sort={sorter.sort} onToggle={sorter.toggle} />
@@ -213,7 +212,7 @@ function Inventory({ query }) {
         {items.map((r, i) => (
           <div key={`${r.product.id}-${i}`} onClick={() => navigate(`/products/${r.product.id}`)} style={{
             display: "grid",
-            gridTemplateColumns: "2.2fr 0.7fr 0.6fr 0.6fr 0.6fr 0.9fr 1fr 0.8fr",
+            gridTemplateColumns: "2.2fr 0.7fr 0.7fr 0.7fr 0.9fr 1fr 0.8fr",
             columnGap: 16,
             padding: "14px 18px", alignItems: "center", fontSize: 12,
             borderBottom: i < items.length - 1 ? `1px solid ${T.PLX_LINE_100}` : "none",
@@ -234,7 +233,6 @@ function Inventory({ query }) {
             </span>
             <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600,
               color: r.on_hand === 0 ? T.PLX_RED_600 : T.PLX_INK_900 }}>{r.on_hand}</span>
-            <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", color: T.PLX_INK_500 }}>{r.committed}</span>
             <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700,
               color: r.available <= 10 ? T.PLX_AMBER_600 : T.PLX_INK_900 }}>{r.available}</span>
             <span style={{ fontSize: 11, color: T.PLX_INK_500 }}>

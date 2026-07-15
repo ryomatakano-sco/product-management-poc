@@ -166,6 +166,7 @@ const api = {
   listPoComments: (poId) => request(`/purchase-orders/${poId}/comments`),
   addPoComment: (poId, body) => request(`/purchase-orders/${poId}/comments`, { method: "POST", body: JSON.stringify({ body }) }),
   getMonthlyFlow: (months) => request(`/dashboard/monthly-flow?months=${months || 6}`),
+  getSlowMovers: (days) => request(`/dashboard/slow-movers?days=${days || 60}`),
   autoDraftPurchaseOrders: () => request(`/purchase-orders/auto-draft`, { method: "POST" }),
 
   // Purchase orders (existing backend at /purchase-orders)

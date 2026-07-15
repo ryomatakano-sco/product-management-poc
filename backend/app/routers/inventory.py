@@ -37,6 +37,8 @@ async def _build_inventory_rows(
     """
     today = date.today()
     in_30 = today + timedelta(days=30)
+    from app.services.expiry import effective_expiry_map
+    eff_map = await effective_expiry_map(db, store_id)
 
     # Branch scope: resolve name + per-variant counters up front.
     branch_name = "全拠点"
@@ -86,7 +88,8 @@ async def _build_inventory_rows(
         committed = sum(t[1] for t in triples)
         unavailable = sum(t[2] for t in triples)
         available = on_hand - committed - unavailable
-        is_expiring = bool(p.expiry_date and today <= p.expiry_date <= in_30)
+        eff_expiry = eff_map.get(p.id) or p.expiry_date
+        is_expiring = bool(eff_expiry and today <= eff_expiry <= in_30)
         variant_low = any(
             (t[0] - t[1] - t[2])
                 <= (v.low_stock_threshold if v.low_stock_threshold is not None else 10)
@@ -128,7 +131,7 @@ async def _build_inventory_rows(
             # total_value_jpy, so the two pages' 在庫金額 figures agree.
             "value_jpy": int(sum(counters(v)[0] * (v.price or 0) for v in p.variants)),
             "status": status,
-            "earliest_expiry_date": p.expiry_date.isoformat() if p.expiry_date else None,
+            "earliest_expiry_date": eff_expiry.isoformat() if eff_expiry else None,
             "last_adjusted_at": (
                 last_adj.created_at.isoformat() if last_adj else None
             ),
