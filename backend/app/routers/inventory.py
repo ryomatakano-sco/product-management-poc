@@ -513,3 +513,81 @@ async def inventory_history(
         await db.execute(stmt.order_by(InventoryAdjustment.created_at.desc()).offset(offset).limit(limit))
     ).scalars().all()
     return PaginatedResponse(items=rows, total=total)
+
+
+@router.post("/variants/{variant_id}/write-off-expired", status_code=201,
+             summary="期限切れロットを一括廃棄する")
+async def write_off_expired(variant_id: int, db: DB, store_id: StoreId, user: CurrentUser = None):
+    """B3 (docs/specs/expiry-writeoff.md): zero every EXPIRED lot of the
+    variant and decrement on_hand by the same amounts, per branch, under the
+    auditable reason `expired_write_off`. Admin-only — disposal is an audit
+    event, not a routine adjustment (no approval-replay path on purpose)."""
+    from datetime import date as _date
+
+    from app.deps import ensure_admin
+    from app.models.lot import ProductLot
+    from app.services.audit import log_event
+
+    ensure_admin(user)
+    user_name = user.display_name if user is not None else None
+
+    variant = (
+        await db.execute(
+            select(ProductVariant)
+            .where(ProductVariant.id == variant_id, ProductVariant.store_id == store_id)
+            .options(selectinload(ProductVariant.product))
+        )
+    ).scalar_one_or_none()
+    if not variant:
+        raise HTTPException(404, detail="Variant not found")
+
+    today = _date.today()
+    lots = (await db.execute(
+        select(ProductLot).where(
+            ProductLot.store_id == store_id,
+            ProductLot.variant_id == variant_id,
+            ProductLot.qty_on_hand > 0,
+            ProductLot.expiry_date.is_not(None),
+            ProductLot.expiry_date < today,
+        )
+    )).scalars().all()
+    if not lots:
+        raise HTTPException(400, detail="期限切れのロット在庫はありません")
+
+    # Per-branch totals so each stock decrement stays atomic + branch-true.
+    from collections import defaultdict
+    per_branch: dict[int, int] = defaultdict(int)
+    for lot in lots:
+        per_branch[lot.branch_id] += lot.qty_on_hand
+
+    written_off = 0
+    for branch_id, qty in per_branch.items():
+        try:
+            await apply_stock_delta(
+                db, store_id=store_id, variant_id=variant_id,
+                branch_id=branch_id, field=InventoryField.on_hand, delta=-qty,
+            )
+        except StockError as e:
+            await db.rollback()
+            raise HTTPException(400, detail=e.message)
+        db.add(InventoryAdjustment(
+            created_by=user_name,
+            store_id=store_id,
+            variant_id=variant_id,
+            branch_id=branch_id,
+            field=InventoryField.on_hand,
+            delta=-qty,
+            reason=AdjustmentReason.expired_write_off,
+            note=f"期限切れロット廃棄（{len(lots)}ロット）",
+        ))
+        written_off += qty
+
+    for lot in lots:
+        lot.qty_on_hand = 0
+
+    log_event(db, store_id=store_id, user_name=user_name,
+              action="expired_write_off", entity_type="variant",
+              entity_id=variant_id,
+              detail=f"{variant.product.name if variant.product else variant_id}: {written_off}点廃棄")
+    await db.commit()
+    return {"written_off": written_off, "lots": len(lots)}

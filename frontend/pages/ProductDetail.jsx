@@ -801,8 +801,35 @@ function InventoryAdjustModal({ variant, onClose, onApplied }) {
 function LotHistory({ product }) {
   const lotsQ = useFetch(() => api.getProductLots(product.id), [product.id]);
   const rows = lotsQ.data?.items ?? [];
+  // B3 (docs/specs/expiry-writeoff.md): one-click disposal of expired lots.
+  // Admin-only (disposal is an audit event) and default-variant scoped —
+  // products in this app are single-variant by construction.
+  const defaultVariant = product.variants?.find((v) => v.is_default) || product.variants?.[0];
+  const hasExpired = rows.some((r) => r.status === "expired" && r.qty_on_hand > 0);
+  const isAdmin = window.PLX_ME?.role === "admin";
+  const [busy, setBusy] = React.useState(false);
+  const doWriteOff = async () => {
+    const t = window.PLX_TR || ((x) => x);
+    if (!window.confirm(t("期限切れロットの残数をすべて廃棄します（在庫から減算・監査記録あり）。よろしいですか？"))) return;
+    setBusy(true);
+    try {
+      const res = await api.writeOffExpired(defaultVariant.id);
+      window.PLX_TOAST?.success?.(`期限切れロットを廃棄しました（${res.written_off} 点）`);
+      lotsQ.refetch();
+    } catch (e) {
+      window.PLX_TOAST?.error?.(window.errText(e, "廃棄に失敗しました"));
+    } finally { setBusy(false); }
+  };
   return (
     <div>
+      {hasExpired && isAdmin && defaultVariant && (
+        <div style={{ padding: "12px 22px 0", display: "flex", justifyContent: "flex-end" }}>
+          <Button variant="secondary" onClick={doWriteOff} loading={busy}
+            style={{ color: T.PLX_RED_600, height: 32, fontSize: 12 }}>
+            ⚠ 期限切れを廃棄
+          </Button>
+        </div>
+      )}
       <div style={{
         display: "grid", gridTemplateColumns: "160px 130px 90px 1fr 120px 130px",
         padding: "12px 22px", fontSize: 11, fontWeight: 700, color: PLX_MUTED,

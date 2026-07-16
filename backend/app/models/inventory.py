@@ -27,6 +27,7 @@ class AdjustmentReason(str, enum.Enum):
     other = "other"
     refund = "refund"
     transfer = "transfer"  # branch-to-branch move (migration 015)
+    expired_write_off = "expired_write_off"  # expired-lot disposal (migration 021, B3)
 
 
 class InventoryAdjustment(Base):

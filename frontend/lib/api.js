@@ -82,6 +82,7 @@ const api = {
   getProductLots: (id) => request(`/products/${id}/lots`),
   createProduct: (body)  => request(`/products`, { method: "POST", body: JSON.stringify(body) }),
   updateProduct: (id, body) => request(`/products/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  writeOffExpired: (variantId) => request(`/variants/${variantId}/write-off-expired`, { method: "POST" }),
   archiveProduct: (id)   => request(`/products/${id}`, { method: "DELETE" }),
 
   // --- global search (powers the Ctrl+K command palette) ---

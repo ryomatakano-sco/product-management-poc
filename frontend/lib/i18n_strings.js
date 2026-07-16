@@ -628,6 +628,11 @@ window._PLX_DICT_EN = {
   "カテゴリを選択…": "Choose category…",
   "適用中…": "Applying…",
   "処理中…": "Processing…",
+  "⚠ 期限切れを廃棄": "⚠ Write off expired",
+  "期限切れロットの残数をすべて廃棄します（在庫から減算・監査記録あり）。よろしいですか？":
+    "Write off ALL remaining stock in expired lots? (Deducted from inventory, audit-logged.)",
+  "廃棄に失敗しました": "Write-off failed",
+  "期限切れロットを廃棄しました（${res.written_off} 点）": "Wrote off expired lots (${res.written_off} pcs)",
 
   "＋ 仕入先を追加": "＋ Add vendor",
   "仕入先を追加": "Add vendor",
