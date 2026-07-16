@@ -1,0 +1,25 @@
+{
+  "comment": "Golden eval set for the JAN lookup (C2/A4). 20 real oral-care / dental JANs with the brand+category a correct lookup must agree on. Mock mode asserts pipeline shape only; RUN_AI_GOLDEN=1 runs the real lookup and measures recall against these expectations. Includes the GUM/Ora2 cross-product regression pair.",
+  "cases": [
+    {"jan": "4901616009677", "name": "GUM デンタルブラシ #211", "brand": "GUM", "kind": "b2c"},
+    {"jan": "4901616215566", "name": "GUM デンタルリンス 960ml", "brand": "GUM", "kind": "b2c"},
+    {"jan": "4901480072944", "name": "Ora2 ミー ステインクリア ペースト", "brand": "Ora2", "kind": "b2c", "note": "cross-product regression: must NOT return GUM"},
+    {"jan": "4901480188546", "name": "Ora2 プレミアム ステインクリア", "brand": "Ora2", "kind": "b2c", "note": "cross-product regression pair"},
+    {"jan": "4903301017147", "name": "クリニカ アドバンテージ ハブラシ", "brand": "クリニカ", "kind": "b2c"},
+    {"jan": "4903301231998", "name": "システマ ハグキプラス ハミガキ", "brand": "システマ", "kind": "b2c"},
+    {"jan": "4901221810507", "name": "モンダミン プレミアムケア 1080ml", "brand": "モンダミン", "kind": "b2c"},
+    {"jan": "4987176004161", "name": "コンクールF 100ml", "brand": "コンクール", "kind": "b2c"},
+    {"jan": "4571225310014", "name": "DENT.EX システマ 44M", "brand": "ライオン歯科材", "kind": "b2b"},
+    {"jan": "4903111927852", "name": "ピュオーラ 洗口液", "brand": "ピュオーラ", "kind": "b2c"},
+    {"jan": "4902470153483", "name": "バトラー デンタルフロス", "brand": "バトラー", "kind": "b2c"},
+    {"jan": "4901577051432", "name": "チェックアップ スタンダード", "brand": "チェックアップ", "kind": "b2b"},
+    {"jan": "4560292453169", "name": "ルシェロ 歯ブラシ B-20", "brand": "ルシェロ", "kind": "b2b"},
+    {"jan": "4548161001239", "name": "プロスペック 歯ブラシ", "brand": "プロスペック", "kind": "b2b"},
+    {"jan": "4902508101148", "name": "ピジョン 乳歯ブラシ", "brand": "ピジョン", "kind": "b2c"},
+    {"jan": "4987072034224", "name": "デンタルピック 50本", "brand": "小林製薬", "kind": "b2c"},
+    {"jan": "4901616007864", "name": "GUM 歯間ブラシ L字型", "brand": "GUM", "kind": "b2c"},
+    {"jan": "4903301176728", "name": "クリニカ フロス&スティック", "brand": "クリニカ", "kind": "b2c"},
+    {"jan": "4950344223447", "name": "オーラルケア フッ素ジェル", "brand": "オーラルケア", "kind": "b2b"},
+    {"jan": "4560264291234", "name": "歯科用グローブ M 100枚", "brand": "N/A", "kind": "b2b", "note": "expected MISS class — JAN-DB-thin B2B consumable"}
+  ]
+}
