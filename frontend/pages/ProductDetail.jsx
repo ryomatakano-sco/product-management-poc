@@ -83,7 +83,7 @@ function ProductDetail({ productId }) {
       )}
       <button
         onClick={() => setConfirmDelete(true)}
-        style={{ ...btnGhost, color: "#B91C1C" }}
+        style={{ ...btnGhost, color: T.PLX_RED_600 }}
         title="この商品をアーカイブ（削除）します"
       >
         🗑 削除
@@ -138,7 +138,7 @@ function ProductDetail({ productId }) {
             <SectionLabel>{p.category_name ?? "未分類"}</SectionLabel>
             {/* Yoshioka 2026-05-11: 種別 badge next to category */}
             {p.item_type === "consumable"
-              ? <Pill color="#2563EB" bg={PLX_BLUE_LIGHT}>消耗品</Pill>
+              ? <Pill color={T.PLX_BLUE_600} bg={PLX_BLUE_LIGHT}>消耗品</Pill>
               : <Pill color={PLX_GREEN} bg={PLX_GREEN_LIGHT}>物販</Pill>}
             <StatusPill status={p.status} />
           </div>
@@ -177,7 +177,7 @@ function ProductDetail({ productId }) {
                   const days = daysUntil(p.expiry_date);
                   const tone = expiryTone(days);
                   const color = tone === "red" ? PLX_RED : tone === "amber" ? PLX_WARN : PLX_MUTED;
-                  const bg    = tone === "red" ? PLX_RED_LIGHT : tone === "amber" ? PLX_WARN_BG : "#F3F4F6";
+                  const bg    = tone === "red" ? PLX_RED_LIGHT : tone === "amber" ? PLX_WARN_BG : T.PLX_PILL_BG;
                   return <Pill color={color} bg={bg}>{days < 0 ? "期限切れ" : `期限まで ${days} 日`}</Pill>;
                 })()}
               />
@@ -197,7 +197,7 @@ function ProductDetail({ productId }) {
                     {p.reorder_requested_at && (
                       <span title={`再発注済 ${formatJpDate(p.reorder_requested_at)}`} style={{
                         fontSize: 10, fontWeight: 700, color: PLX_GREEN,
-                        background: PLX_GREEN_LIGHT, padding: "3px 9px", borderRadius: 9999,
+                        background: PLX_GREEN_LIGHT, padding: "3px 9px", borderRadius: T.RADIUS_PILL,
                       }}>✓ 再発注済</span>
                     )}
                     <a href={p.reorder_url} target="_blank" rel="noopener noreferrer"
@@ -209,8 +209,8 @@ function ProductDetail({ productId }) {
                           .catch((e) => window.PLX_TOAST?.error?.(window.errText(e, "再発注済にできませんでした")));
                       }}
                       style={{
-                        height: 30, padding: "0 12px", borderRadius: 9999,
-                        background: PLX_GREEN, color: "#fff", border: "none",
+                        height: 30, padding: "0 12px", borderRadius: T.RADIUS_PILL,
+                        background: PLX_GREEN, color: T.PLX_ON_BRAND, border: "none",
                         fontWeight: 700, fontSize: 11, cursor: "pointer",
                         display: "inline-flex", alignItems: "center", gap: 5, textDecoration: "none",
                         boxShadow: "0 4px 10px rgba(26,166,138,.22)",
@@ -226,7 +226,7 @@ function ProductDetail({ productId }) {
               {(p.tags ?? []).map((t) => (
                 <span key={t} style={{
                   fontSize: 11, fontWeight: 600, color: PLX_GREEN,
-                  background: PLX_GREEN_LIGHT, padding: "4px 10px", borderRadius: 9999,
+                  background: PLX_GREEN_LIGHT, padding: "4px 10px", borderRadius: T.RADIUS_PILL,
                 }}>{t}</span>
               ))}
             </div>
@@ -234,7 +234,7 @@ function ProductDetail({ productId }) {
         </div>
 
         <div style={{
-          background: PLX_GREEN_50, borderRadius: 12,
+          background: PLX_GREEN_50, borderRadius: T.RADIUS_LG,
           padding: "16px 20px", minWidth: 200,
         }}>
           <div style={{ fontSize: 11, color: PLX_MUTED, fontWeight: 600 }}>利用可能在庫</div>
@@ -384,7 +384,7 @@ function ConfirmDeleteModal({ title, message, confirmLabel, onConfirm, onCancel,
       }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 12 }}>
           <div style={{
-            width: 40, height: 40, borderRadius: "50%", background: "#FEE2E2",
+            width: 40, height: 40, borderRadius: "50%", background: T.PLX_RED_100,
             display: "flex", alignItems: "center", justifyContent: "center",
             flexShrink: 0, fontSize: 20,
           }}>⚠</div>
@@ -405,8 +405,8 @@ function ConfirmDeleteModal({ title, message, confirmLabel, onConfirm, onCancel,
             onClick={onConfirm}
             disabled={disabled}
             style={{
-              height: 38, padding: "0 20px", borderRadius: 9999,
-              background: "#DC2626", color: "#fff", border: "none",
+              height: 38, padding: "0 20px", borderRadius: T.RADIUS_PILL,
+              background: T.PLX_RED_600, color: T.PLX_ON_BRAND, border: "none",
               fontWeight: 700, fontSize: 13,
               cursor: disabled ? "wait" : "pointer",
               opacity: disabled ? 0.7 : 1,
@@ -507,7 +507,7 @@ function VariantsTable({ variants, onAdjust, onEdit }) {
                 {v.is_default && (
                   <span style={{
                     fontSize: 9, fontWeight: 700, color: PLX_GREEN,
-                    background: PLX_GREEN_LIGHT, padding: "2px 7px", borderRadius: 9999,
+                    background: PLX_GREEN_LIGHT, padding: "2px 7px", borderRadius: T.RADIUS_PILL,
                   }}>デフォルト</span>
                 )}
               </div>
@@ -535,7 +535,7 @@ function VariantsTable({ variants, onAdjust, onEdit }) {
             }}>{av}</span>
             <span style={{ textAlign: "right", display: "flex", gap: 6, justifyContent: "flex-end" }}>
               <button onClick={() => onAdjust(v)} style={{
-                fontSize: 11, fontWeight: 700, padding: "5px 11px", borderRadius: 9999,
+                fontSize: 11, fontWeight: 700, padding: "5px 11px", borderRadius: T.RADIUS_PILL,
                 border: `1px solid ${PLX_GREEN}`, background: T.PLX_CARD_BG, color: PLX_GREEN,
                 cursor: "pointer",
               }}>在庫を調整</button>
@@ -543,7 +543,7 @@ function VariantsTable({ variants, onAdjust, onEdit }) {
                 onClick={() => onEdit && onEdit(v)}
                 title="商品の編集ページを開きます"
                 style={{
-                  fontSize: 11, fontWeight: 600, padding: "5px 11px", borderRadius: 9999,
+                  fontSize: 11, fontWeight: 600, padding: "5px 11px", borderRadius: T.RADIUS_PILL,
                   border: `1px solid ${PLX_BORDER}`, background: T.PLX_CARD_BG, color: PLX_TEXT,
                   cursor: "pointer",
                 }}
@@ -712,7 +712,7 @@ function InventoryAdjustModal({ variant, onClose, onApplied }) {
   };
 
   const pmBtn = {
-    width: 34, height: 34, borderRadius: 9,
+    width: 34, height: 34, borderRadius: T.RADIUS_MD,
     border: `1px solid ${PLX_BORDER}`, background: T.PLX_CARD_BG,
     cursor: "pointer", fontWeight: 700, fontSize: 16, color: PLX_TEXT,
   };
@@ -836,7 +836,7 @@ function LotHistory({ product }) {
           <span style={{ textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums", color: r.qty_on_hand === 0 ? PLX_MUTED : PLX_TEXT }}>{r.qty_on_hand}</span>
           <span>
             {r.status === "current"  && <Pill color={PLX_GREEN} bg={PLX_GREEN_LIGHT}>● 使用中</Pill>}
-            {r.status === "depleted" && <Pill color={PLX_MUTED} bg="#F3F4F6">使い切り</Pill>}
+            {r.status === "depleted" && <Pill color={PLX_MUTED} bg={T.PLX_PILL_BG}>使い切り</Pill>}
             {r.status === "expired"  && <Pill color={PLX_RED} bg={PLX_RED_LIGHT}>期限切れ</Pill>}
           </span>
           <span style={{ fontSize: 11, color: PLX_MUTED }}>{r.branch_name}</span>
@@ -901,7 +901,7 @@ function ProductImageManager({ product, onChanged }) {
               }} />
               <button onClick={() => remove(img)} title="この画像を削除" style={{
                 position: "absolute", top: -6, right: -6, width: 18, height: 18,
-                borderRadius: "50%", border: "none", background: T.PLX_RED_600, color: "#fff",
+                borderRadius: "50%", border: "none", background: T.PLX_RED_600, color: T.PLX_ON_BRAND,
                 fontSize: 10, lineHeight: "18px", cursor: "pointer", padding: 0,
               }}>×</button>
             </div>

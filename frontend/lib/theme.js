@@ -78,7 +78,14 @@ const _LIGHT = {
   PLX_SIDEBAR_INK_DIM:   "#7C8BA6",
   PLX_SIDEBAR_ACTIVE_BG: "#003A77",
   // ── a11y tokens (remediation 2026-07-15) ──
-  PLX_FOCUS_RING: "#0077D9",   // keyboard focus ring (≥3:1 on white)
+  PLX_FOCUS_RING: "#0077D9",
+  PLX_ON_BRAND:   "#FFFFFF",   // text/icons on brand-colored fills (buttons, badges)
+  PLX_SIDEBAR_INK_ACTIVE: "#FFFFFF",  // sidebar is constant-dark in both palettes
+  PLX_AMBER_300:  "#FCD34D",   // amber borders (was a dead `|| "#fcd34d"` fallback)
+  PLX_RED_300:    "#FCA5A5",
+  PLX_TEAL_700:   "#0F766E",   // key-source badge text
+  PLX_TEAL_300:   "#5EEAD4",   // key-source badge border
+  PLX_TEAL_100:   "#CCFBF1",   // key-source badge bg   // red borders (was a dead `|| "#fca5a5"` fallback)   // keyboard focus ring (≥3:1 on white)
   PLX_PILL_BG:    "#F2F3F5",   // neutral pill bg (replaces hardcoded #F3F4F6)
   // Amber readable as TEXT/indicator: #F9C22C was 1.49:1 on white. Signal
   // surfaces keep the bright amber via PLX_AMBER_100 backgrounds.
@@ -165,6 +172,13 @@ const _DARK = {
   PLX_SIDEBAR_ACTIVE_BG: "#1F2630",
   // a11y tokens (dark counterparts)
   PLX_FOCUS_RING: "#3FB1FF",
+  PLX_ON_BRAND:   "#FFFFFF",
+  PLX_SIDEBAR_INK_ACTIVE: "#FFFFFF",
+  PLX_AMBER_300:  "#6E5A22",
+  PLX_RED_300:    "#703030",
+  PLX_TEAL_700:   "#5EEAD4",
+  PLX_TEAL_300:   "#155E56",
+  PLX_TEAL_100:   "#123B36",
   PLX_PILL_BG:    "#212831",
   PLX_AMBER_700:  "#FBD25C",   // amber-as-text reads bright on dark
   RADIUS_SM:   _LIGHT.RADIUS_SM,

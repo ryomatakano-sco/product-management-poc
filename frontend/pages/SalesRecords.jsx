@@ -115,7 +115,7 @@ function SalesRecords({ query, initialSaleId }) {
     }
     return (
       <span style={{
-        display: "inline-block", padding: "2px 8px", borderRadius: 9999,
+        display: "inline-block", padding: "2px 8px", borderRadius: T.RADIUS_PILL,
         fontSize: 10, fontWeight: 700,
         background: tone ? T.PLX_GREEN_050 : T.PLX_RED_100,
         color:      tone ? T.PLX_GREEN_700 : T.PLX_RED_600,
@@ -133,7 +133,7 @@ function SalesRecords({ query, initialSaleId }) {
     const t = PM_TONE[method] ?? PM_TONE.cash;
     return (
       <span style={{
-        display: "inline-block", padding: "3px 10px", borderRadius: 9999,
+        display: "inline-block", padding: "3px 10px", borderRadius: T.RADIUS_PILL,
         fontSize: 11, fontWeight: 700, background: t.bg, color: t.fg,
         border: `1px solid ${t.bd}20`, whiteSpace: "nowrap",
       }}>{PM_LABEL[method] ?? method ?? "—"}</span>
@@ -290,7 +290,7 @@ function SalesRecords({ query, initialSaleId }) {
                     <td style={{ padding: "11px 14px" }}>
                       {isRefund && (
                         <span style={{
-                          display: "inline-block", padding: "2px 8px", borderRadius: 9999,
+                          display: "inline-block", padding: "2px 8px", borderRadius: T.RADIUS_PILL,
                           fontSize: 10, fontWeight: 700, marginRight: 8,
                           background: T.PLX_RED_100, color: T.PLX_RED_600,
                         }}>返品</span>
@@ -539,17 +539,17 @@ function ManualSaleModal({ onClose, onSaved, initialProduct }) {
 
   // ── small reusable bits ─────────────────────────────────────────────────
   const labelStyle = { fontSize: 12, fontWeight: 700, color: T.PLX_INK_700, display: "block", marginBottom: 6 };
-  const reqStar = <span style={{ color: "#DC2626", marginLeft: 4 }}>*</span>;
+  const reqStar = <span style={{ color: T.PLX_RED_600, marginLeft: 4 }}>*</span>;
   const errText = (msg) => msg ? (
-    <div style={{ fontSize: 11, color: "#DC2626", marginTop: 5, fontWeight: 600 }}>① {msg}</div>
+    <div style={{ fontSize: 11, color: T.PLX_RED_600, marginTop: 5, fontWeight: 600 }}>① {msg}</div>
   ) : null;
   const stockBadge = (n) => {
     const isLow = Number(n) <= 10;
     return (
       <span style={{
-        fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 9999,
-        background: isLow ? "#FEF3C7" : T.PLX_SURFACE_50,
-        color: isLow ? "#B45309" : T.PLX_INK_700,
+        fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: T.RADIUS_PILL,
+        background: isLow ? T.PLX_AMBER_100 : T.PLX_SURFACE_50,
+        color: isLow ? T.PLX_AMBER_700 : T.PLX_INK_700,
         whiteSpace: "nowrap",
       }}>在庫 {n}</span>
     );
@@ -578,7 +578,7 @@ function ManualSaleModal({ onClose, onSaved, initialProduct }) {
                 placeholder="商品名 または SKU で検索"
                 style={{
                   ...formInput, paddingLeft: 36,
-                  borderColor: errors.variant_id ? "#DC2626" : undefined,
+                  borderColor: errors.variant_id ? T.PLX_RED_600 : undefined,
                 }}
               />
             </div>
@@ -686,7 +686,7 @@ function ManualSaleModal({ onClose, onSaved, initialProduct }) {
       {/* 在庫不足警告 — hard block: Save button is disabled below */}
       {insufficientStock && (
         <div style={{
-          fontSize: 11, color: "#DC2626", fontWeight: 600, marginBottom: 12,
+          fontSize: 11, color: T.PLX_RED_600, fontWeight: 600, marginBottom: 12,
           display: "flex", alignItems: "center", gap: 6,
         }}>
           ⚠ {selected.on_hand > 0
@@ -717,7 +717,7 @@ function ManualSaleModal({ onClose, onSaved, initialProduct }) {
                 type="button"
                 onClick={() => setPaymentMethod(opt.value)}
                 style={{
-                  height: 36, padding: "0 16px", borderRadius: 9999, cursor: "pointer",
+                  height: 36, padding: "0 16px", borderRadius: T.RADIUS_PILL, cursor: "pointer",
                   fontFamily: "inherit", fontSize: 13, fontWeight: 600,
                   background: on ? T.PLX_GREEN_100 : T.PLX_SURFACE_100,
                   color: on ? T.PLX_GREEN_700 : T.PLX_INK_700,
@@ -861,8 +861,8 @@ function SaleDetailModal({ saleId, onClose, onRefunded }) {
               fontSize: 12, fontWeight: 600, marginBottom: 14,
             }}>
               <span style={{
-                display: "inline-block", padding: "2px 8px", borderRadius: 9999,
-                fontSize: 10, fontWeight: 700, background: T.PLX_RED_600, color: "#fff",
+                display: "inline-block", padding: "2px 8px", borderRadius: T.RADIUS_PILL,
+                fontSize: 10, fontWeight: 700, background: T.PLX_RED_600, color: T.PLX_ON_BRAND,
               }}>返品</span>
               返品行 — 元の販売 ID: {s.refund_of_sale_id ?? "—"}
             </div>
@@ -1025,7 +1025,7 @@ function RefundReasonModal({ sale, onClose, onDone }) {
         }}>キャンセル</button>
         <button onClick={submit} disabled={busy} style={{
           padding: "8px 18px", borderRadius: T.RADIUS_MD, border: "none",
-          background: T.PLX_RED_600, color: "#fff", fontSize: 13, fontWeight: 700,
+          background: T.PLX_RED_600, color: T.PLX_ON_BRAND, fontSize: 13, fontWeight: 700,
           cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.6 : 1,
         }}>{busy ? "記録中…" : "返品を確定する"}</button>
       </div>

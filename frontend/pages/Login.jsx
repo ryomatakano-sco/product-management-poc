@@ -37,8 +37,8 @@ function Login({ onLoggedIn }) {
         {/* Brand */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "center", marginBottom: 22 }}>
           <span style={{
-            width: 38, height: 38, borderRadius: 10, background: "#0F2A23",
-            color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center",
+            width: 38, height: 38, borderRadius: 10, background: T.PLX_SIDEBAR_BG,
+            color: T.PLX_ON_BRAND, display: "inline-flex", alignItems: "center", justifyContent: "center",
             fontWeight: 800, fontSize: 15,
           }}>pX</span>
           <span style={{ fontSize: 20, fontWeight: 800, color: T.PLX_INK_900 }}>
@@ -78,8 +78,8 @@ function Login({ onLoggedIn }) {
           )}
 
           <button type="submit" disabled={busy} style={{
-            marginTop: 16, width: "100%", height: 44, borderRadius: 9999, border: "none",
-            background: T.PLX_GREEN_600, color: "#fff", fontWeight: 700, fontSize: 14,
+            marginTop: 16, width: "100%", height: 44, borderRadius: T.RADIUS_PILL, border: "none",
+            background: T.PLX_GREEN_600, color: T.PLX_ON_BRAND, fontWeight: 700, fontSize: 14,
             cursor: busy ? "wait" : "pointer", opacity: busy ? 0.7 : 1,
           }}>{busy ? "サインイン中…" : "サインイン"}</button>
 

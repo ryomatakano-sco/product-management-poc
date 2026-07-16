@@ -72,8 +72,8 @@ function Categories() {
       <button onClick={handleExport} disabled={exporting}
         style={{ ...btnSecondary, opacity: exporting ? 0.6 : 1 }}>⬇ エクスポート</button>
       <button onClick={openCreate} style={{
-        height: 38, padding: "0 18px", borderRadius: 9999,
-        background: PLX_GREEN, color: "#fff", border: "none",
+        height: 38, padding: "0 18px", borderRadius: T.RADIUS_PILL,
+        background: PLX_GREEN, color: T.PLX_ON_BRAND, border: "none",
         fontWeight: 700, fontSize: 13, cursor: "pointer",
         display: "inline-flex", alignItems: "center", gap: 6,
         boxShadow: "0 6px 16px rgba(22,163,108,.25)",
@@ -199,7 +199,7 @@ function TreeNode({ node, depth, selectedId, onSelect, onEdit, onDelete }) {
         }}>{node.name}</span>
         <span style={{
           fontSize: 11, fontWeight: 600, color: T.PLX_INK_500,
-          background: T.PLX_SURFACE_100, padding: "2px 8px", borderRadius: 9999,
+          background: T.PLX_SURFACE_100, padding: "2px 8px", borderRadius: T.RADIUS_PILL,
         }}>{node.product_count} 件</span>
         <button
           onClick={(e) => { e.stopPropagation(); onEdit(node); }}
@@ -301,6 +301,7 @@ function CategoryFormModal({ editing, allCategories, onClose, onSaved }) {
   const [taxRate, setTaxRate] = React.useState(parseFloat(editing?.default_tax_rate ?? 10));
   const [saving, setSaving] = React.useState(false);
 
+  // Data, not UI theme: stored per-category color values (hex by design).
   const SWATCHES = ["#16A36C", "#22B07A", "#2E7BD6", "#7AD3B0", "#E89B17", "#D6433A", "#9C56C0", "#5B6776"];
 
   const submit = async () => {
@@ -503,7 +504,7 @@ function CategoriesSkeleton() {
           <div className="plx-skeleton" style={{ width: 22, height: 22, borderRadius: "50%" }} />
           <div className="plx-skeleton" style={{ width: 200, height: 14 }} />
           <div style={{ flex: 1 }} />
-          <div className="plx-skeleton" style={{ width: 40, height: 14, borderRadius: 9999 }} />
+          <div className="plx-skeleton" style={{ width: 40, height: 14, borderRadius: T.RADIUS_PILL }} />
         </div>
       ))}
     </div>

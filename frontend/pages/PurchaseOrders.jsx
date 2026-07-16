@@ -270,7 +270,7 @@ function PurchaseOrders() {
                 && po.estimated_arrival < new Date().toISOString().slice(0, 10) && (
                 <span style={{
                   fontSize: 9, fontWeight: 700, color: T.PLX_RED_600,
-                  background: T.PLX_RED_100, padding: "1px 7px", borderRadius: 9999,
+                  background: T.PLX_RED_100, padding: "1px 7px", borderRadius: T.RADIUS_PILL,
                 }}>遅延</span>
               )}
             </span>
@@ -650,7 +650,7 @@ function PurchaseOrderDetail({ id }) {
               {canCancel && (
                 <button onClick={handleCancel} disabled={busy} style={{
                   padding: "5px 12px", borderRadius: T.RADIUS_MD,
-                  border: `1px solid ${T.PLX_RED_300 || "#fca5a5"}`,
+                  border: `1px solid ${T.PLX_RED_300}`,
                   background: T.PLX_CARD_BG, fontSize: 12, fontWeight: 600,
                   color: T.PLX_RED_600, cursor: busy ? "not-allowed" : "pointer",
                   opacity: busy ? 0.6 : 1, display: "inline-flex", alignItems: "center", gap: 5,
@@ -662,8 +662,8 @@ function PurchaseOrderDetail({ id }) {
           {po.status === "draft" && (
             <div style={{
               padding: "9px 14px", borderRadius: T.RADIUS_MD, marginBottom: 10,
-              background: T.PLX_AMBER_100, border: `1px solid ${T.PLX_AMBER_300 || "#fcd34d"}`,
-              color: T.PLX_AMBER_700 || "#b45309", fontSize: 12, lineHeight: 1.6,
+              background: T.PLX_AMBER_100, border: `1px solid ${T.PLX_AMBER_300}`,
+              color: T.PLX_AMBER_700, fontSize: 12, lineHeight: 1.6,
             }}>
               {"下書きの発注書は入荷を記録できません。「📤 送信」で発注済みにすると、部分入荷（一部だけ届いた場合）も含めて入荷を記録できます。"}
             </div>
@@ -787,6 +787,7 @@ function PurchaseOrderDetail({ id }) {
 // Print-friendly 発注書 sheet. Fixed monochrome styling (independent of the
 // app theme — dark mode must not produce a dark PDF).
 function POPrintSheet({ po, company }) {
+  // Print sheet: always rendered light for paper — hardcoded hex by design.
   const ink = "#111827", muted = "#6b7280", line = "#d1d5db";
   const yen = (v) => `¥${formatYen(v)}`;
   return (
@@ -883,8 +884,7 @@ function POPrintSheet({ po, company }) {
   );
 }
 
-const STEPPER_NAVY = "#1e3a5f";
-const STEPPER_NAVY_LIGHT = "#e8f0f8";
+// Stepper colors read from T at render time (see PoStepper below).
 
 function POStatusStepper({ status }) {
   const steps = [
@@ -902,9 +902,9 @@ function POStatusStepper({ status }) {
       {steps.map((step, i) => {
         const done   = !cancelled && i <= currentIdx;
         const active = !cancelled && i === currentIdx;
-        const dotBg     = cancelled ? "#f1f5f9" : done ? STEPPER_NAVY : "#fff";
-        const dotBorder = cancelled ? "#cbd5e1" : done ? STEPPER_NAVY : "#cbd5e1";
-        const lineColor = cancelled ? "#e2e8f0" : i < currentIdx ? STEPPER_NAVY : "#e2e8f0";
+        const dotBg     = cancelled ? T.PLX_SURFACE_100 : done ? T.PLX_GREEN_600 : T.PLX_CARD_BG;
+        const dotBorder = cancelled ? T.PLX_LINE_200 : done ? T.PLX_GREEN_600 : T.PLX_LINE_200;
+        const lineColor = cancelled ? T.PLX_LINE_200 : i < currentIdx ? T.PLX_GREEN_600 : T.PLX_LINE_200;
         return (
           <React.Fragment key={step.key}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 54 }}>
@@ -912,14 +912,14 @@ function POStatusStepper({ status }) {
                 width: 24, height: 24, borderRadius: "50%",
                 background: dotBg, border: `2px solid ${dotBorder}`,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                color: "#fff", fontSize: 12, fontWeight: 700, marginBottom: 6,
-                boxShadow: done && !cancelled ? `0 0 0 3px ${STEPPER_NAVY_LIGHT}` : "none",
+                color: T.PLX_ON_BRAND, fontSize: 12, fontWeight: 700, marginBottom: 6,
+                boxShadow: done && !cancelled ? `0 0 0 3px ${T.PLX_GREEN_050}` : "none",
               }}>
                 {done && !cancelled ? "✓" : ""}
               </div>
               <span style={{
                 fontSize: 10, fontWeight: active ? 700 : 500,
-                color: active ? STEPPER_NAVY : cancelled ? "#94a3b8" : done ? "#475569" : "#94a3b8",
+                color: active ? T.PLX_GREEN_600 : cancelled ? T.PLX_INK_400 : done ? T.PLX_INK_700 : T.PLX_INK_400,
                 whiteSpace: "nowrap",
               }}>{step.label}</span>
             </div>

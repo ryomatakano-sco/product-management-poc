@@ -324,7 +324,7 @@ function TutorialTour({ onExit }) {
             )}
             <button onClick={next} style={{
               padding: "7px 18px", borderRadius: T.RADIUS_MD, border: "none",
-              background: T.PLX_GREEN_600, color: "#fff",
+              background: T.PLX_GREEN_600, color: T.PLX_ON_BRAND,
               fontSize: 12, fontWeight: 700, cursor: "pointer",
             }}>{idx + 1 === steps.length ? "完了" : "次へ"}</button>
           </div>

@@ -99,7 +99,7 @@ function BranchCard({ branch, onEdit }) {
             </span>
             {snap.low_stock_count > 0 && (
               <span style={{ fontSize: 10, fontWeight: 700, color: T.PLX_AMBER_700,
-                background: T.PLX_AMBER_100, padding: "2px 8px", borderRadius: 9999 }}>
+                background: T.PLX_AMBER_100, padding: "2px 8px", borderRadius: T.RADIUS_PILL }}>
                 低 {snap.low_stock_count}
               </span>
             )}

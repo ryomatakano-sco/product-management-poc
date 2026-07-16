@@ -58,7 +58,7 @@ function Pill({ children, color, bg }) {
   return (
     <span style={{
       fontSize: 11, fontWeight: 700, color, background: bg,
-      padding: "3px 10px", borderRadius: 9999, whiteSpace: "nowrap", display: "inline-block",
+      padding: "3px 10px", borderRadius: T.RADIUS_PILL, whiteSpace: "nowrap", display: "inline-block",
     }}>{children}</span>
   );
 }
@@ -73,7 +73,7 @@ function Select({ value, onChange, options, minWidth = 160 }) {
   return (
     <div style={{ position: "relative" }}>
       <select value={value} onChange={(e) => onChange(e.target.value)} style={{
-        height: 38, padding: "0 32px 0 14px", borderRadius: 9,
+        height: 38, padding: "0 32px 0 14px", borderRadius: T.RADIUS_MD,
         border: `1px solid ${PLX_BORDER}`, fontSize: 13, background: T.PLX_CARD_BG,
         cursor: "pointer", appearance: "none", WebkitAppearance: "none",
         color: PLX_TEXT, minWidth,
@@ -90,14 +90,14 @@ function Select({ value, onChange, options, minWidth = 160 }) {
 function SegmentedControl({ value, onChange, options }) {
   return (
     <div style={{
-      display: "inline-flex", background: PLX_SURFACE, borderRadius: 9999,
+      display: "inline-flex", background: PLX_SURFACE, borderRadius: T.RADIUS_PILL,
       padding: 3, border: `1px solid ${PLX_BORDER}`,
     }}>
       {options.map((o) => {
         const on = value === o.value;
         return (
           <button key={o.value} onClick={() => onChange(o.value)} style={{
-            fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 9999,
+            fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: T.RADIUS_PILL,
             border: "none",
             background: on ? T.PLX_CARD_BG : "transparent",
             color: on ? PLX_GREEN : PLX_MUTED,
@@ -168,26 +168,32 @@ const formInput = {
   // No `outline:"none"` — the global :focus-visible rule (index.html) draws
   // the keyboard focus ring. Removing outlines without a replacement was the
   // root WCAG 2.4.7 failure (a11y remediation 2026-07-15).
-  width: "100%", height: 38, border: `1px solid ${PLX_BORDER}`, borderRadius: T.RADIUS_MD,
-  padding: "0 14px", fontSize: 13, background: T.PLX_INPUT_BG,
-  boxSizing: "border-box", color: PLX_TEXT,
+  // Getters, not values: these objects are module-scope, so plain values
+  // would freeze the light palette at load time. Getters re-read T on every
+  // render-time spread, so dark mode gets the right colors.
+  width: "100%", height: 38, get border() { return `1px solid ${T.PLX_LINE_200}`; },
+  borderRadius: T.RADIUS_MD,
+  padding: "0 14px", fontSize: 13, get background() { return T.PLX_INPUT_BG; },
+  boxSizing: "border-box", get color() { return T.PLX_INK_900; },
 };
 
 const btnPrimary = {
-  height: 38, padding: "0 20px", borderRadius: 9999,
-  background: PLX_GREEN, color: "#fff", border: "none",
+  height: 38, padding: "0 20px", borderRadius: T.RADIUS_PILL,
+  get background() { return T.PLX_GREEN_600; }, get color() { return T.PLX_ON_BRAND; },
+  border: "none",
   fontWeight: 700, fontSize: 13, cursor: "pointer",
 };
 
 const btnSecondary = {
-  height: 38, padding: "0 18px", borderRadius: 9999,
-  background: T.PLX_CARD_BG, color: PLX_TEXT, border: `1px solid ${PLX_BORDER}`,
+  height: 38, padding: "0 18px", borderRadius: T.RADIUS_PILL,
+  get background() { return T.PLX_CARD_BG; }, get color() { return T.PLX_INK_900; },
+  get border() { return `1px solid ${T.PLX_LINE_200}`; },
   fontWeight: 700, fontSize: 13, cursor: "pointer",
 };
 
 const btnGhost = {
-  height: 38, padding: "0 14px", borderRadius: 9999,
-  background: "transparent", color: PLX_MUTED, border: "none",
+  height: 38, padding: "0 14px", borderRadius: T.RADIUS_PILL,
+  background: "transparent", get color() { return T.PLX_INK_500; }, border: "none",
   fontWeight: 700, fontSize: 13, cursor: "pointer",
 };
 

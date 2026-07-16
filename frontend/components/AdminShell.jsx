@@ -1,6 +1,6 @@
 // AdminShell — paylight X dark-green sidebar + topbar.
 // Refreshed 2026-05-12 to match the compass design brief §2.8 + §3:
-//   - Dark green sidebar (PLX_SIDEBAR_BG = #0F2A23)
+//   - Dark navy sidebar (PLX_SIDEBAR_BG, navy since the rebrand)
 //   - Nav groups (メイン / オペレーション / マスタ / その他)
 //   - Active row pill in PLX_GREEN_600 + 3 px bright stripe on the left edge
 //   - Wordmark logo header (square "pX" mark + "paylight X" text)
@@ -76,11 +76,11 @@ function PlxSidebar({ current }) {
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{
-            width: 28, height: 28, borderRadius: 6, background: T.PLX_GREEN_600,
-            color: "#fff", fontWeight: 800, fontSize: 13, letterSpacing: "-0.02em",
+            width: 28, height: 28, borderRadius: T.RADIUS_SM, background: T.PLX_GREEN_600,
+            color: T.PLX_SIDEBAR_INK_ACTIVE, fontWeight: 800, fontSize: 13, letterSpacing: "-0.02em",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>pX</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: T.PLX_SIDEBAR_INK_ACTIVE, letterSpacing: "-0.01em" }}>
             paylight <span style={{ color: T.PLX_GREEN_500 }}>X</span>
           </div>
         </div>
@@ -92,13 +92,13 @@ function PlxSidebar({ current }) {
         borderBottom: "1px solid rgba(255,255,255,0.06)",
       }}>
         <div style={{
-          width: 28, height: 28, borderRadius: 6, background: "rgba(255,255,255,0.08)",
-          color: "#fff", fontSize: 11, fontWeight: 700,
+          width: 28, height: 28, borderRadius: T.RADIUS_SM, background: "rgba(255,255,255,0.08)",
+          color: T.PLX_SIDEBAR_INK_ACTIVE, fontSize: 11, fontWeight: 700,
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>本</div>
         <div style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }}>
           <div style={{
-            fontSize: 12, fontWeight: 600, color: "#fff",
+            fontSize: 12, fontWeight: 600, color: T.PLX_SIDEBAR_INK_ACTIVE,
             whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           }}>ペイライト歯科クリニック</div>
           <div style={{ fontSize: 10, color: T.PLX_SIDEBAR_INK_DIM }}>
@@ -128,12 +128,12 @@ function PlxSidebar({ current }) {
         borderTop: "1px solid rgba(255,255,255,0.06)",
       }}>
         <div style={{
-          width: 32, height: 32, borderRadius: "50%", background: "#F4D4B8",
+          width: 32, height: 32, borderRadius: "50%", background: "#F4D4B8", /* fixed avatar colors — theme-independent */
           color: "#1F2937", fontWeight: 700, fontSize: 13,
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>{(window.PLX_ME?.display_name || "山田 花子").charAt(0)}</div>
         <div style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: T.PLX_SIDEBAR_INK_ACTIVE, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {window.PLX_ME?.display_name || "山田 花子"}
           </div>
           <div style={{ fontSize: 10, color: T.PLX_SIDEBAR_INK_DIM }}>
@@ -152,7 +152,7 @@ function PlxSidebar({ current }) {
             cursor: "pointer", fontSize: 13, display: "inline-flex",
             alignItems: "center", justifyContent: "center", flexShrink: 0,
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = "#fff"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.45)"; }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = T.PLX_SIDEBAR_INK_ACTIVE; e.currentTarget.style.borderColor = "rgba(255,255,255,0.45)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.color = T.PLX_SIDEBAR_INK_DIM; e.currentTarget.style.borderColor = "rgba(255,255,255,0.18)"; }}
         >⎋</button>
       </div>
@@ -170,8 +170,8 @@ function PlxSidebar({ current }) {
       >
         <span style={{
           fontSize: 9, fontWeight: 700, letterSpacing: ".08em",
-          color: "#FCD34D", background: "rgba(252,211,77,0.12)",
-          padding: "2px 7px", borderRadius: 9999,
+          color: "#FCD34D", /* on constant-dark sidebar */ background: "rgba(252,211,77,0.12)",
+          padding: "2px 7px", borderRadius: T.RADIUS_PILL,
           border: "1px solid rgba(252,211,77,0.35)",
           textTransform: "uppercase",
         }}>{PLX_VERSION.channel}</span>
@@ -191,7 +191,7 @@ function SbItem({ spec, active }) {
     height: 40, padding: "0 16px", margin: "2px 4px", borderRadius: 8,
     textDecoration: "none", cursor: "pointer",
     background: active ? T.PLX_SIDEBAR_ACTIVE_BG : "transparent",
-    color: active ? "#FFFFFF" : T.PLX_SIDEBAR_INK,
+    color: active ? T.PLX_SIDEBAR_INK_ACTIVE : T.PLX_SIDEBAR_INK,
     fontSize: 13, fontWeight: active ? 600 : 500,
   };
   return (
@@ -203,13 +203,13 @@ function SbItem({ spec, active }) {
           background: T.PLX_GREEN_500, borderRadius: 2,
         }} />
       )}
-      <NavIcon name={spec.icon} color={active ? "#fff" : T.PLX_SIDEBAR_INK} />
+      <NavIcon name={spec.icon} color={active ? T.PLX_SIDEBAR_INK_ACTIVE : T.PLX_SIDEBAR_INK} />
       <span style={{ flex: 1 }}>{spec.label}</span>
       {spec.badge != null && (
         <span style={{
           background: active ? "rgba(255,255,255,0.22)" : T.PLX_GREEN_600,
-          color: "#fff", fontSize: 10, fontWeight: 700,
-          padding: "2px 7px", borderRadius: 9999,
+          color: T.PLX_ON_BRAND, fontSize: 10, fontWeight: 700,
+          padding: "2px 7px", borderRadius: T.RADIUS_PILL,
         }}>{spec.badge}</span>
       )}
     </a>
@@ -484,7 +484,7 @@ function NotificationBell() {
         {unread > 0 && (
           <span style={{
             position: "absolute", top: 4, right: 5, minWidth: 15, height: 15, padding: "0 3px",
-            borderRadius: 9999, background: T.PLX_RED_600, color: "#fff",
+            borderRadius: T.RADIUS_PILL, background: T.PLX_RED_600, color: T.PLX_ON_BRAND,
             fontSize: 9, fontWeight: 800, display: "inline-flex",
             alignItems: "center", justifyContent: "center",
             border: `2px solid ${T.PLX_SURFACE_0}`,

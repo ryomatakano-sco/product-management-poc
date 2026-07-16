@@ -116,7 +116,7 @@ function DevToggleButton({ open, onClick }) {
         width: 40, height: 40, borderRadius: "50%",
         border: `1px solid ${PLX_BORDER}`,
         background: open ? PLX_TEXT : T.PLX_CARD_BG,
-        color: open ? "#fff" : PLX_TEXT,
+        color: open ? T.PLX_ON_BRAND : PLX_TEXT,
         cursor: "pointer",
         display: "flex", alignItems: "center", justifyContent: "center",
         fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700,
@@ -139,7 +139,7 @@ function DevPasswordGate({ onUnlock, onClose, lastError }) {
       style={{
         position: "fixed", left: 16, bottom: 68, zIndex: 9999,
         width: 300, background: T.PLX_CARD_BG, border: `1px solid ${PLX_BORDER}`,
-        borderRadius: 12, boxShadow: "0 12px 32px rgba(0,0,0,.14)",
+        borderRadius: T.RADIUS_LG, boxShadow: "0 12px 32px rgba(0,0,0,.14)",
         fontSize: 12, color: PLX_TEXT, padding: 14,
       }}
     >
@@ -178,11 +178,11 @@ function DevTutorialControls({ onClosePanel }) {
   const auto = T9N.autoStartEnabled();
   const rowStyle = { display: "flex", alignItems: "center", gap: 8, padding: "6px 0" };
   const pillBase = {
-    padding: "4px 10px", borderRadius: 9999, fontSize: 11, fontWeight: 700,
+    padding: "4px 10px", borderRadius: T.RADIUS_PILL, fontSize: 11, fontWeight: 700,
     cursor: "pointer", border: `1px solid ${PLX_BORDER}`,
     background: "transparent", color: PLX_TEXT,
   };
-  const pillActive = { ...pillBase, background: PLX_GREEN, color: "#fff", border: `1px solid ${PLX_GREEN}` };
+  const pillActive = { ...pillBase, background: PLX_GREEN, color: T.PLX_ON_BRAND, border: `1px solid ${PLX_GREEN}` };
   return (
     <>
       <div style={rowStyle}>
@@ -221,7 +221,7 @@ function DevPanelBody({ status, error, loading, storeId, onStoreIdChange, onRefr
         position: "fixed", left: 16, bottom: 68, zIndex: 9999,
         width: 340, maxHeight: "calc(100vh - 100px)", overflow: "auto",
         background: T.PLX_CARD_BG, border: `1px solid ${PLX_BORDER}`,
-        borderRadius: 12, boxShadow: "0 12px 32px rgba(0,0,0,.14)",
+        borderRadius: T.RADIUS_LG, boxShadow: "0 12px 32px rgba(0,0,0,.14)",
         fontSize: 12, color: PLX_TEXT,
       }}
     >
@@ -278,7 +278,7 @@ function DevPanelHeader({ loading, onRefresh, onClose }) {
 function DevIconBtn({ children, onClick, title }) {
   return (
     <button onClick={onClick} title={title} style={{
-      width: 26, height: 26, borderRadius: 6, border: `1px solid ${PLX_BORDER}`,
+      width: 26, height: 26, borderRadius: T.RADIUS_SM, border: `1px solid ${PLX_BORDER}`,
       background: T.PLX_CARD_BG, color: PLX_TEXT, cursor: "pointer",
       display: "flex", alignItems: "center", justifyContent: "center",
     }}>{children}</button>
@@ -353,14 +353,14 @@ function DevThemeLocaleControls() {
     display: "flex", alignItems: "center", gap: 8, padding: "6px 0",
   };
   const pillBase = {
-    padding: "4px 10px", borderRadius: 9999, fontSize: 11, fontWeight: 700,
+    padding: "4px 10px", borderRadius: T.RADIUS_PILL, fontSize: 11, fontWeight: 700,
     cursor: "pointer", border: `1px solid ${PLX_BORDER}`,
     background: "transparent", color: PLX_TEXT,
   };
   const pillActive = {
     ...pillBase,
     background: PLX_GREEN,
-    color: "#fff",
+    color: T.PLX_ON_BRAND,
     border: `1px solid ${PLX_GREEN}`,
   };
   return (
@@ -398,7 +398,7 @@ function DevAiArenaActions() {
   }, [hasLast]);
 
   const rowBtn = {
-    padding: "6px 12px", borderRadius: 6,
+    padding: "6px 12px", borderRadius: T.RADIUS_SM,
     border: `1px solid ${PLX_BORDER}`, background: T.PLX_CARD_BG,
     color: PLX_TEXT, fontWeight: 700, fontSize: 11, cursor: "pointer",
     display: "inline-flex", alignItems: "center", gap: 6,
@@ -514,13 +514,13 @@ function DevStoreSwitcher({ storeId, onChange }) {
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") commit(); }}
           style={{
-            width: 70, padding: "4px 8px", borderRadius: 6,
+            width: 70, padding: "4px 8px", borderRadius: T.RADIUS_SM,
             border: `1px solid ${PLX_BORDER}`, fontFamily: "var(--font-mono)",
             fontSize: 12,
           }}
         />
         <button onClick={commit} style={{
-          padding: "4px 10px", borderRadius: 6,
+          padding: "4px 10px", borderRadius: T.RADIUS_SM,
           border: `1px solid ${PLX_BORDER}`, background: T.PLX_CARD_BG,
           cursor: "pointer", fontSize: 12,
         }}>Apply &amp; reload</button>
@@ -534,7 +534,7 @@ function DevStoreSwitcher({ storeId, onChange }) {
 
 function DevLinks() {
   const link = {
-    display: "inline-block", padding: "4px 8px", borderRadius: 6,
+    display: "inline-block", padding: "4px 8px", borderRadius: T.RADIUS_SM,
     border: `1px solid ${PLX_BORDER}`, background: T.PLX_CARD_BG,
     color: PLX_TEXT, textDecoration: "none", fontSize: 11,
     fontFamily: "var(--font-mono)",
@@ -620,7 +620,7 @@ function DevEnvEditor({ ai, writeTarget }) {
 
   return (
     <div style={{
-      marginTop: 8, padding: 8, borderRadius: 6,
+      marginTop: 8, padding: 8, borderRadius: T.RADIUS_SM,
       border: `1px solid ${PLX_BORDER}`, background: T.PLX_CARD_BG,
     }}>
       <label style={editorLabel}>OPENAI_API_KEY</label>
@@ -669,13 +669,13 @@ function DevEnvEditor({ ai, writeTarget }) {
 }
 
 const miniBtnStyle = {
-  padding: "3px 8px", borderRadius: 6, fontSize: 11,
+  padding: "3px 8px", borderRadius: T.RADIUS_SM, fontSize: 11,
   border: `1px solid ${PLX_BORDER}`, background: T.PLX_CARD_BG,
   color: PLX_TEXT, cursor: "pointer",
 };
 
 const primaryBtnStyle = {
-  ...miniBtnStyle, background: PLX_GREEN, color: "#fff",
+  ...miniBtnStyle, background: PLX_GREEN, color: T.PLX_ON_BRAND,
   borderColor: PLX_GREEN, fontWeight: 700,
 };
 
@@ -684,7 +684,7 @@ const editorLabel = {
 };
 
 const editorInput = {
-  width: "100%", padding: "5px 8px", borderRadius: 6,
+  width: "100%", padding: "5px 8px", borderRadius: T.RADIUS_SM,
   border: `1px solid ${PLX_BORDER}`, fontFamily: "var(--font-mono)",
   fontSize: 11, boxSizing: "border-box",
 };

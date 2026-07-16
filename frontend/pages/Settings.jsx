@@ -131,6 +131,7 @@ function GeneralSettings() {
         <FormRow label="通貨"><input value={f.form.currency || "JPY"} onChange={(e) => f.update("currency", e.target.value)} style={formInput} /></FormRow>
         <FormRow label="ブランドカラー">
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {/* data, not theme: stored brand-color setting */}
             <input value={f.form.brand_color_hex || "#16A36C"}
               onChange={(e) => f.update("brand_color_hex", e.target.value)}
               style={{ ...formInput, fontFamily: T.FONT_MONO }} />
@@ -192,7 +193,7 @@ function LogoUploader({ logoUrl, onChanged }) {
           <img src={logoUrl} alt="ロゴ" style={{
             height: 64, maxWidth: 220, objectFit: "contain",
             border: `1px solid ${T.PLX_LINE_200}`, borderRadius: T.RADIUS_MD,
-            background: "#fff", padding: 6,
+            background: "#fff", /* logo legibility pad — constant white by design */ padding: 6,
           }} />
           <button onClick={() => inputRef.current?.click()} disabled={busy}
             style={{ ...btnSecondary, opacity: busy ? 0.6 : 1 }}>変更</button>
@@ -284,7 +285,7 @@ function ToggleRow({ label, on, onChange }) {
       }}>
       <span style={{ fontSize: 13, color: T.PLX_INK_900 }}>{label}</span>
       <span style={{
-        width: 38, height: 22, borderRadius: 9999,
+        width: 38, height: 22, borderRadius: T.RADIUS_PILL,
         background: on ? T.PLX_GREEN_600 : T.PLX_LINE_200,
         position: "relative", transition: "background .12s",
       }}>
@@ -368,7 +369,7 @@ function TaxRatesSettings() {
         }}>＋ 税率を追加</button>
         <button onClick={saveRates} disabled={f.saving} style={{
           padding: "8px 18px", borderRadius: T.RADIUS_MD, border: "none",
-          background: T.PLX_GREEN_600, color: "#fff", fontSize: 13, fontWeight: 700,
+          background: T.PLX_GREEN_600, color: T.PLX_ON_BRAND, fontSize: 13, fontWeight: 700,
           cursor: f.saving ? "not-allowed" : "pointer", opacity: f.saving ? 0.6 : 1,
         }}>{f.saving ? "保存中…" : "変更を保存"}</button>
       </div>
@@ -463,8 +464,8 @@ function IntegrationsSettings() {
     <SettingsCard title="統合">
       <div style={{
         padding: "9px 14px", borderRadius: T.RADIUS_MD, marginBottom: 14,
-        background: T.PLX_AMBER_100, border: `1px solid ${T.PLX_AMBER_300 || "#fcd34d"}`,
-        color: T.PLX_AMBER_700 || "#b45309", fontSize: 12, lineHeight: 1.6,
+        background: T.PLX_AMBER_100, border: `1px solid ${T.PLX_AMBER_300}`,
+        color: T.PLX_AMBER_700, fontSize: 12, lineHeight: 1.6,
       }}>
         {"この画面はモック表示です。外部サービス連携は本番実装のスコープで、PoC では動作しません。"}
       </div>
@@ -755,7 +756,7 @@ function ApiSettings() {
       </div>
       <div style={{ ...row, borderBottom: "none" }}>
         <span style={{ color: T.PLX_INK_500, fontWeight: 600 }}>例 (curl)</span>
-        <code style={{ ...mono, background: T.PLX_SURFACE_50, padding: "6px 10px", borderRadius: 6, display: "block", overflowX: "auto" }}>
+        <code style={{ ...mono, background: T.PLX_SURFACE_50, padding: "6px 10px", borderRadius: T.RADIUS_SM, display: "block", overflowX: "auto" }}>
           curl -H "X-Store-Id: {String(storeId)}" {base}/products?limit=5
         </code>
       </div>
@@ -776,13 +777,13 @@ function AppearanceSettings() {
   const [theme] = usePlxTheme();
   const [locale] = usePlxLocale();
   const pillBase = {
-    padding: "8px 18px", borderRadius: 9999, fontSize: 13, fontWeight: 700,
+    padding: "8px 18px", borderRadius: T.RADIUS_PILL, fontSize: 13, fontWeight: 700,
     cursor: "pointer", border: `1px solid ${T.PLX_LINE_200}`,
     background: T.PLX_SURFACE_0, color: T.PLX_INK_900,
   };
   const pillActive = {
     ...pillBase,
-    background: T.PLX_GREEN_600, color: "#fff",
+    background: T.PLX_GREEN_600, color: T.PLX_ON_BRAND,
     border: `1px solid ${T.PLX_GREEN_600}`,
   };
   const sectionStyle = { marginBottom: 22 };
