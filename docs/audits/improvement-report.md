@@ -29,7 +29,7 @@ The review brief was written against an older snapshot. Verified findings:
 | (docs) | A1 | docs/adr/0001-recall-improvement.md — options (a) JAN-DB, (b) supplier-catalog ingestion, (c) Yahoo API (Rakuten/Amazon ToS-excluded); pre-registered go/no-go; **no code, stops for PM** |
 | `a6d2ad8` | B2/B3 | Spec-lets ×3; auto-draft quantities now velocity-aware (30d demand − usable stock, expiring-within-30d excluded from usable, threshold heuristic as fallback, suggested_reason per line); expired-lot write-off (mig 021 enum + admin-only endpoint + lot-tab button + audit) |
 | `2c2e228` | C6 | ai_agent.py (770 lines) → ai/{agents,lookup,mock,schemas}.py with a back-compat shim; behavior pinned by the suite |
-| (this) | D | CONTEXT.md tracked; docs/production-readiness.md; this report |
+| (this) | D | docs/production-readiness.md; this report (CONTEXT.md left ignored — see PM decisions) |
 
 ## Definition-of-done checklist (from the brief)
 
