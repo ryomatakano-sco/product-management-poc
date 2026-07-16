@@ -970,7 +970,7 @@ function SalesFilterSelect({ label, value, onChange, options, disabled }) {
       <select
         value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}
         style={{
-          border: "none", outline: "none", background: "transparent",
+          border: "none", background: "transparent",
           fontSize: 12, fontWeight: 600, color: T.PLX_INK_900, fontFamily: "inherit",
           cursor: disabled ? "not-allowed" : "pointer", padding: "0 4px",
         }}

@@ -146,7 +146,7 @@ function ScanReceiver({ token }) {
               style={{
                 flex: 1, height: 44, borderRadius: 10, border: "1px solid #374151",
                 background: "#1F2937", color: "#ECEEF1", padding: "0 14px", fontSize: 16,
-                fontFamily: "ui-monospace,monospace", outline: "none", boxSizing: "border-box",
+                fontFamily: "ui-monospace,monospace", boxSizing: "border-box",
               }}
             />
             <button

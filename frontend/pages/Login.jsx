@@ -25,7 +25,7 @@ function Login({ onLoggedIn }) {
   const input = {
     width: "100%", height: 44, padding: "0 14px", borderRadius: 10,
     border: `1px solid ${T.PLX_LINE_200}`, fontSize: 14, color: T.PLX_INK_900,
-    background: T.PLX_SURFACE_0, boxSizing: "border-box", outline: "none",
+    background: T.PLX_SURFACE_0, boxSizing: "border-box", 
   };
 
   return (

@@ -86,7 +86,7 @@ function PurchaseOrders() {
   const selectStyle = {
     height: 34, padding: "0 10px", borderRadius: T.RADIUS_MD,
     border: `1px solid ${T.PLX_LINE_200}`, background: T.PLX_CARD_BG,
-    fontSize: 12, color: T.PLX_INK_900, cursor: "pointer", outline: "none",
+    fontSize: 12, color: T.PLX_INK_900, cursor: "pointer", 
   };
 
   async function handleExport() {
@@ -186,7 +186,7 @@ function PurchaseOrders() {
             style={{
               width: "100%", height: 34, paddingLeft: 32, paddingRight: 10,
               borderRadius: T.RADIUS_MD, border: `1px solid ${T.PLX_LINE_200}`,
-              fontSize: 12, color: T.PLX_INK_900, background: T.PLX_SURFACE_50, outline: "none",
+              fontSize: 12, color: T.PLX_INK_900, background: T.PLX_SURFACE_50, 
               boxSizing: "border-box",
             }}
           />
@@ -947,7 +947,7 @@ function POEditView({ po, form, updateField, updateItem, deleteItem, addBlankIte
   const inputStyle = {
     width: "100%", height: 36, padding: "0 10px", borderRadius: T.RADIUS_MD,
     border: `1px solid ${T.PLX_LINE_200}`, fontSize: 13, color: T.PLX_INK_900,
-    boxSizing: "border-box", outline: "none", background: T.PLX_CARD_BG,
+    boxSizing: "border-box", background: T.PLX_CARD_BG,
   };
   const visibleItems = form.items.filter((it) => !it._deleted);
 
@@ -1081,7 +1081,7 @@ function POEditView({ po, form, updateField, updateItem, deleteItem, addBlankIte
                     style={{
                       width: "100%", height: 36, padding: "0 10px", borderRadius: T.RADIUS_MD,
                       border: `1px solid ${T.PLX_LINE_200}`, background: T.PLX_CARD_BG,
-                      fontSize: 12, color: T.PLX_INK_900, boxSizing: "border-box", outline: "none",
+                      fontSize: 12, color: T.PLX_INK_900, boxSizing: "border-box", 
                     }}>
                     <option value="" disabled>商品を選択してください…</option>
                     {products
@@ -1103,7 +1103,7 @@ function POEditView({ po, form, updateField, updateItem, deleteItem, addBlankIte
                         width: "100%", padding: "8px 10px", borderRadius: T.RADIUS_MD,
                         border: `1px solid ${T.PLX_LINE_200}`, background: T.PLX_CARD_BG,
                         fontSize: 12, fontWeight: 600, color: T.PLX_INK_900,
-                        boxSizing: "border-box", outline: "none",
+                        boxSizing: "border-box", 
                       }}
                       onFocus={(e) => e.target.style.borderColor = T.PLX_BLUE_600}
                       onBlur={(e) => e.target.style.borderColor = T.PLX_LINE_200}
@@ -1117,7 +1117,7 @@ function POEditView({ po, form, updateField, updateItem, deleteItem, addBlankIte
                         marginTop: 6, padding: "4px 10px", borderRadius: T.RADIUS_MD,
                         border: `1px solid ${T.PLX_LINE_200}`, background: T.PLX_CARD_BG,
                         fontFamily: T.FONT_MONO, fontSize: 10, color: T.PLX_INK_500,
-                        outline: "none", width: 160,
+                        width: 160,
                       }}
                       onFocus={(e) => e.target.style.borderColor = T.PLX_BLUE_600}
                       onBlur={(e) => e.target.style.borderColor = T.PLX_LINE_200}
@@ -1189,7 +1189,7 @@ function POCreateModal({ vendors, branches, onClose, onCreated }) {
   const inputStyle = {
     width: "100%", height: 36, padding: "0 10px", borderRadius: T.RADIUS_MD,
     border: `1px solid ${T.PLX_LINE_200}`, fontSize: 13, color: T.PLX_INK_900,
-    boxSizing: "border-box", outline: "none", background: T.PLX_CARD_BG,
+    boxSizing: "border-box", background: T.PLX_CARD_BG,
   };
   const labelStyle = { fontSize: 11, fontWeight: 600, color: T.PLX_INK_500, marginBottom: 4, display: "block" };
 

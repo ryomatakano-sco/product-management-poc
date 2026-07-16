@@ -164,7 +164,7 @@
               onKeyDown={onKeyDown}
               placeholder="商品 / 仕入先 / 発注書 / JAN / SKU を横断検索…"
               style={{
-                flex: 1, height: 28, border: "none", outline: "none",
+                flex: 1, height: 28, border: "none", 
                 fontSize: 16, fontWeight: 500, color: PLX_TEXT,
                 background: "transparent",
               }}

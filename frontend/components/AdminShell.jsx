@@ -392,7 +392,7 @@ function PlxTopBar({ title, breadcrumbs, headerRight }) {
           position: "relative", width: 280, height: 36, flexShrink: 0,
           padding: "0 12px 0 36px", fontSize: 13, fontFamily: "inherit",
           background: T.PLX_SURFACE_50, border: `1px solid ${T.PLX_LINE_200}`,
-          borderRadius: T.RADIUS_MD, outline: "none", color: T.PLX_INK_500,
+          borderRadius: T.RADIUS_MD, color: T.PLX_INK_500,
           boxSizing: "border-box", cursor: "pointer", textAlign: "left",
           display: "flex", alignItems: "center", justifyContent: "space-between",
         }}

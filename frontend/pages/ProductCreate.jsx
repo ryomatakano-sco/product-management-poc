@@ -713,7 +713,7 @@ function ProductCreate({ editId }) {
                     }
                   }}
                   placeholder={tags.length ? "" : "タグを入力して Enter で追加"} style={{
-                    border: "none", outline: "none", fontSize: 12,
+                    border: "none", fontSize: 12,
                     flex: 1, minWidth: 120, padding: "4px 0",
                   }} />
               </div>
@@ -1292,7 +1292,7 @@ function AiAssistModal({ onClose, onApply, seed }) {
                         width: "100%", height: 54, border: `1.5px solid ${PLX_GREEN_LIGHT}`,
                         borderRadius: 12, padding: "0 150px 0 18px", fontSize: 18,
                         fontFamily: "ui-monospace,SFMono-Regular,monospace",
-                        letterSpacing: ".05em", outline: "none", background: T.PLX_CARD_BG,
+                        letterSpacing: ".05em", background: T.PLX_CARD_BG,
                         boxSizing: "border-box", color: PLX_TEXT, fontWeight: 600,
                       }} />
                     <button
@@ -1314,7 +1314,7 @@ function AiAssistModal({ onClose, onApply, seed }) {
                     placeholder="例: GUM デンタルブラシ" style={{
                       width: "100%", height: 54, border: `1.5px solid ${PLX_GREEN_LIGHT}`,
                       borderRadius: 12, padding: "0 18px", fontSize: 16,
-                      outline: "none", background: T.PLX_CARD_BG, boxSizing: "border-box",
+                      background: T.PLX_CARD_BG, boxSizing: "border-box",
                       color: PLX_TEXT, fontWeight: 600,
                     }} />
                 )}

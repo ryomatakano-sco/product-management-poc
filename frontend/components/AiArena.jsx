@@ -427,7 +427,7 @@
             style={{
               width: "100%", height: 38, padding: "0 14px", fontSize: 14,
               border: `1px solid ${PLX_BORDER}`, borderRadius: 8,
-              outline: "none", fontFamily: "ui-monospace, monospace",
+              fontFamily: "ui-monospace, monospace",
               boxSizing: "border-box",
             }} />
         ) : (
@@ -436,7 +436,7 @@
             style={{
               width: "100%", height: 38, padding: "0 14px", fontSize: 14,
               border: `1px solid ${PLX_BORDER}`, borderRadius: 8,
-              outline: "none", boxSizing: "border-box",
+              boxSizing: "border-box",
             }} />
         )}
       </div>
@@ -503,7 +503,7 @@
             style={{
               flex: 1, height: 28, padding: "0 10px", fontSize: 11,
               border: `1px solid ${PLX_BORDER}`, borderRadius: 6,
-              outline: "none", fontFamily: "ui-monospace, monospace",
+              fontFamily: "ui-monospace, monospace",
             }}
           />
           <button onClick={onAddCustom} disabled={!customInput.trim()} style={{
