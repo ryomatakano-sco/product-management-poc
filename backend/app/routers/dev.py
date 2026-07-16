@@ -195,6 +195,44 @@ async def patch_dev_env(patch: EnvPatch) -> dict:
     }
 
 
+@router.get("/ai-corrections")
+async def dev_ai_corrections(limit: int = 50) -> dict:
+    """A5 readout: recent AI-vs-final rows + accept-rate per field, across
+    all stores (dev tool — loopback + dev-password gated like all of /dev)."""
+    from sqlalchemy import func, select
+
+    from app.db import async_session
+    from app.models.ai_session import AiCorrection
+
+    async with async_session() as db:
+        rows = (await db.execute(
+            select(AiCorrection).order_by(AiCorrection.created_at.desc()).limit(limit)
+        )).scalars().all()
+        rates = (await db.execute(
+            select(
+                AiCorrection.field_name,
+                func.count(AiCorrection.id),
+                func.sum(func.if_(AiCorrection.accepted, 1, 0)),
+            ).group_by(AiCorrection.field_name)
+        )).all()
+    return {
+        "accept_rate_by_field": {
+            f: {"total": int(n), "accepted": int(a or 0),
+                "rate": round((a or 0) / n, 3) if n else None}
+            for f, n, a in rates
+        },
+        "recent": [
+            {
+                "id": r.id, "store_id": r.store_id, "field": r.field_name,
+                "ai": r.ai_value, "final": r.final_value, "accepted": r.accepted,
+                "jan": r.input_jan, "title": r.input_title, "model": r.model_name,
+                "at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ],
+    }
+
+
 @router.get("/status")
 async def dev_status() -> dict:
     db = await _db_status()

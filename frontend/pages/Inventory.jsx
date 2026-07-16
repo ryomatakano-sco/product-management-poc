@@ -210,7 +210,8 @@ function Inventory({ query }) {
           />
         )}
         {items.map((r, i) => (
-          <div key={`${r.product.id}-${i}`} onClick={() => navigate(`/products/${r.product.id}`)} style={{
+          <div key={`${r.product.id}-${i}`} onClick={() => navigate(`/products/${r.product.id}`)}
+            {...plxClickable(() => navigate(`/products/${r.product.id}`))} style={{
             display: "grid",
             gridTemplateColumns: "2.2fr 0.7fr 0.7fr 0.7fr 0.9fr 1fr 0.8fr",
             columnGap: 16,
@@ -228,13 +229,13 @@ function Inventory({ query }) {
             </div>
             <span>
               {r.product.item_type === "consumable"
-                ? <Pill color="#2563EB" bg={PLX_BLUE_LIGHT}>消耗品</Pill>
+                ? <Pill color={T.PLX_BLUE_600} bg={PLX_BLUE_LIGHT}>消耗品</Pill>
                 : <Pill color={PLX_GREEN} bg={PLX_GREEN_LIGHT}>物販</Pill>}
             </span>
             <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600,
               color: r.on_hand === 0 ? T.PLX_RED_600 : T.PLX_INK_900 }}>{r.on_hand}</span>
             <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700,
-              color: r.available <= 10 ? T.PLX_AMBER_600 : T.PLX_INK_900 }}>{r.available}</span>
+              color: r.available <= 10 ? T.PLX_AMBER_700 : T.PLX_INK_900 }}>{r.available}</span>
             <span style={{ fontSize: 11, color: T.PLX_INK_500 }}>
               {r.earliest_expiry_date ? formatJpDate(r.earliest_expiry_date) : "—"}
             </span>
@@ -551,7 +552,8 @@ function RecentAdjustments({ refreshKey }) {
         <div style={{ padding: 24, textAlign: "center", color: T.PLX_INK_400, fontSize: 12 }}>調整履歴はまだありません。</div>
       )}
       {rows.map((a, i) => (
-        <div key={a.id} onClick={() => a.product_id && navigate(`/products/${a.product_id}`)} style={{
+        <div key={a.id} onClick={() => a.product_id && navigate(`/products/${a.product_id}`)}
+          {...(a.product_id ? plxClickable(() => navigate(`/products/${a.product_id}`)) : {})} style={{
           display: "grid", gridTemplateColumns: "1.1fr 2fr 0.9fr 0.6fr 2fr",
           padding: "11px 18px", alignItems: "center", fontSize: 12, columnGap: 14,
           borderBottom: i < rows.length - 1 ? `1px solid ${T.PLX_LINE_100}` : "none",
@@ -580,7 +582,7 @@ function RecentAdjustments({ refreshKey }) {
 }
 
 function StatusBadge({ status }) {
-  if (status === "low_stock")     return <Pill color={T.PLX_AMBER_600} bg={T.PLX_AMBER_100}>● 在庫低下</Pill>;
+  if (status === "low_stock")     return <Pill color={T.PLX_AMBER_700} bg={T.PLX_AMBER_100}>● 在庫低下</Pill>;
   if (status === "expiring_soon") return <Pill color={T.PLX_RED_600} bg={T.PLX_RED_100}>● 期限間近</Pill>;
   if (status === "out_of_stock")  return <Pill color={T.PLX_RED_600} bg={T.PLX_RED_100}>在庫切れ</Pill>;
   return <Pill color={T.PLX_GREEN_700} bg={T.PLX_GREEN_100}>通常</Pill>;
@@ -588,11 +590,12 @@ function StatusBadge({ status }) {
 
 function KpiTile({ label, value, unit, tone, onClick, clickable, extra }) {
   const color = tone === "red" ? T.PLX_RED_600 :
-                tone === "amber" ? T.PLX_AMBER_600 :
+                tone === "amber" ? T.PLX_AMBER_700 :
                 tone === "muted" ? T.PLX_INK_500 :
                 T.PLX_GREEN_600;
   return (
-    <div onClick={clickable ? onClick : undefined} style={{
+    <div onClick={clickable ? onClick : undefined}
+      {...(clickable ? plxClickable(onClick) : {})} style={{
       background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG,
       border: `1px solid ${T.PLX_LINE_200}`, boxShadow: T.SHADOW_SM,
       padding: 18, cursor: clickable ? "pointer" : "default",
@@ -612,7 +615,7 @@ function KpiTile({ label, value, unit, tone, onClick, clickable, extra }) {
 
 function Chip({ on, onClick, label, tone }) {
   const color = tone === "red" ? T.PLX_RED_600 :
-                tone === "amber" ? T.PLX_AMBER_600 :
+                tone === "amber" ? T.PLX_AMBER_700 :
                 T.PLX_GREEN_700;
   const bg = tone === "red" ? T.PLX_RED_100 :
              tone === "amber" ? T.PLX_AMBER_100 :
@@ -620,7 +623,7 @@ function Chip({ on, onClick, label, tone }) {
   return (
     <button onClick={onClick} style={{
       fontSize: 12, fontWeight: 600, padding: "6px 12px",
-      borderRadius: 9999,
+      borderRadius: T.RADIUS_PILL,
       background: on ? bg : T.PLX_CARD_BG,
       color: on ? color : T.PLX_INK_700,
       border: `1px solid ${on ? color : T.PLX_LINE_200}`,
@@ -673,10 +676,10 @@ function ApprovalQueue({ refreshKey, onDecided }) {
   return (
     <div style={{
       background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG,
-      border: `1px solid ${T.PLX_AMBER_300 || "#fcd34d"}`,
+      border: `1px solid ${T.PLX_AMBER_300}`,
       boxShadow: T.SHADOW_SM, overflow: "hidden", marginTop: 18,
     }}>
-      <div style={{ padding: "10px 16px", fontSize: 13, fontWeight: 700, borderBottom: `1px solid ${T.PLX_LINE_200}`, color: T.PLX_AMBER_700 || "#b45309" }}>
+      <div style={{ padding: "10px 16px", fontSize: 13, fontWeight: 700, borderBottom: `1px solid ${T.PLX_LINE_200}`, color: T.PLX_AMBER_700 }}>
         {`⏳ 承認待ちの在庫調整 (${items.length})`}
       </div>
       {items.map((r) => (
@@ -694,17 +697,17 @@ function ApprovalQueue({ refreshKey, onDecided }) {
             <span style={{ display: "flex", gap: 8 }}>
               <button disabled={busyId === r.id} onClick={() => decide(r, true)} style={{
                 padding: "5px 12px", borderRadius: T.RADIUS_MD, border: "none",
-                background: T.PLX_GREEN_600, color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer",
+                background: T.PLX_GREEN_600, color: T.PLX_ON_BRAND, fontSize: 11, fontWeight: 700, cursor: "pointer",
                 opacity: busyId === r.id ? 0.6 : 1,
               }}>✓ 承認</button>
               <button disabled={busyId === r.id} onClick={() => decide(r, false)} style={{
-                padding: "5px 12px", borderRadius: T.RADIUS_MD, border: `1px solid ${T.PLX_RED_300 || "#fca5a5"}`,
+                padding: "5px 12px", borderRadius: T.RADIUS_MD, border: `1px solid ${T.PLX_RED_300}`,
                 background: "transparent", color: T.PLX_RED_600, fontSize: 11, fontWeight: 700, cursor: "pointer",
                 opacity: busyId === r.id ? 0.6 : 1,
               }}>✕ 却下</button>
             </span>
           ) : (
-            <span style={{ color: T.PLX_AMBER_600, fontWeight: 700, fontSize: 11 }}>承認待ち</span>
+            <span style={{ color: T.PLX_AMBER_700, fontWeight: 700, fontSize: 11 }}>承認待ち</span>
           )}
         </div>
       ))}

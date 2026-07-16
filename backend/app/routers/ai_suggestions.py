@@ -96,6 +96,53 @@ def wrong_product_drop(jan: str | None, candidates) -> bool:
     return any(jan_verified_for(jan, getattr(c, "source_url", None)) for c in candidates)
 
 
+_TOKEN_RE = None
+
+
+def _title_tokens(s: str) -> set[str]:
+    """Significant tokens of a product title: ASCII alnum runs (brands like
+    GUM / Ora2 / DENT, model numbers) and JP script runs of 2+ chars,
+    NFKC-normalized and casefolded."""
+    global _TOKEN_RE
+    import re
+    import unicodedata
+
+    if _TOKEN_RE is None:
+        _TOKEN_RE = re.compile(r"[a-z0-9]{2,}|[぀-ゟ゠-ヿ一-鿿]{2,}")
+    s = unicodedata.normalize("NFKC", s or "").casefold()
+    return set(_TOKEN_RE.findall(s))
+
+
+def title_mismatch_drop(title: str | None, jan: str | None, candidates) -> bool:
+    """A4 guard for title (商品名) searches — the JAN path got the strict-
+    citation + wrong-product guards, the title path had NOTHING, so a name
+    query could silently surface a completely different product.
+
+    Rule (mirrors wrong_product_drop's fire-only-on-evidence philosophy):
+    on a title-only search, if NO title/brand candidate shares even one
+    significant token with the query, the whole result set is about some
+    other product — drop it all (the UI then shows the honest no-result
+    path). One overlapping candidate anywhere → keep everything, because
+    partial agreement means the agent found the right product family.
+    """
+    if jan or not title:
+        return False
+    import unicodedata
+
+    q = _title_tokens(title)
+    if not q:
+        return False
+    for c in candidates:
+        if getattr(c, "field_name", None) in ("title", "brand"):
+            v = unicodedata.normalize("NFKC", (getattr(c, "value", "") or "")).casefold()
+            if any(t in v for t in q):
+                return False
+    # No name/brand candidate at all → nothing to judge; keep (recall first).
+    if not any(getattr(c, "field_name", None) in ("title", "brand") for c in candidates):
+        return False
+    return True
+
+
 async def _load_master_lists(db, store_id: int) -> tuple[list[str], list[str]]:
     """Fetch the store's category names + active vendor names for prompt injection.
 
@@ -170,10 +217,40 @@ def _session_to_read(
     )
 
 
+async def _enforce_daily_cap(db, store_id: int) -> None:
+    """429 once a store has created `ai_daily_cap` sessions since JST
+    midnight (review C5) — each session is real OpenAI spend."""
+    from datetime import datetime
+
+    from sqlalchemy import func as _func
+
+    from app.config import settings as _settings
+    from app.services.tz import JST, jst_to_utc_naive
+
+    day_start_utc = jst_to_utc_naive(
+        datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
+    )
+    n = (await db.execute(
+        select(_func.count(AiSuggestionSession.id)).where(
+            AiSuggestionSession.store_id == store_id,
+            AiSuggestionSession.created_at >= day_start_utc,
+        )
+    )).scalar_one()
+    if n >= _settings.ai_daily_cap:
+        raise HTTPException(
+            429,
+            detail=(
+                f"本日のAI検索回数が上限（{_settings.ai_daily_cap}回）に達しました。"
+                "明日また実行できます。上限は AI_DAILY_CAP で変更できます。"
+            ),
+        )
+
+
 @router.post("", response_model=AiSuggestionRead, status_code=201)
 async def create_ai_suggestion(body: AiSuggestionRequest, db: DB, store_id: StoreId):
     if not body.jan and not body.title:
         raise HTTPException(400, detail="At least one of 'jan' or 'title' is required")
+    await _enforce_daily_cap(db, store_id)
 
     # Validate + normalise the JAN before any model call. NFKC strips full-
     # width digits to ASCII, the mod-10 check digit rejects typos. Saves an
@@ -216,8 +293,23 @@ async def create_ai_suggestion(body: AiSuggestionRequest, db: DB, store_id: Stor
         # different product (the Ora2-search-returns-GUM bug) — drop them.
         drop_unverified = wrong_product_drop(jan, result.candidates)
 
+        # Title-plausibility guard (A4): a name search whose results share no
+        # token with the query is a wrong product — suppress all candidates.
+        # Local list, NOT result.candidates mutation: real outcomes live in
+        # the lookup cache and must stay intact.
+        candidates_to_persist = list(result.candidates)
+        # Mock results are canned (same product for every query) — judging
+        # them against the query would suppress every mock title search.
+        if not getattr(outcome, "is_mock", False) and title_mismatch_drop(title, jan, candidates_to_persist):
+            logger.warning("title guard fired: query=%r produced unrelated candidates — suppressing", title)
+            candidates_to_persist = []
+            session.error_message = (
+                "検索結果が入力された商品名と一致しないため、候補を表示しません"
+                "（別商品の可能性があります）。名称を変えて再検索してください。"
+            )
+
         # Persist candidates as field_options
-        for i, candidate in enumerate(result.candidates):
+        for i, candidate in enumerate(candidates_to_persist):
             # Anti-hallucination: only strict-citation fields require a source_url.
             # Lenient fields (title, brand, description, category, indications, etc.)
             # are kept even without an inline citation — the search agent's
@@ -275,8 +367,13 @@ async def get_ai_suggestion(session_id: int, db: DB, store_id: StoreId):
 
 
 @router.post("/compare", response_model=AiSuggestionCompare)
-async def compare_ai_suggestion(body: AiSuggestionCompareRequest):
+async def compare_ai_suggestion(body: AiSuggestionCompareRequest, db: DB, store_id: StoreId):
     """Run the same lookup against N models in parallel.
+
+    Auth: StoreId was MISSING here until review C5 — this endpoint spends
+    real OpenAI money (up to 6 models per call) and the server binds
+    0.0.0.0, so it was callable by anyone on the LAN. It now requires the
+    same session/loopback auth as everything else, plus the daily cap.
 
     Used by the DevPanel model arena to A/B which model produces the best
     recall/quality. Not user-facing. Caller-supplied model ids are passed
@@ -291,6 +388,7 @@ async def compare_ai_suggestion(body: AiSuggestionCompareRequest):
 
     if not body.jan and not body.title:
         raise HTTPException(400, detail="At least one of 'jan' or 'title' is required")
+    await _enforce_daily_cap(db, store_id)
     if not body.models:
         raise HTTPException(400, detail="At least one model id is required")
     if len(body.models) > 6:

@@ -105,3 +105,37 @@ class AiSuggestionFieldOption(Base):
     )
 
     session: Mapped["AiSuggestionSession"] = relationship(back_populates="field_options")
+
+
+class AiCorrection(Base):
+    """AI-vs-final telemetry (mig 020, review A5).
+
+    One row per (product-save, AI-suggested field): the AI's top candidate vs
+    what the user actually saved. `accepted` = the values agree after
+    normalization. Written best-effort on product create — a telemetry failure
+    must never block a save (see products.record_ai_corrections).
+    """
+
+    __tablename__ = "ai_corrections"
+    __table_args__ = (
+        Index("ix_ai_corrections_store_created", "store_id", "created_at"),
+        Index("ix_ai_corrections_store_field", "store_id", "field_name"),
+        Base.__table_args__,
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    store_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("stores.id"), nullable=False)
+    session_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("ai_suggestion_sessions.id"), nullable=True
+    )
+    product_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    input_jan: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    input_title: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    field_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    ai_value: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    final_value: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    accepted: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    model_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

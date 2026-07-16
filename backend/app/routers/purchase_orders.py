@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Query
@@ -16,6 +16,7 @@ from app.deps import DB, StoreId, CurrentUserName
 from app.models.inventory import AdjustmentReason, InventoryAdjustment, InventoryField
 from app.models.product import Product, ProductStatus, ProductVariant
 from app.models.purchase_order import POComment, POStatus, PurchaseOrder, PurchaseOrderItem, PurchaseOrderTag
+from app.models.sale import SalesRecord
 from app.models.tag import Tag
 from sqlalchemy import insert as sa_insert
 from app.services.lots import receive_into_lot
@@ -215,15 +216,56 @@ async def auto_draft_purchase_orders(db: DB, store_id: StoreId, user_name: Curre
         )
     )).scalars().all())
 
+    # 30-day sales velocity per variant (B2 spec: docs/specs/suggested-
+    # reorder.md). One grouped query; refund rows (quantity < 0) excluded.
+    from app.services.tz import JST as _JST, jst_to_utc_naive as _jst2utc
+    _since = _jst2utc(datetime.now(_JST) - timedelta(days=30))
+    sold_30d = dict((await db.execute(
+        select(SalesRecord.variant_id, func.coalesce(func.sum(SalesRecord.quantity), 0))
+        .where(
+            SalesRecord.store_id == store_id,
+            SalesRecord.sold_at >= _since,
+            SalesRecord.quantity > 0,
+        )
+        .group_by(SalesRecord.variant_id)
+    )).all())
+
+    # Stock that expires within 30 days can't cover future demand — treat it
+    # as unavailable for reorder math (lot-level, summed per variant).
+    from app.models.lot import ProductLot
+    _expiring_cutoff = date.today() + timedelta(days=30)
+    expiring_qty = dict((await db.execute(
+        select(ProductLot.variant_id, func.coalesce(func.sum(ProductLot.qty_on_hand), 0))
+        .where(
+            ProductLot.store_id == store_id,
+            ProductLot.qty_on_hand > 0,
+            ProductLot.expiry_date.is_not(None),
+            ProductLot.expiry_date <= _expiring_cutoff,
+        )
+        .group_by(ProductLot.variant_id)
+    )).all())
+
     from collections import defaultdict
+    import math
     by_vendor: dict[int, list] = defaultdict(list)
     for v in variants:
         threshold = v.low_stock_threshold if v.low_stock_threshold is not None else 10
         available = (v.on_hand or 0) - (v.committed or 0) - (v.unavailable or 0)
+        usable = available - int(expiring_qty.get(v.id, 0))
         if available > threshold or v.id in open_variant_ids:
             continue
-        qty = max(1, threshold * 2 - available)
-        by_vendor[v.product.vendor_id].append((v, qty))
+        # velocity-based cover (30 days of demand) with the old threshold
+        # heuristic as the floor / zero-sales fallback.
+        sold = int(sold_30d.get(v.id, 0))
+        threshold_qty = max(1, threshold * 2 - available)
+        if sold > 0:
+            velocity_qty = max(0, math.ceil(sold) - usable)  # 30d demand − usable stock
+            qty = max(velocity_qty, threshold_qty)
+            reason = "velocity" if velocity_qty >= threshold_qty else "threshold"
+        else:
+            qty = threshold_qty
+            reason = "threshold"
+        by_vendor[v.product.vendor_id].append((v, qty, reason))
 
     if not by_vendor:
         return {"created": [], "message": "自動作成の対象がありません（低在庫かつ未発注の商品なし）"}
@@ -253,7 +295,8 @@ async def auto_draft_purchase_orders(db: DB, store_id: StoreId, user_name: Curre
         db.add(po)
         await db.flush()
         items = []
-        for v, qty in lines:
+        reasons = []
+        for v, qty, reason in lines:
             cost = v.cost if v.cost is not None else Decimal("0")
             item = PurchaseOrderItem(
                 purchase_order_id=po.id, store_id=store_id, variant_id=v.id,
@@ -261,11 +304,12 @@ async def auto_draft_purchase_orders(db: DB, store_id: StoreId, user_name: Curre
             )
             db.add(item)
             items.append(item)
+            reasons.append({"variant_id": v.id, "quantity": qty, "suggested_reason": reason})
         po.subtotal, po.total = _compute_totals(items, po.shipping_cost)
-        created.append(po.id)
+        created.append({"id": po.id, "lines": reasons})
 
     await db.commit()
-    return {"created": created}
+    return {"created": [c["id"] for c in created], "detail": created}
 
 
 # NOTE: declared before /{po_id} — "summary" must not be parsed as a po_id.
@@ -467,18 +511,13 @@ async def create_purchase_order(body: PurchaseOrderCreate, db: DB, store_id: Sto
     po.subtotal = subtotal
     po.total = subtotal + po.shipping_cost
 
-    # Tags — use direct insert to avoid lazy load
-    for tag_name in body.tags:
-        tag = (
-            await db.execute(select(Tag).where(Tag.store_id == store_id, Tag.name == tag_name))
-        ).scalar_one_or_none()
-        if not tag:
-            tag = Tag(store_id=store_id, name=tag_name)
-            db.add(tag)
-            await db.flush()
-        await db.execute(
-            sa_insert(PurchaseOrderTag).values(purchase_order_id=po.id, tag_id=tag.id)
-        )
+    # Tags — batched get-or-create (services/tags.py), one link INSERT
+    if body.tags:
+        from app.services.tags import ensure_tags
+        tags = await ensure_tags(db, store_id, body.tags)
+        await db.execute(sa_insert(PurchaseOrderTag), [
+            {"purchase_order_id": po.id, "tag_id": t.id} for t in tags
+        ])
 
     if body.status == POStatus.ordered:
         po.ordered_at = datetime.now(timezone.utc)
@@ -539,17 +578,12 @@ async def update_purchase_order(po_id: int, body: PurchaseOrderUpdate, db: DB, s
                 PurchaseOrderTag.purchase_order_id == po.id
             )
         )
-        for tag_name in body.tags:
-            tag = (
-                await db.execute(select(Tag).where(Tag.store_id == store_id, Tag.name == tag_name))
-            ).scalar_one_or_none()
-            if not tag:
-                tag = Tag(store_id=store_id, name=tag_name)
-                db.add(tag)
-                await db.flush()
-            await db.execute(
-                sa_insert(PurchaseOrderTag).values(purchase_order_id=po.id, tag_id=tag.id)
-            )
+        if body.tags:
+            from app.services.tags import ensure_tags
+            tags = await ensure_tags(db, store_id, body.tags)
+            await db.execute(sa_insert(PurchaseOrderTag), [
+                {"purchase_order_id": po.id, "tag_id": t.id} for t in tags
+            ])
 
     await db.commit()
     return _po_to_read(await _get_po(po.id, store_id, db))

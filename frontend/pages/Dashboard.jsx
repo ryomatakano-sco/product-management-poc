@@ -1,12 +1,13 @@
 // Dashboard — landing page (Yoshioka 2026-05-11).
-// AI summary (server returns canned text + real KPI counts) + KPI tiles +
-// "要対応の商品" list (top 5 lowest-stock products) + 最近の活動 (mock) +
-// category breakdown (mock).
+// Every section is wired to real endpoints: AI summary + KPI tiles +
+// 要対応の商品 (GET /dashboard/summary), 月別入出庫 (GET /dashboard/
+// monthly-flow), 滞留在庫 (GET /dashboard/slow-movers), 最近の活動
+// (inventory adjustments via /dashboard/summary), category breakdown
+// (real category_breakdown data). Sections with no data render explicit
+// empty states — nothing here is mocked.
 
-const DASH_AMBER = "#D97706";
-const DASH_AMBER_LIGHT = "#FEF3C7";
-const DASH_RED = "#DC2626";
-const DASH_RED_LIGHT = "#FEE2E2";
+// Tone colors read from T at render time (module-scope consts would freeze
+// the light palette and break dark mode).
 
 function Dashboard() {
   const summaryQ = useFetch(() => api.getDashboardSummary(), []);
@@ -70,7 +71,7 @@ function Dashboard() {
           display: "inline-flex", alignItems: "center", gap: 8,
           height: 36, padding: "0 14px",
           background: T.PLX_CARD_BG, border: `1px solid ${T.PLX_LINE_200}`,
-          borderRadius: 9999, fontSize: 13, fontWeight: 600, color: T.PLX_INK_700,
+          borderRadius: T.RADIUS_PILL, fontSize: 13, fontWeight: 600, color: T.PLX_INK_700,
         }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.PLX_INK_500}
             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -240,8 +241,8 @@ function AiSummaryCard({ summary, onRegenerate }) {
         }}>AIサマリー — 1日1回 朝6:00 更新</span>
         {summary.ai_generated && (
           <span title="OpenAI により生成された本日のサマリーです" style={{
-            fontSize: 10, fontWeight: 800, padding: "2px 9px", borderRadius: 9999,
-            background: T.PLX_GREEN_600, color: "#fff", letterSpacing: "0.04em",
+            fontSize: 10, fontWeight: 800, padding: "2px 9px", borderRadius: T.RADIUS_PILL,
+            background: T.PLX_GREEN_600, color: T.PLX_ON_BRAND, letterSpacing: "0.04em",
           }}>✨ AI生成</span>
         )}
         <div style={{ flex: 1 }} />
@@ -322,17 +323,18 @@ function AiSummarySkeleton() {
 
 function KpiTile({ icon, label, value, unit, delta, tone = "green", clickable, onClick }) {
   const color =
-    tone === "red"   ? DASH_RED :
-    tone === "amber" ? DASH_AMBER :
+    tone === "red"   ? T.PLX_RED_600 :
+    tone === "amber" ? T.PLX_AMBER_700 :
     tone === "muted" ? PLX_MUTED :
                        PLX_GREEN;
   const bg =
-    tone === "red"   ? DASH_RED_LIGHT :
-    tone === "amber" ? DASH_AMBER_LIGHT :
-    tone === "muted" ? "#F3F4F6" :
+    tone === "red"   ? T.PLX_RED_100 :
+    tone === "amber" ? T.PLX_AMBER_100 :
+    tone === "muted" ? T.PLX_PILL_BG :
                        PLX_GREEN_LIGHT;
   return (
-    <div onClick={clickable ? onClick : undefined} style={{
+    <div onClick={clickable ? onClick : undefined}
+      {...(clickable ? plxClickable(onClick) : {})} style={{
       background: T.PLX_CARD_BG, borderRadius: 14, border: `1px solid ${PLX_BORDER}`,
       padding: "16px 18px", height: 104,
       cursor: clickable ? "pointer" : "default",
@@ -357,7 +359,7 @@ function KpiTile({ icon, label, value, unit, delta, tone = "green", clickable, o
       {delta && (
         <div style={{
           marginTop: 8, fontSize: 10, fontWeight: 700, color,
-          background: bg, display: "inline-block", padding: "2px 8px", borderRadius: 9999,
+          background: bg, display: "inline-block", padding: "2px 8px", borderRadius: T.RADIUS_PILL,
         }}>{delta}</div>
       )}
     </div>
@@ -416,7 +418,8 @@ function AttentionTable({ rows }) {
         const days = daysUntil(p.expiry_date);
         const lowAvail = (p.total_available ?? 0) <= 10;
         return (
-          <div key={p.id} onClick={() => navigate(`/products/${p.id}`)} style={{
+          <div key={p.id} onClick={() => navigate(`/products/${p.id}`)}
+            {...plxClickable(() => navigate(`/products/${p.id}`))} style={{
             display: "grid", gridTemplateColumns: "2.1fr 0.8fr 0.7fr 1fr 18px",
             padding: "11px 14px", alignItems: "center", cursor: "pointer", borderRadius: 8,
             borderBottom: i < rows.length - 1 ? `1px solid ${PLX_BORDER}` : "none",
@@ -442,20 +445,20 @@ function AttentionTable({ rows }) {
             </div>
             <span>
               {p.item_type === "consumable"
-                ? <Pill color="#2563EB" bg={PLX_BLUE_LIGHT}>消耗品</Pill>
+                ? <Pill color={T.PLX_BLUE_600} bg={PLX_BLUE_LIGHT}>消耗品</Pill>
                 : <Pill color={PLX_GREEN} bg={PLX_GREEN_LIGHT}>物販</Pill>}
             </span>
             <span style={{
               textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700,
-              color: lowAvail ? DASH_RED : PLX_TEXT,
+              color: lowAvail ? T.PLX_RED_600 : PLX_TEXT,
             }}>{p.total_available ?? 0}
               <span style={{ fontSize: 10, color: PLX_MUTED, marginLeft: 2, fontWeight: 500 }}>個</span>
             </span>
             <span style={{ textAlign: "center" }}>
-              {lowAvail && <Pill color={DASH_RED} bg={DASH_RED_LIGHT}>● 在庫低下</Pill>}
-              {!lowAvail && days != null && days <= 30 && days >= 0 && <Pill color={DASH_AMBER} bg={DASH_AMBER_LIGHT}>あと {days} 日</Pill>}
-              {!lowAvail && days != null && days < 0 && <Pill color={DASH_RED} bg={DASH_RED_LIGHT}>期限切れ</Pill>}
-              {!lowAvail && (days == null || days > 30) && <Pill color={PLX_MUTED} bg="#F3F4F6">確認</Pill>}
+              {lowAvail && <Pill color={T.PLX_RED_600} bg={T.PLX_RED_100}>● 在庫低下</Pill>}
+              {!lowAvail && days != null && days <= 30 && days >= 0 && <Pill color={T.PLX_AMBER_700} bg={T.PLX_AMBER_100}>あと {days} 日</Pill>}
+              {!lowAvail && days != null && days < 0 && <Pill color={T.PLX_RED_600} bg={T.PLX_RED_100}>期限切れ</Pill>}
+              {!lowAvail && (days == null || days > 30) && <Pill color={PLX_MUTED} bg={T.PLX_PILL_BG}>確認</Pill>}
             </span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={PLX_SUBTLE}
               strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -507,8 +510,8 @@ function AttentionSkeleton() {
   );
 }
 
-// ── Activity list — static mock for PoC ────────────────────────────────────
-// TODO: wire to inventory_adjustments + audit log after demo.
+// ── Activity list — real data (summary.recent_activity = 5 most recent
+// inventory adjustments, see backend dashboard.py) ─────────────────────────
 
 // Map a backend `kind` (e.g. inventory adjustment reason enum) to a small
 // icon name. The set is intentionally short — we don't need a perfect
@@ -599,7 +602,7 @@ function ActivityIcon({ name }) {
   };
   switch (name) {
     case "in":  return <svg {...p}><line x1="12" y1="5" x2="12" y2="19"/><polyline points="5 12 12 19 19 12"/></svg>;
-    case "out": return <svg {...p} stroke={DASH_AMBER}><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>;
+    case "out": return <svg {...p} stroke={T.PLX_AMBER_700}><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>;
     case "new": return <svg {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
     case "ai":  return <svg {...p}><path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6z"/></svg>;
     case "po":  return <svg {...p}><rect x="1" y="6" width="14" height="11" rx="1.5"/><path d="M15 9h4l3 3v5h-7"/></svg>;
@@ -645,17 +648,18 @@ function CategoryBars({ rows: rawRows }) {
       {rows.map((r) => (
         <div key={r.category_id}
           onClick={() => navigate(`/products?category_id=${r.category_id}`)}
+          {...plxClickable(() => navigate(`/products?category_id=${r.category_id}`))}
           title={`在庫金額 ¥${formatYen(r.stock_value_jpy)}`}
           style={{
             display: "grid", gridTemplateColumns: "140px 1fr 130px",
             alignItems: "center", gap: 14, fontSize: 12, cursor: "pointer",
           }}>
           <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>
-          <div style={{ height: 10, background: PLX_GREEN_50, borderRadius: 9999, position: "relative", overflow: "hidden" }}>
+          <div style={{ height: 10, background: PLX_GREEN_50, borderRadius: T.RADIUS_PILL, position: "relative", overflow: "hidden" }}>
             <div style={{
               position: "absolute", left: 0, top: 0, bottom: 0,
               width: `${(r.stock_count / max) * 100}%`,
-              background: PLX_GREEN, borderRadius: 9999,
+              background: PLX_GREEN, borderRadius: T.RADIUS_PILL,
             }} />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
@@ -693,7 +697,7 @@ function SkelBlock({ w = "100%", h = 12, r = 6 }) {
   return (
     <div style={{
       width: w, height: h, borderRadius: r,
-      background: "linear-gradient(90deg, #F3F4F6 0%, #E5E7EB 50%, #F3F4F6 100%)",
+      background: `linear-gradient(90deg, ${T.PLX_SURFACE_100} 0%, ${T.PLX_LINE_200} 50%, ${T.PLX_SURFACE_100} 100%)`,
       backgroundSize: "400px 100%",
       animation: "plxshimmer 1.4s linear infinite",
     }} />
@@ -723,7 +727,7 @@ function MonthlyFlowBars({ months }) {
               }} />
               <div title={`販売 ${m.sold} 点`} style={{
                 width: 18, height: Math.max(2, Math.round(H * m.sold / max)),
-                background: T.PLX_BLUE_600 || "#2E7BD6", borderRadius: "4px 4px 0 0",
+                background: T.PLX_BLUE_600, borderRadius: "4px 4px 0 0",
               }} />
             </div>
             <div style={{ fontSize: 10, color: PLX_MUTED, marginTop: 6, fontFamily: T.FONT_MONO }}>{m.month.slice(2)}</div>
@@ -733,7 +737,7 @@ function MonthlyFlowBars({ months }) {
       </div>
       <div style={{ display: "flex", gap: 16, marginTop: 10, fontSize: 11, color: PLX_MUTED, justifyContent: "center" }}>
         <span><span style={{ display: "inline-block", width: 10, height: 10, background: T.PLX_GREEN_600, borderRadius: 2, marginRight: 5 }} />入荷</span>
-        <span><span style={{ display: "inline-block", width: 10, height: 10, background: T.PLX_BLUE_600 || "#2E7BD6", borderRadius: 2, marginRight: 5 }} />販売</span>
+        <span><span style={{ display: "inline-block", width: 10, height: 10, background: T.PLX_BLUE_600, borderRadius: 2, marginRight: 5 }} />販売</span>
       </div>
     </div>
   );
@@ -758,7 +762,8 @@ function SlowMoversTable({ items }) {
         <span style={{ textAlign: "right" }}>最終販売</span>
       </div>
       {items.map((r) => (
-        <div key={r.id} onClick={() => navigate(`/products/${r.id}`)} style={{
+        <div key={r.id} onClick={() => navigate(`/products/${r.id}`)}
+          {...plxClickable(() => navigate(`/products/${r.id}`))} style={{
           display: "grid", gridTemplateColumns: "1.8fr 0.5fr 0.8fr 0.9fr",
           padding: "7px 0", fontSize: 12, alignItems: "center", cursor: "pointer",
           borderTop: `1px solid ${PLX_BORDER}`,

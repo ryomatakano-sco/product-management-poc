@@ -1,6 +1,6 @@
 // AdminShell — paylight X dark-green sidebar + topbar.
 // Refreshed 2026-05-12 to match the compass design brief §2.8 + §3:
-//   - Dark green sidebar (PLX_SIDEBAR_BG = #0F2A23)
+//   - Dark navy sidebar (PLX_SIDEBAR_BG, navy since the rebrand)
 //   - Nav groups (メイン / オペレーション / マスタ / その他)
 //   - Active row pill in PLX_GREEN_600 + 3 px bright stripe on the left edge
 //   - Wordmark logo header (square "pX" mark + "paylight X" text)
@@ -76,11 +76,11 @@ function PlxSidebar({ current }) {
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{
-            width: 28, height: 28, borderRadius: 6, background: T.PLX_GREEN_600,
-            color: "#fff", fontWeight: 800, fontSize: 13, letterSpacing: "-0.02em",
+            width: 28, height: 28, borderRadius: T.RADIUS_SM, background: T.PLX_GREEN_600,
+            color: T.PLX_SIDEBAR_INK_ACTIVE, fontWeight: 800, fontSize: 13, letterSpacing: "-0.02em",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>pX</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: T.PLX_SIDEBAR_INK_ACTIVE, letterSpacing: "-0.01em" }}>
             paylight <span style={{ color: T.PLX_GREEN_500 }}>X</span>
           </div>
         </div>
@@ -92,13 +92,13 @@ function PlxSidebar({ current }) {
         borderBottom: "1px solid rgba(255,255,255,0.06)",
       }}>
         <div style={{
-          width: 28, height: 28, borderRadius: 6, background: "rgba(255,255,255,0.08)",
-          color: "#fff", fontSize: 11, fontWeight: 700,
+          width: 28, height: 28, borderRadius: T.RADIUS_SM, background: "rgba(255,255,255,0.08)",
+          color: T.PLX_SIDEBAR_INK_ACTIVE, fontSize: 11, fontWeight: 700,
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>本</div>
         <div style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }}>
           <div style={{
-            fontSize: 12, fontWeight: 600, color: "#fff",
+            fontSize: 12, fontWeight: 600, color: T.PLX_SIDEBAR_INK_ACTIVE,
             whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           }}>ペイライト歯科クリニック</div>
           <div style={{ fontSize: 10, color: T.PLX_SIDEBAR_INK_DIM }}>
@@ -108,7 +108,7 @@ function PlxSidebar({ current }) {
       </div>
 
       {/* Nav groups */}
-      <div data-tour="nav" style={{ padding: "12px 8px 8px", flex: 1, overflowY: "auto" }}>
+      <nav aria-label="メイン" data-tour="nav" style={{ padding: "12px 8px 8px", flex: 1, overflowY: "auto" }}>
         {groups.map((g) => (
           <div key={g.label} style={{ marginBottom: 14 }}>
             <div style={{
@@ -120,7 +120,7 @@ function PlxSidebar({ current }) {
             ))}
           </div>
         ))}
-      </div>
+      </nav>
 
       {/* Footer — logged-in user (window.PLX_ME set by the app.jsx auth gate) */}
       <div style={{
@@ -128,12 +128,12 @@ function PlxSidebar({ current }) {
         borderTop: "1px solid rgba(255,255,255,0.06)",
       }}>
         <div style={{
-          width: 32, height: 32, borderRadius: "50%", background: "#F4D4B8",
+          width: 32, height: 32, borderRadius: "50%", background: "#F4D4B8", /* fixed avatar colors — theme-independent */
           color: "#1F2937", fontWeight: 700, fontSize: 13,
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>{(window.PLX_ME?.display_name || "山田 花子").charAt(0)}</div>
         <div style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: T.PLX_SIDEBAR_INK_ACTIVE, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {window.PLX_ME?.display_name || "山田 花子"}
           </div>
           <div style={{ fontSize: 10, color: T.PLX_SIDEBAR_INK_DIM }}>
@@ -152,7 +152,7 @@ function PlxSidebar({ current }) {
             cursor: "pointer", fontSize: 13, display: "inline-flex",
             alignItems: "center", justifyContent: "center", flexShrink: 0,
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = "#fff"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.45)"; }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = T.PLX_SIDEBAR_INK_ACTIVE; e.currentTarget.style.borderColor = "rgba(255,255,255,0.45)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.color = T.PLX_SIDEBAR_INK_DIM; e.currentTarget.style.borderColor = "rgba(255,255,255,0.18)"; }}
         >⎋</button>
       </div>
@@ -170,8 +170,8 @@ function PlxSidebar({ current }) {
       >
         <span style={{
           fontSize: 9, fontWeight: 700, letterSpacing: ".08em",
-          color: "#FCD34D", background: "rgba(252,211,77,0.12)",
-          padding: "2px 7px", borderRadius: 9999,
+          color: "#FCD34D", /* on constant-dark sidebar */ background: "rgba(252,211,77,0.12)",
+          padding: "2px 7px", borderRadius: T.RADIUS_PILL,
           border: "1px solid rgba(252,211,77,0.35)",
           textTransform: "uppercase",
         }}>{PLX_VERSION.channel}</span>
@@ -191,24 +191,25 @@ function SbItem({ spec, active }) {
     height: 40, padding: "0 16px", margin: "2px 4px", borderRadius: 8,
     textDecoration: "none", cursor: "pointer",
     background: active ? T.PLX_SIDEBAR_ACTIVE_BG : "transparent",
-    color: active ? "#FFFFFF" : T.PLX_SIDEBAR_INK,
+    color: active ? T.PLX_SIDEBAR_INK_ACTIVE : T.PLX_SIDEBAR_INK,
     fontSize: 13, fontWeight: active ? 600 : 500,
   };
   return (
-    <a href={spec.to ? "#" + spec.to : "#"} onClick={(e) => { if (!spec.to) e.preventDefault(); }} style={style}>
+    <a href={spec.to ? "#" + spec.to : "#"} aria-current={active ? "page" : undefined}
+      onClick={(e) => { if (!spec.to) e.preventDefault(); }} style={style}>
       {active && (
         <span style={{
           position: "absolute", left: -4, top: 6, bottom: 6, width: 3,
           background: T.PLX_GREEN_500, borderRadius: 2,
         }} />
       )}
-      <NavIcon name={spec.icon} color={active ? "#fff" : T.PLX_SIDEBAR_INK} />
+      <NavIcon name={spec.icon} color={active ? T.PLX_SIDEBAR_INK_ACTIVE : T.PLX_SIDEBAR_INK} />
       <span style={{ flex: 1 }}>{spec.label}</span>
       {spec.badge != null && (
         <span style={{
           background: active ? "rgba(255,255,255,0.22)" : T.PLX_GREEN_600,
-          color: "#fff", fontSize: 10, fontWeight: 700,
-          padding: "2px 7px", borderRadius: 9999,
+          color: T.PLX_ON_BRAND, fontSize: 10, fontWeight: 700,
+          padding: "2px 7px", borderRadius: T.RADIUS_PILL,
         }}>{spec.badge}</span>
       )}
     </a>
@@ -392,7 +393,7 @@ function PlxTopBar({ title, breadcrumbs, headerRight }) {
           position: "relative", width: 280, height: 36, flexShrink: 0,
           padding: "0 12px 0 36px", fontSize: 13, fontFamily: "inherit",
           background: T.PLX_SURFACE_50, border: `1px solid ${T.PLX_LINE_200}`,
-          borderRadius: T.RADIUS_MD, outline: "none", color: T.PLX_INK_500,
+          borderRadius: T.RADIUS_MD, color: T.PLX_INK_500,
           boxSizing: "border-box", cursor: "pointer", textAlign: "left",
           display: "flex", alignItems: "center", justifyContent: "space-between",
         }}
@@ -483,7 +484,7 @@ function NotificationBell() {
         {unread > 0 && (
           <span style={{
             position: "absolute", top: 4, right: 5, minWidth: 15, height: 15, padding: "0 3px",
-            borderRadius: 9999, background: T.PLX_RED_600, color: "#fff",
+            borderRadius: T.RADIUS_PILL, background: T.PLX_RED_600, color: T.PLX_ON_BRAND,
             fontSize: 9, fontWeight: 800, display: "inline-flex",
             alignItems: "center", justifyContent: "center",
             border: `2px solid ${T.PLX_SURFACE_0}`,
@@ -494,7 +495,7 @@ function NotificationBell() {
       {open && (
         <>
           {/* click-away scrim */}
-          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 60 }} />
+          <div onClick={() => setOpen(false)} aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: 60 }} />
           <div style={{
             position: "absolute", top: 42, right: 0, width: 360, zIndex: 61,
             background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG,
@@ -520,7 +521,8 @@ function NotificationBell() {
                 </div>
               )}
               {items.map((n) => (
-                <div key={n.id} onClick={() => openItem(n)} style={{
+                <div key={n.id} onClick={() => openItem(n)}
+                  {...(n.link_path ? plxClickable(() => openItem(n)) : {})} style={{
                   padding: "10px 14px", cursor: n.link_path ? "pointer" : "default",
                   display: "flex", gap: 10, alignItems: "flex-start",
                   background: n.read_at ? "transparent" : T.PLX_GREEN_050 || T.PLX_SURFACE_50,
@@ -573,7 +575,7 @@ function PlxThemeToggle() {
     >
       {isDark ? (
         // sun
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.PLX_AMBER_600}
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.PLX_AMBER_700}
           strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="4"/>
           <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>

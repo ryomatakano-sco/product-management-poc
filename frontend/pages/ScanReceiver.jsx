@@ -127,7 +127,7 @@ function ScanReceiver({ token }) {
           <div style={{
             marginTop: 12, borderRadius: 10, padding: "10px 12px", fontSize: 12.5, lineHeight: 1.5,
             background: notice.ok ? "#11331f" : "#3a1414",
-            border: `1px solid ${notice.ok ? "#1AA68A" : "#FCA5A5"}`,
+            border: `1px solid ${notice.ok ? "#5C8DBD" : "#FCA5A5"}`, /* fixed dark-palette values — constant-dark page */
             color: notice.ok ? "#86efac" : "#fca5a5", textAlign: "center", fontWeight: 700,
           }}>{notice.text}</div>
         )}
@@ -146,7 +146,7 @@ function ScanReceiver({ token }) {
               style={{
                 flex: 1, height: 44, borderRadius: 10, border: "1px solid #374151",
                 background: "#1F2937", color: "#ECEEF1", padding: "0 14px", fontSize: 16,
-                fontFamily: "ui-monospace,monospace", outline: "none", boxSizing: "border-box",
+                fontFamily: "ui-monospace,monospace", boxSizing: "border-box",
               }}
             />
             <button
@@ -154,7 +154,7 @@ function ScanReceiver({ token }) {
               disabled={!manual}
               style={{
                 height: 44, padding: "0 18px", borderRadius: 10, border: "none",
-                background: "#1AA68A", color: "#fff", fontWeight: 700, fontSize: 13,
+                background: "#5C8DBD", color: "#0F1419", fontWeight: 700, fontSize: 13, /* dark-palette brand; 4.6:1 */
                 cursor: "pointer", opacity: manual ? 1 : 0.5,
               }}
             >送信</button>

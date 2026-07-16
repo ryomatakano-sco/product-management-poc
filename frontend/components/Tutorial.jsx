@@ -272,7 +272,7 @@ function TutorialTour({ onExit }) {
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 10500 }}>
       {/* Click-catcher: swallows stray clicks so the tour stays in control. */}
-      <div style={{ position: "fixed", inset: 0 }} onClick={(e) => e.stopPropagation()} />
+      <div style={{ position: "fixed", inset: 0 }} aria-hidden="true" onClick={(e) => e.stopPropagation()} />
 
       {/* Spotlight hole (or full dim while settling / on centered steps). */}
       {hole ? (
@@ -291,14 +291,14 @@ function TutorialTour({ onExit }) {
 
       {/* Tooltip card */}
       {!settling && (
-        <div style={{
+        <div role="dialog" aria-modal="true" aria-labelledby="plx-tour-title" style={{
           ...cardStyle,
           background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG,
           border: `1px solid ${T.PLX_LINE_200}`,
           boxShadow: "0 16px 48px rgba(0,0,0,0.25)",
           padding: "18px 20px", zIndex: 10501,
         }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: T.PLX_INK_900, marginBottom: 6 }}>
+          <div id="plx-tour-title" style={{ fontSize: 15, fontWeight: 800, color: T.PLX_INK_900, marginBottom: 6 }}>
             {step.title}
           </div>
           <div style={{ fontSize: 13, color: T.PLX_INK_700, lineHeight: 1.7 }}>
@@ -324,7 +324,7 @@ function TutorialTour({ onExit }) {
             )}
             <button onClick={next} style={{
               padding: "7px 18px", borderRadius: T.RADIUS_MD, border: "none",
-              background: T.PLX_GREEN_600, color: "#fff",
+              background: T.PLX_GREEN_600, color: T.PLX_ON_BRAND,
               fontSize: 12, fontWeight: 700, cursor: "pointer",
             }}>{idx + 1 === steps.length ? "完了" : "次へ"}</button>
           </div>

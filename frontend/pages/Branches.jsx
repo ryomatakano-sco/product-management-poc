@@ -50,6 +50,7 @@ function BranchCard({ branch, onEdit }) {
       boxShadow: T.SHADOW_SM, padding: 22, cursor: "pointer",
     }}
       onClick={() => navigate(`/branches/${branch.id}`)}
+      {...plxClickable(() => navigate(`/branches/${branch.id}`))}
       onMouseEnter={(e) => e.currentTarget.style.boxShadow = T.SHADOW_MD}
       onMouseLeave={(e) => e.currentTarget.style.boxShadow = T.SHADOW_SM}
     >
@@ -97,8 +98,8 @@ function BranchCard({ branch, onEdit }) {
               ¥{formatYen(snap.total_value_jpy)}
             </span>
             {snap.low_stock_count > 0 && (
-              <span style={{ fontSize: 10, fontWeight: 700, color: T.PLX_AMBER_600,
-                background: T.PLX_AMBER_100, padding: "2px 8px", borderRadius: 9999 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: T.PLX_AMBER_700,
+                background: T.PLX_AMBER_100, padding: "2px 8px", borderRadius: T.RADIUS_PILL }}>
                 低 {snap.low_stock_count}
               </span>
             )}

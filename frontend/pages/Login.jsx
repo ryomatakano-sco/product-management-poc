@@ -25,7 +25,7 @@ function Login({ onLoggedIn }) {
   const input = {
     width: "100%", height: 44, padding: "0 14px", borderRadius: 10,
     border: `1px solid ${T.PLX_LINE_200}`, fontSize: 14, color: T.PLX_INK_900,
-    background: T.PLX_SURFACE_0, boxSizing: "border-box", outline: "none",
+    background: T.PLX_SURFACE_0, boxSizing: "border-box", 
   };
 
   return (
@@ -37,8 +37,8 @@ function Login({ onLoggedIn }) {
         {/* Brand */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "center", marginBottom: 22 }}>
           <span style={{
-            width: 38, height: 38, borderRadius: 10, background: "#0F2A23",
-            color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center",
+            width: 38, height: 38, borderRadius: 10, background: T.PLX_SIDEBAR_BG,
+            color: T.PLX_ON_BRAND, display: "inline-flex", alignItems: "center", justifyContent: "center",
             fontWeight: 800, fontSize: 15,
           }}>pX</span>
           <span style={{ fontSize: 20, fontWeight: 800, color: T.PLX_INK_900 }}>
@@ -56,19 +56,15 @@ function Login({ onLoggedIn }) {
             スタッフアカウントでサインインしてください
           </div>
 
-          <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: T.PLX_INK_700, marginBottom: 6 }}>
-            メールアドレス
-          </label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+          <TextInput id="login-email" label="メールアドレス"
+            type="email" value={email} onChange={(e) => setEmail(e.target.value)}
             placeholder="admin@example.com" autoComplete="username" required
-            style={{ ...input, marginBottom: 14 }} />
+            style={{ ...input }} />
 
-          <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: T.PLX_INK_700, marginBottom: 6 }}>
-            パスワード
-          </label>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+          <TextInput id="login-password" label="パスワード"
+            type="password" value={password} onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••" autoComplete="current-password" required
-            style={{ ...input, marginBottom: 6 }} />
+            style={{ ...input }} />
 
           {error && (
             <div style={{
@@ -77,11 +73,9 @@ function Login({ onLoggedIn }) {
             }}>{error}</div>
           )}
 
-          <button type="submit" disabled={busy} style={{
-            marginTop: 16, width: "100%", height: 44, borderRadius: 9999, border: "none",
-            background: T.PLX_GREEN_600, color: "#fff", fontWeight: 700, fontSize: 14,
-            cursor: busy ? "wait" : "pointer", opacity: busy ? 0.7 : 1,
-          }}>{busy ? "サインイン中…" : "サインイン"}</button>
+          <Button type="submit" variant="primary" loading={busy} style={{
+            marginTop: 16, width: "100%", height: 44, fontSize: 14,
+          }}>サインイン</Button>
 
           <div style={{ marginTop: 14, fontSize: 11, color: T.PLX_INK_400, textAlign: "center" }}>
             PoC 開発用: admin@example.com / admin

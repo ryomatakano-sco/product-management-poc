@@ -10,6 +10,7 @@ from sqlalchemy import case, exists, func, insert as sa_insert, literal, or_, se
 from sqlalchemy.orm import selectinload
 
 from app.deps import DB, StoreId, CurrentUserName
+from app.services.audit import log_event
 from app.models.category import Category
 from app.models.product import ItemType, Product, ProductImage, ProductStatus, ProductVariant
 from app.models.sale import SalesRecord
@@ -636,6 +637,7 @@ async def get_product(product_id: int, db: DB, store_id: StoreId):
 async def create_product(body: ProductCreate, db: DB, store_id: StoreId, user_name: CurrentUserName = None):
     product = Product(
         internal_code=await _next_internal_code(db, store_id, body.item_type),
+        created_by=user_name,
         store_id=store_id,
         name=body.name,
         name_kana=body.name_kana,
@@ -683,6 +685,7 @@ async def create_product(body: ProductCreate, db: DB, store_id: StoreId, user_na
     # Variants — ensure at least one default
     has_default = False
     first_variant: ProductVariant | None = None
+    created_variants: list[ProductVariant] = []
     for vdata in body.variants:
         v = ProductVariant(
             product_id=product.id,
@@ -694,6 +697,7 @@ async def create_product(body: ProductCreate, db: DB, store_id: StoreId, user_na
         if v.is_default:
             has_default = True
         db.add(v)
+        created_variants.append(v)
 
     if not body.variants:
         # Auto-create default variant
@@ -709,6 +713,27 @@ async def create_product(body: ProductCreate, db: DB, store_id: StoreId, user_na
         # blanking SKU/price in every list view).
         first_variant.is_default = True
 
+    # Initial stock entered on the create form must exist at a branch, not
+    # only as the variant's denormalized total — the sale/adjust guards read
+    # the per-branch rows (mig 012), so without this a product created with
+    # stock could never be sold (found by tests/test_sales.py).
+    if any(v.on_hand for v in created_variants):
+        from app.models.inventory import VariantBranchStock
+        from app.services.stock import StockError, resolve_branch_id
+
+        await db.flush()  # variant ids
+        try:
+            main_branch = await resolve_branch_id(db, store_id, None)
+        except StockError as e:
+            await db.rollback()
+            raise HTTPException(400, detail=e.message)
+        for v in created_variants:
+            if v.on_hand:
+                db.add(VariantBranchStock(
+                    store_id=store_id, variant_id=v.id,
+                    branch_id=main_branch, on_hand=v.on_hand,
+                ))
+
     # Images
     for idata in body.images:
         db.add(ProductImage(
@@ -717,21 +742,28 @@ async def create_product(body: ProductCreate, db: DB, store_id: StoreId, user_na
             **idata.model_dump(),
         ))
 
-    # Tags — auto-create missing, use direct insert to avoid lazy load
-    for tag_name in body.tags:
-        tag = (
-            await db.execute(
-                select(Tag).where(Tag.store_id == store_id, Tag.name == tag_name)
-            )
-        ).scalar_one_or_none()
-        if not tag:
-            tag = Tag(store_id=store_id, name=tag_name)
-            db.add(tag)
-            await db.flush()
-        await db.execute(
-            sa_insert(ProductTag).values(product_id=product.id, tag_id=tag.id)
+    # Tags — batched get-or-create (services/tags.py), one link INSERT
+    if body.tags:
+        from app.services.tags import ensure_tags
+        tags = await ensure_tags(db, store_id, body.tags)
+        await db.execute(sa_insert(ProductTag), [
+            {"product_id": product.id, "tag_id": t.id} for t in tags
+        ])
+
+    # A5 telemetry: AI top-candidate vs saved value, per field. Best-effort —
+    # never blocks the save (see services/ai_telemetry.py).
+    if body.ai_session_id and session:
+        from app.services.ai_telemetry import record_ai_corrections
+        default_v = next((v for v in created_variants if v.is_default),
+                         created_variants[0] if created_variants else None)
+        await record_ai_corrections(
+            db, store_id=store_id, product=product,
+            default_variant=default_v, session=session,
         )
 
+    log_event(db, store_id=store_id, user_name=user_name,
+              action="product_created", entity_type="product",
+              entity_id=product.id, detail=product.name)
     await db.commit()
 
     # Return full detail
@@ -739,7 +771,8 @@ async def create_product(body: ProductCreate, db: DB, store_id: StoreId, user_na
 
 
 @router.patch("/{product_id}", response_model=ProductDetail)
-async def update_product(product_id: int, body: ProductUpdate, db: DB, store_id: StoreId):
+async def update_product(product_id: int, body: ProductUpdate, db: DB, store_id: StoreId,
+                         user_name: CurrentUserName = None):
     product = (
         await db.execute(
             select(Product).where(Product.id == product_id, Product.store_id == store_id)
@@ -747,14 +780,23 @@ async def update_product(product_id: int, body: ProductUpdate, db: DB, store_id:
     ).scalar_one_or_none()
     if not product:
         raise HTTPException(404, detail="Product not found")
+    changed = []
     for key, val in body.model_dump(exclude_unset=True).items():
+        if getattr(product, key, None) != val:
+            changed.append(key)
         setattr(product, key, val)
+    if changed:
+        product.updated_by = user_name
+        log_event(db, store_id=store_id, user_name=user_name,
+                  action="product_updated", entity_type="product",
+                  entity_id=product.id, detail=", ".join(changed))
     await db.commit()
     return await get_product(product_id, db, store_id)
 
 
 @router.delete("/{product_id}", response_model=ProductDetail)
-async def delete_product(product_id: int, db: DB, store_id: StoreId):
+async def delete_product(product_id: int, db: DB, store_id: StoreId,
+                         user_name: CurrentUserName = None):
     """Soft delete via status='archived'."""
     product = (
         await db.execute(
@@ -764,6 +806,10 @@ async def delete_product(product_id: int, db: DB, store_id: StoreId):
     if not product:
         raise HTTPException(404, detail="Product not found")
     product.status = ProductStatus.archived
+    product.updated_by = user_name
+    log_event(db, store_id=store_id, user_name=user_name,
+              action="product_archived", entity_type="product",
+              entity_id=product.id, detail=product.name)
     await db.commit()
     return await get_product(product_id, db, store_id)
 

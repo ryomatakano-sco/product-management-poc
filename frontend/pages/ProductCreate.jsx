@@ -517,8 +517,8 @@ function ProductCreate({ editId }) {
 
       {error && (
         <div style={{
-          background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 10,
-          padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#991B1B",
+          background: T.PLX_RED_100, border: `1px solid ${T.PLX_RED_300}`, borderRadius: 10,
+          padding: "10px 14px", marginBottom: 14, fontSize: 13, color: T.PLX_RED_600,
           fontWeight: 600, display: "flex", alignItems: "center", gap: 10,
         }}>
           <span style={{ fontSize: 16 }}>⚠</span>
@@ -530,12 +530,12 @@ function ProductCreate({ editId }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           {/* AI banner */}
           <div style={{
-            background: "linear-gradient(100deg, #E6F7F2 0%, #F4FBF8 80%)",
+            background: `linear-gradient(100deg, ${T.PLX_GREEN_050} 0%, ${T.PLX_SURFACE_50} 80%)`,
             border: `1px solid ${PLX_GREEN_LIGHT}`, borderRadius: 14,
             padding: "16px 20px", display: "flex", alignItems: "center", gap: 16,
           }}>
             <div style={{
-              width: 44, height: 44, borderRadius: 12, background: T.PLX_CARD_BG,
+              width: 44, height: 44, borderRadius: T.RADIUS_LG, background: T.PLX_CARD_BG,
               display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
               boxShadow: "0 4px 12px rgba(26,166,138,.15)",
             }}>
@@ -553,8 +553,8 @@ function ProductCreate({ editId }) {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <button onClick={() => setAiOpen(true)} style={{
-                height: 38, padding: "0 18px", borderRadius: 9999,
-                background: PLX_GREEN, color: "#fff", border: "none",
+                height: 38, padding: "0 18px", borderRadius: T.RADIUS_PILL,
+                background: PLX_GREEN, color: T.PLX_ON_BRAND, border: "none",
                 fontWeight: 700, fontSize: 13, cursor: "pointer",
                 boxShadow: "0 6px 16px rgba(26,166,138,.25)", whiteSpace: "nowrap",
               }}>✨ AI で入力する</button>
@@ -574,7 +574,7 @@ function ProductCreate({ editId }) {
                   }}
                   title="現在空欄の項目だけ AI で埋めます。入力済みの値はそのまま残ります。"
                   style={{
-                    height: 32, padding: "0 14px", borderRadius: 9999,
+                    height: 32, padding: "0 14px", borderRadius: T.RADIUS_PILL,
                     background: T.PLX_CARD_BG, color: PLX_GREEN,
                     border: `1px solid ${PLX_GREEN}`,
                     fontWeight: 700, fontSize: 11, cursor: "pointer",
@@ -619,7 +619,7 @@ function ProductCreate({ editId }) {
                 </span>
                 <span style={{ color: PLX_TEXT }}>「{dupWarning.name}」</span>
                 <button type="button" onClick={() => navigate(`/products/${dupWarning.id}`)} style={{
-                  height: 26, padding: "0 12px", borderRadius: 9999,
+                  height: 26, padding: "0 12px", borderRadius: T.RADIUS_PILL,
                   border: `1px solid ${PLX_BORDER}`, background: T.PLX_CARD_BG,
                   fontSize: 11, fontWeight: 700, cursor: "pointer", color: PLX_TEXT,
                 }}>既存の商品を開く →</button>
@@ -664,7 +664,7 @@ function ProductCreate({ editId }) {
                 </div>
                 <a href={reorderUrl || "#"} target="_blank" rel="noopener noreferrer"
                   onClick={(e) => { if (!reorderUrl) e.preventDefault(); }} style={{
-                    height: 38, padding: "0 14px", borderRadius: 9,
+                    height: 38, padding: "0 14px", borderRadius: T.RADIUS_MD,
                     border: `1px solid ${reorderUrl ? PLX_GREEN : PLX_BORDER}`,
                     background: reorderUrl ? T.PLX_CARD_BG : T.PLX_SURFACE_50,
                     color: reorderUrl ? PLX_GREEN : PLX_SUBTLE,
@@ -687,14 +687,14 @@ function ProductCreate({ editId }) {
             </FormRow>
             <FormRow label="タグ（複数選択可・新規入力で自動作成）">
               <div style={{
-                minHeight: 38, border: `1px solid ${PLX_BORDER}`, borderRadius: 9,
+                minHeight: 38, border: `1px solid ${PLX_BORDER}`, borderRadius: T.RADIUS_MD,
                 padding: "6px 10px", display: "flex", flexWrap: "wrap", gap: 6,
                 alignItems: "center", background: T.PLX_CARD_BG,
               }}>
                 {tags.map((t) => (
                   <span key={t} style={{
                     fontSize: 12, fontWeight: 600, color: PLX_GREEN,
-                    background: PLX_GREEN_LIGHT, padding: "4px 10px", borderRadius: 9999,
+                    background: PLX_GREEN_LIGHT, padding: "4px 10px", borderRadius: T.RADIUS_PILL,
                     display: "inline-flex", alignItems: "center", gap: 4,
                   }}>
                     {t}
@@ -713,7 +713,7 @@ function ProductCreate({ editId }) {
                     }
                   }}
                   placeholder={tags.length ? "" : "タグを入力して Enter で追加"} style={{
-                    border: "none", outline: "none", fontSize: 12,
+                    border: "none", fontSize: 12,
                     flex: 1, minWidth: 120, padding: "4px 0",
                   }} />
               </div>
@@ -724,7 +724,7 @@ function ProductCreate({ editId }) {
                 {(tagsQ.data?.items ?? []).slice(0, 5).map((t) => (
                   <button key={t.id}
                     onClick={() => !tags.includes(t.name) && setTags([...tags, t.name])} style={{
-                      fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 9999,
+                      fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: T.RADIUS_PILL,
                       border: `1px dashed ${PLX_BORDER}`, background: T.PLX_CARD_BG,
                       color: PLX_MUTED, cursor: "pointer",
                     }}>＋ {t.name}</button>
@@ -770,27 +770,27 @@ function ProductCreate({ editId }) {
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
               {existingImages.map((img) => (
                 <div key={`ex-${img.id}`} style={{ position: "relative" }}>
-                  <img src={img.url} alt="" style={{
+                  <img src={img.url} alt="商品画像" style={{
                     width: 84, height: 84, objectFit: "cover", borderRadius: 10,
                     border: `1px solid ${PLX_BORDER}`,
                   }} />
                   <button type="button" onClick={() => removeExistingImage(img)} title="この画像を削除" style={{
                     position: "absolute", top: -7, right: -7, width: 20, height: 20,
-                    borderRadius: "50%", border: "none", background: PLX_RED, color: "#fff",
+                    borderRadius: "50%", border: "none", background: PLX_RED, color: T.PLX_ON_BRAND,
                     fontSize: 11, lineHeight: "20px", cursor: "pointer", padding: 0,
                   }}>×</button>
                 </div>
               ))}
               {pendingImages.map((f, i) => (
                 <div key={`pd-${i}`} style={{ position: "relative" }}>
-                  <img src={URL.createObjectURL(f)} alt="" style={{
+                  <img src={URL.createObjectURL(f)} alt={f.name} style={{
                     width: 84, height: 84, objectFit: "cover", borderRadius: 10,
                     border: `2px dashed ${PLX_GREEN}`,
                   }} />
                   <button type="button" onClick={() => setPendingImages((p) => p.filter((_, j) => j !== i))}
                     title="取り消す" style={{
                     position: "absolute", top: -7, right: -7, width: 20, height: 20,
-                    borderRadius: "50%", border: "none", background: PLX_RED, color: "#fff",
+                    borderRadius: "50%", border: "none", background: PLX_RED, color: T.PLX_ON_BRAND,
                     fontSize: 11, lineHeight: "20px", cursor: "pointer", padding: 0,
                   }}>×</button>
                 </div>
@@ -1029,7 +1029,7 @@ function RadioRow({ checked, onClick, label, sub }) {
 function ItemKindToggle({ value, onChange }) {
   const opts = [
     { value: "product",    label: "物販品", sub: "販売する商品（歯ブラシ等）",     color: PLX_GREEN, bg: PLX_GREEN_LIGHT },
-    { value: "consumable", label: "消耗品", sub: "治療で使う材料（紙コップ等）", color: "#2563EB", bg: PLX_BLUE_LIGHT },
+    { value: "consumable", label: "消耗品", sub: "治療で使う材料（紙コップ等）", color: T.PLX_BLUE_600, bg: PLX_BLUE_LIGHT },
   ];
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, maxWidth: 560 }}>
@@ -1210,6 +1210,7 @@ function AiAssistModal({ onClose, onApply, seed }) {
         (n, arr) => n + (arr || []).filter((o) => o.is_new).length, 0)
     : 0;
 
+  const dlg = useDialog({ onClose });
   return (
     <div onClick={onClose} style={{
       position: "fixed", inset: 0, background: "rgba(17,24,39,.45)",
@@ -1226,7 +1227,7 @@ function AiAssistModal({ onClose, onApply, seed }) {
       {pairOpen && (
         <PhoneScanSession onClose={() => setPairOpen(false)} />
       )}
-      <div onClick={(e) => e.stopPropagation()} style={{
+      <div {...dlg} aria-label="AIアシスト" onClick={(e) => e.stopPropagation()} style={{
         background: T.PLX_CARD_BG, borderRadius: 18, width: 680, maxHeight: "86%",
         boxShadow: "0 24px 60px rgba(17,24,39,.22)", overflow: "hidden",
         display: "flex", flexDirection: "column",
@@ -1263,7 +1264,7 @@ function AiAssistModal({ onClose, onApply, seed }) {
               {/* Mode toggle — Yoshioka 2026-05-11 ("そっちの方が良さそう"): default to JAN. */}
               <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
                 <div style={{
-                  display: "inline-flex", background: PLX_SURFACE, borderRadius: 9999,
+                  display: "inline-flex", background: PLX_SURFACE, borderRadius: T.RADIUS_PILL,
                   padding: 3, border: `1px solid ${PLX_BORDER}`,
                 }}>
                   {[{ v: "jan", l: "ジャンルコード" }, { v: "name", l: "商品名" }].map((o) => {
@@ -1271,7 +1272,7 @@ function AiAssistModal({ onClose, onApply, seed }) {
                     return (
                       <button key={o.v} onClick={() => setMode(o.v)} style={{
                         fontSize: 12, fontWeight: 700, padding: "7px 18px",
-                        borderRadius: 9999, border: "none",
+                        borderRadius: T.RADIUS_PILL, border: "none",
                         background: on ? T.PLX_CARD_BG : "transparent",
                         color: on ? PLX_GREEN : PLX_MUTED,
                         boxShadow: on ? "0 1px 3px rgba(0,0,0,.06)" : "none",
@@ -1290,9 +1291,9 @@ function AiAssistModal({ onClose, onApply, seed }) {
                       inputMode="numeric" pattern="[0-9]*"
                       placeholder="例: 4901301234567" style={{
                         width: "100%", height: 54, border: `1.5px solid ${PLX_GREEN_LIGHT}`,
-                        borderRadius: 12, padding: "0 150px 0 18px", fontSize: 18,
+                        borderRadius: T.RADIUS_LG, padding: "0 150px 0 18px", fontSize: 18,
                         fontFamily: "ui-monospace,SFMono-Regular,monospace",
-                        letterSpacing: ".05em", outline: "none", background: T.PLX_CARD_BG,
+                        letterSpacing: ".05em", background: T.PLX_CARD_BG,
                         boxSizing: "border-box", color: PLX_TEXT, fontWeight: 600,
                       }} />
                     <button
@@ -1300,7 +1301,7 @@ function AiAssistModal({ onClose, onApply, seed }) {
                       title="カメラでバーコードをスキャン"
                       style={{
                         position: "absolute", right: 6, top: 6, height: 42, padding: "0 14px",
-                        borderRadius: 9, background: PLX_GREEN, color: "#fff",
+                        borderRadius: T.RADIUS_MD, background: PLX_GREEN, color: T.PLX_ON_BRAND,
                         border: "none", cursor: "pointer",
                         fontWeight: 700, fontSize: 12,
                         display: "inline-flex", alignItems: "center", gap: 6,
@@ -1313,8 +1314,8 @@ function AiAssistModal({ onClose, onApply, seed }) {
                   <input value={name} onChange={(e) => setName(e.target.value)}
                     placeholder="例: GUM デンタルブラシ" style={{
                       width: "100%", height: 54, border: `1.5px solid ${PLX_GREEN_LIGHT}`,
-                      borderRadius: 12, padding: "0 18px", fontSize: 16,
-                      outline: "none", background: T.PLX_CARD_BG, boxSizing: "border-box",
+                      borderRadius: T.RADIUS_LG, padding: "0 18px", fontSize: 16,
+                      background: T.PLX_CARD_BG, boxSizing: "border-box",
                       color: PLX_TEXT, fontWeight: 600,
                     }} />
                 )}
@@ -1351,8 +1352,8 @@ function AiAssistModal({ onClose, onApply, seed }) {
               </div>
 
               <button onClick={lookup} disabled={mode === "jan" ? !jan : !name} style={{
-                width: "100%", height: 46, borderRadius: 12,
-                background: PLX_GREEN, color: "#fff", border: "none",
+                width: "100%", height: 46, borderRadius: T.RADIUS_LG,
+                background: PLX_GREEN, color: T.PLX_ON_BRAND, border: "none",
                 fontWeight: 700, fontSize: 14, cursor: "pointer",
                 boxShadow: "0 6px 16px rgba(26,166,138,.25)",
                 display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
@@ -1386,11 +1387,11 @@ function AiAssistModal({ onClose, onApply, seed }) {
                 <div style={{
                   display: "inline-flex", alignItems: "center", gap: 8, maxWidth: "100%",
                   background: PLX_GREEN_50, border: `1px solid ${PLX_GREEN_LIGHT}`,
-                  borderRadius: 9999, padding: "6px 14px", marginBottom: 22,
+                  borderRadius: T.RADIUS_PILL, padding: "6px 14px", marginBottom: 22,
                 }}>
                   <span style={{
                     fontSize: 10, fontWeight: 700, color: PLX_GREEN, letterSpacing: ".04em",
-                    background: "#fff", borderRadius: 9999, padding: "2px 8px",
+                    background: T.PLX_CARD_BG, borderRadius: T.RADIUS_PILL, padding: "2px 8px",
                   }}>{searchedQuery.mode === "jan" ? "JAN" : "商品名"}</span>
                   <span style={{
                     fontSize: 14, fontWeight: 700, color: PLX_TEXT,
@@ -1426,7 +1427,7 @@ function AiAssistModal({ onClose, onApply, seed }) {
                 }}>
                   <div style={{
                     position: "absolute", top: -4, left: "50%", marginLeft: -10,
-                    width: 22, height: 22, borderRadius: "50%", background: "#fff",
+                    width: 22, height: 22, borderRadius: "50%", background: T.PLX_CARD_BG,
                     border: `2px solid ${PLX_GREEN}`, display: "flex",
                     alignItems: "center", justifyContent: "center", fontSize: 12,
                     boxShadow: "0 2px 6px rgba(26,166,138,.3)",
@@ -1452,11 +1453,11 @@ function AiAssistModal({ onClose, onApply, seed }) {
 
               {/* reassuring progress bar (eases toward ~92%, never 100% till done) */}
               <div style={{
-                height: 6, background: PLX_GREEN_50, borderRadius: 9999,
+                height: 6, background: PLX_GREEN_50, borderRadius: T.RADIUS_PILL,
                 margin: "18px auto 0", maxWidth: 320, overflow: "hidden",
               }}>
                 <div style={{
-                  height: "100%", borderRadius: 9999,
+                  height: "100%", borderRadius: T.RADIUS_PILL,
                   background: `linear-gradient(90deg, ${PLX_GREEN_LIGHT}, ${PLX_GREEN})`,
                   animation: "plxBar 14s cubic-bezier(.2,.7,.2,1) forwards",
                 }} />
@@ -1498,11 +1499,11 @@ function AiAssistModal({ onClose, onApply, seed }) {
                     <span style={{
                       display: "inline-flex", alignItems: "center", gap: 8,
                       background: PLX_GREEN_50, border: `1px solid ${PLX_GREEN_LIGHT}`,
-                      borderRadius: 9999, padding: "4px 12px", maxWidth: "100%",
+                      borderRadius: T.RADIUS_PILL, padding: "4px 12px", maxWidth: "100%",
                     }}>
                       <span style={{
                         fontSize: 9.5, fontWeight: 700, color: PLX_GREEN, letterSpacing: ".04em",
-                        background: "#fff", borderRadius: 9999, padding: "2px 8px",
+                        background: T.PLX_CARD_BG, borderRadius: T.RADIUS_PILL, padding: "2px 8px",
                       }}>{qMode === "jan" ? "JAN" : "商品名"}</span>
                       <span style={{
                         fontSize: 13, fontWeight: 700, color: PLX_TEXT,
@@ -1518,8 +1519,8 @@ function AiAssistModal({ onClose, onApply, seed }) {
                   served from the cache rather than a fresh web search. */}
               {session.from_cache && (
                 <div style={{
-                  background: PLX_WARN_BG, border: `1px solid #FCD34D`, borderRadius: 10,
-                  padding: "10px 14px", fontSize: 12, color: "#92400e",
+                  background: PLX_WARN_BG, border: `1px solid ${T.PLX_AMBER_300}`, borderRadius: 10,
+                  padding: "10px 14px", fontSize: 12, color: T.PLX_AMBER_700,
                   marginBottom: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
                 }}>
                   <span style={{ fontSize: 15 }}>🗄️</span>
@@ -1527,8 +1528,8 @@ function AiAssistModal({ onClose, onApply, seed }) {
                     {"これは以前の検索結果（キャッシュ）です。最新ではない可能性があります。"}
                   </span>
                   <button onClick={reSearch} style={{
-                    height: 32, padding: "0 14px", borderRadius: 9999, border: "none",
-                    background: PLX_GREEN, color: "#fff", fontWeight: 700, fontSize: 12,
+                    height: 32, padding: "0 14px", borderRadius: T.RADIUS_PILL, border: "none",
+                    background: PLX_GREEN, color: T.PLX_ON_BRAND, fontWeight: 700, fontSize: 12,
                     cursor: "pointer", whiteSpace: "nowrap",
                   }}>🔄 再検索する</button>
                 </div>
@@ -1549,7 +1550,7 @@ function AiAssistModal({ onClose, onApply, seed }) {
                 /* Not found. Offer a confirm + re-search (the cache may hold a
                    stale "not found"; a fresh search might now find it). */
                 <div style={{
-                  border: `1px dashed ${PLX_BORDER}`, borderRadius: 12,
+                  border: `1px dashed ${PLX_BORDER}`, borderRadius: T.RADIUS_LG,
                   padding: "22px 18px", textAlign: "center", marginBottom: 12,
                 }}>
                   <div style={{ fontSize: 26, marginBottom: 8 }}>🔍</div>
@@ -1562,8 +1563,8 @@ function AiAssistModal({ onClose, onApply, seed }) {
                       : "別の表記やJANコードでお試しいただくか、もう一度検索できます。"}
                   </div>
                   <button onClick={reSearch} style={{
-                    height: 40, padding: "0 20px", borderRadius: 9999, border: "none",
-                    background: PLX_GREEN, color: "#fff", fontWeight: 700, fontSize: 13,
+                    height: 40, padding: "0 20px", borderRadius: T.RADIUS_PILL, border: "none",
+                    background: PLX_GREEN, color: T.PLX_ON_BRAND, fontWeight: 700, fontSize: 13,
                     cursor: "pointer", boxShadow: "0 6px 16px rgba(26,166,138,.25)",
                   }}>🔄 もう一度検索する</button>
                 </div>
@@ -1591,7 +1592,7 @@ function AiAssistModal({ onClose, onApply, seed }) {
                       <span style={{
                         fontSize: 9, fontWeight: 700, color: PLX_GREEN,
                         background: PLX_GREEN_LIGHT,
-                        padding: "2px 7px", borderRadius: 9999,
+                        padding: "2px 7px", borderRadius: T.RADIUS_PILL,
                       }}>選択済</span>
                     )}
                   </div>
@@ -1615,7 +1616,7 @@ function AiAssistModal({ onClose, onApply, seed }) {
                           }}>
                             {on && (
                               <svg width="9" height="9" viewBox="0 0 9 9" fill="none"
-                                stroke="#fff" strokeWidth="2" strokeLinecap="round">
+                                stroke={T.PLX_ON_BRAND} strokeWidth="2" strokeLinecap="round">
                                 <path d="M1.5 4.5L3.5 6.5L7.5 2" />
                               </svg>
                             )}
@@ -1624,8 +1625,8 @@ function AiAssistModal({ onClose, onApply, seed }) {
                             <div style={{ fontSize: 13, fontWeight: 600, color: PLX_TEXT, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                               {opt.is_new && (
                                 <span style={{
-                                  fontSize: 9, fontWeight: 700, color: "#fff", background: PLX_GREEN,
-                                  padding: "1px 7px", borderRadius: 9999, flexShrink: 0,
+                                  fontSize: 9, fontWeight: 700, color: T.PLX_ON_BRAND, background: PLX_GREEN,
+                                  padding: "1px 7px", borderRadius: T.RADIUS_PILL, flexShrink: 0,
                                 }}>🆕 新規</span>
                               )}
                               <span>{opt.value}</span>
@@ -1676,7 +1677,7 @@ function ConfBar({ val }) {
     <div style={{ minWidth: 78, textAlign: "right" }}>
       <div style={{ fontSize: 11, fontWeight: 700, color }}>{pct}%</div>
       <div style={{
-        height: 3, background: "#F3F4F6", borderRadius: 2,
+        height: 3, background: T.PLX_PILL_BG, borderRadius: 2,
         marginTop: 3, overflow: "hidden",
       }}>
         <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 2 }} />
@@ -1805,8 +1806,9 @@ function PhoneScanSession({ onClose }) {
 
   const localhostQr = /^https?:\/\/(localhost|127\.|\[::1\])/.test(phoneUrl);
 
+  const dlg = useDialog({ onClose });
   return (
-    <div onClick={(e) => e.stopPropagation()} style={{
+    <div {...dlg} aria-label="スマホでスキャン" onClick={(e) => e.stopPropagation()} style={{
       position: "fixed", inset: 0, background: "rgba(17,24,39,0.85)",
       zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
     }}>
@@ -1835,7 +1837,7 @@ function PhoneScanSession({ onClose }) {
               {"QRをスマホで読み取り、商品のバーコードを続けてスキャンしてください。スキャンした商品の結果がここに表示されます。"}
             </div>
             <div ref={qrBoxRef} style={{
-              display: "inline-block", padding: 10, background: "#fff", borderRadius: 12,
+              display: "inline-block", padding: 10, background: "#fff", /* QR quiet zone must stay white for scanners */ borderRadius: T.RADIUS_LG,
               minWidth: 168, minHeight: 168,
             }} />
             {phoneUrl && (
@@ -1879,7 +1881,7 @@ function PhoneScanSession({ onClose }) {
                       {(p.status === "done" || p.status === "notfound" || p.status === "error") && (
                         <button onClick={() => openForm(p.jan)} style={{
                           height: 28, padding: "0 12px", borderRadius: 8, border: "none",
-                          background: PLX_GREEN, color: "#fff", fontWeight: 700, fontSize: 11, cursor: "pointer",
+                          background: PLX_GREEN, color: T.PLX_ON_BRAND, fontWeight: 700, fontSize: 11, cursor: "pointer",
                         }}>登録フォームを開く</button>
                       )}
                     </div>
@@ -1892,8 +1894,8 @@ function PhoneScanSession({ onClose }) {
                           {p.title || "（商品名は候補から選択）"}
                           {p.from_cache && (
                             <span style={{
-                              fontSize: 9, fontWeight: 700, color: "#92400e", background: PLX_WARN_BG,
-                              padding: "1px 6px", borderRadius: 9999, marginLeft: 6,
+                              fontSize: 9, fontWeight: 700, color: T.PLX_AMBER_700, background: PLX_WARN_BG,
+                              padding: "1px 6px", borderRadius: T.RADIUS_PILL, marginLeft: 6,
                             }}>🗄️ キャッシュ</span>
                           )}
                         </div>
@@ -1908,7 +1910,7 @@ function PhoneScanSession({ onClose }) {
                       </div>
                     )}
                     {p.status === "error" && (
-                      <div style={{ fontSize: 11.5, color: "#991B1B", marginTop: 5 }}>
+                      <div style={{ fontSize: 11.5, color: T.PLX_RED_600, marginTop: 5 }}>
                         エラー: {p.error || "検索に失敗しました"}
                       </div>
                     )}
@@ -1925,16 +1927,16 @@ function PhoneScanSession({ onClose }) {
               ペアリングの有効期限が切れました
             </div>
             <button onClick={onClose} style={{
-              height: 38, padding: "0 18px", borderRadius: 9999, background: PLX_GREEN,
-              color: "#fff", border: "none", fontWeight: 700, fontSize: 12, cursor: "pointer",
+              height: 38, padding: "0 18px", borderRadius: T.RADIUS_PILL, background: PLX_GREEN,
+              color: T.PLX_ON_BRAND, border: "none", fontWeight: 700, fontSize: 12, cursor: "pointer",
             }}>閉じる</button>
           </div>
         )}
 
         {(phase === "error" || error) && phase !== "expired" && (
           <div style={{
-            marginTop: 12, background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 10,
-            padding: "10px 12px", fontSize: 11.5, color: "#991B1B", lineHeight: 1.6,
+            marginTop: 12, background: T.PLX_RED_100, border: `1px solid ${T.PLX_RED_300}`, borderRadius: 10,
+            padding: "10px 12px", fontSize: 11.5, color: T.PLX_RED_600, lineHeight: 1.6,
           }}>
             {error || "ペアリングに失敗しました。"}
           </div>
@@ -2098,8 +2100,9 @@ function BarcodeScanner({ onDetected, onClose, validate, onReject, continuous })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const dlg = useDialog({ onClose });
   return (
-    <div onClick={(e) => e.stopPropagation()} style={{
+    <div {...dlg} aria-label="バーコードスキャン" onClick={(e) => e.stopPropagation()} style={{
       position: "fixed", inset: 0, background: "rgba(17,24,39,0.85)",
       zIndex: 100, display: "flex", flexDirection: "column",
       alignItems: "center", justifyContent: "center", padding: 20,
@@ -2123,8 +2126,8 @@ function BarcodeScanner({ onDetected, onClose, validate, onReject, continuous })
 
         {error ? (
           <div style={{
-            background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 10,
-            padding: "12px 14px", fontSize: 12, color: "#991B1B", lineHeight: 1.6,
+            background: T.PLX_RED_100, border: `1px solid ${T.PLX_RED_300}`, borderRadius: 10,
+            padding: "12px 14px", fontSize: 12, color: T.PLX_RED_600, lineHeight: 1.6,
           }}>
             {error}
           </div>
@@ -2132,7 +2135,7 @@ function BarcodeScanner({ onDetected, onClose, validate, onReject, continuous })
           <>
             <div id={containerId} style={{
               width: "100%", minHeight: 240, borderRadius: 10,
-              overflow: "hidden", background: "#000",
+              overflow: "hidden", background: "#000", /* camera letterbox — always black */
             }} />
             <div style={{
               marginTop: 10, fontSize: 11, color: PLX_MUTED, textAlign: "center",
@@ -2148,8 +2151,8 @@ function BarcodeScanner({ onDetected, onClose, validate, onReject, continuous })
 
         <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end" }}>
           <button onClick={onClose} style={{
-            height: 36, padding: "0 16px", borderRadius: 9999,
-            background: "#F3F4F6", color: PLX_TEXT, border: "none",
+            height: 36, padding: "0 16px", borderRadius: T.RADIUS_PILL,
+            background: T.PLX_PILL_BG, color: PLX_TEXT, border: "none",
             fontWeight: 700, fontSize: 12, cursor: "pointer",
           }}>キャンセル</button>
         </div>
@@ -2220,13 +2223,14 @@ function ConfirmSaveModal({ isEdit, status, before, after, refData, onCancel, on
   const displayRows = isEdit ? rows.filter((r) => r.changed) : rows.filter((r) => r.a !== "" && r.a != null);
   const hasChanges = displayRows.length > 0;
 
+  const dlg = useDialog({ onClose: onCancel });
   return (
     <div onClick={onCancel} style={{
       position: "fixed", inset: 0, background: "rgba(17,24,39,0.45)",
       backdropFilter: "blur(4px)", zIndex: 80,
       display: "flex", alignItems: "center", justifyContent: "center",
     }}>
-      <div onClick={(e) => e.stopPropagation()} style={{
+      <div {...dlg} aria-label="保存内容の確認" onClick={(e) => e.stopPropagation()} style={{
         background: T.PLX_CARD_BG, borderRadius: 16, width: 600, maxWidth: "92%",
         maxHeight: "82vh", boxShadow: "0 24px 60px rgba(17,24,39,.22)",
         overflow: "hidden", display: "flex", flexDirection: "column",
@@ -2292,8 +2296,8 @@ function ConfirmRow({ label, b, a, changed, showBefore }) {
       gridTemplateColumns: showBefore ? "120px 1fr 1fr" : "120px 1fr",
       gap: 10, alignItems: "start",
       padding: "8px 10px", borderRadius: 8,
-      background: changed ? "#FEF9E7" : "transparent",
-      border: changed ? "1px solid #FCD34D" : "1px solid transparent",
+      background: changed ? T.PLX_AMBER_100 : "transparent",
+      border: changed ? `1px solid ${T.PLX_AMBER_300}` : "1px solid transparent",
     }}>
       <div style={{ fontSize: 12, fontWeight: 700, color: PLX_MUTED }}>{label}</div>
       {showBefore && (

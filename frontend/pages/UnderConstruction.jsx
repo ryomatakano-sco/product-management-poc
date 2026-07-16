@@ -51,7 +51,7 @@ function UnderConstruction({ navId, title, breadcrumbs }) {
               onClick={() => window.PLX_TOAST?.success("公開時にお知らせします")}
               style={{
               height: 38, padding: "0 16px", borderRadius: T.RADIUS_MD,
-              background: T.PLX_GREEN_600, color: "#fff", border: "none",
+              background: T.PLX_GREEN_600, color: T.PLX_ON_BRAND, border: "none",
               fontWeight: 600, fontSize: 13, cursor: "pointer",
               display: "inline-flex", alignItems: "center", gap: 6,
             }}>🔔 通知を受け取る</button>

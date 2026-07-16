@@ -57,6 +57,12 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     mock_ai: str = ""  # "1" forces mock mode even when OPENAI_API_KEY is set
 
+    # Per-store daily cap on OpenAI-spending lookups (review C5). Counted as
+    # AiSuggestionSession rows created since JST midnight; 429 past the cap.
+    # Env: AI_DAILY_CAP. Generous default — it exists to stop loops/abuse
+    # from burning API budget, not to squeeze normal use.
+    ai_daily_cap: int = 200
+
     # Signs session cookies (services/auth.py). Fixed dev default so --reload
     # restarts don't log everyone out; override via AUTH_SECRET in production.
     auth_secret: str = "plx-poc-dev-secret-change-in-prod"

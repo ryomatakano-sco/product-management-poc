@@ -72,8 +72,8 @@ function Categories() {
       <button onClick={handleExport} disabled={exporting}
         style={{ ...btnSecondary, opacity: exporting ? 0.6 : 1 }}>⬇ エクスポート</button>
       <button onClick={openCreate} style={{
-        height: 38, padding: "0 18px", borderRadius: 9999,
-        background: PLX_GREEN, color: "#fff", border: "none",
+        height: 38, padding: "0 18px", borderRadius: T.RADIUS_PILL,
+        background: PLX_GREEN, color: T.PLX_ON_BRAND, border: "none",
         fontWeight: 700, fontSize: 13, cursor: "pointer",
         display: "inline-flex", alignItems: "center", gap: 6,
         boxShadow: "0 6px 16px rgba(22,163,108,.25)",
@@ -160,6 +160,8 @@ function TreeNode({ node, depth, selectedId, onSelect, onEdit, onDelete }) {
     <>
       <div
         onClick={() => onSelect(node.id)}
+        {...plxClickable(() => onSelect(node.id))}
+        aria-current={isActive ? "true" : undefined}
         style={{
           display: "flex", alignItems: "center", gap: 8,
           padding: `8px 12px 8px ${12 + depth * 20}px`,
@@ -197,7 +199,7 @@ function TreeNode({ node, depth, selectedId, onSelect, onEdit, onDelete }) {
         }}>{node.name}</span>
         <span style={{
           fontSize: 11, fontWeight: 600, color: T.PLX_INK_500,
-          background: T.PLX_SURFACE_100, padding: "2px 8px", borderRadius: 9999,
+          background: T.PLX_SURFACE_100, padding: "2px 8px", borderRadius: T.RADIUS_PILL,
         }}>{node.product_count} 件</span>
         <button
           onClick={(e) => { e.stopPropagation(); onEdit(node); }}
@@ -299,6 +301,7 @@ function CategoryFormModal({ editing, allCategories, onClose, onSaved }) {
   const [taxRate, setTaxRate] = React.useState(parseFloat(editing?.default_tax_rate ?? 10));
   const [saving, setSaving] = React.useState(false);
 
+  // Data, not UI theme: stored per-category color values (hex by design).
   const SWATCHES = ["#16A36C", "#22B07A", "#2E7BD6", "#7AD3B0", "#E89B17", "#D6433A", "#9C56C0", "#5B6776"];
 
   const submit = async () => {
@@ -402,24 +405,21 @@ function CategoryFormModal({ editing, allCategories, onClose, onSaved }) {
 // module if/when we grow a real component library.
 
 function Modal({ title, onClose, children }) {
-  React.useEffect(() => {
-    const onEsc = (e) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onEsc);
-    return () => window.removeEventListener("keydown", onEsc);
-  }, [onClose]);
+  // useDialog (Atoms) owns Escape, the focus trap, and focus restore.
+  const dlg = useDialog({ onClose, labelledBy: "plx-modal-title" });
   return (
     <div onClick={onClose} style={{
       position: "fixed", inset: 0, zIndex: 100,
       background: "rgba(15,27,45,0.45)",
       display: "flex", alignItems: "center", justifyContent: "center",
     }}>
-      <div onClick={(e) => e.stopPropagation()} style={{
+      <div {...dlg} onClick={(e) => e.stopPropagation()} style={{
         background: T.PLX_CARD_BG, width: 560, maxWidth: "92%", maxHeight: "90%",
         overflowY: "auto", borderRadius: T.RADIUS_LG, boxShadow: T.SHADOW_LG,
         padding: 24,
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{title}</h3>
+          <h3 id="plx-modal-title" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{title}</h3>
           <button onClick={onClose} aria-label="閉じる" style={{
             background: "transparent", border: "none", cursor: "pointer",
             fontSize: 20, color: T.PLX_INK_500, padding: "4px 8px",
@@ -504,7 +504,7 @@ function CategoriesSkeleton() {
           <div className="plx-skeleton" style={{ width: 22, height: 22, borderRadius: "50%" }} />
           <div className="plx-skeleton" style={{ width: 200, height: 14 }} />
           <div style={{ flex: 1 }} />
-          <div className="plx-skeleton" style={{ width: 40, height: 14, borderRadius: 9999 }} />
+          <div className="plx-skeleton" style={{ width: 40, height: 14, borderRadius: T.RADIUS_PILL }} />
         </div>
       ))}
     </div>

@@ -15,5 +15,21 @@ dependencies = [
     "openai-agents>=0.0.7",
 ]
 
+[project.optional-dependencies]
+# Test-only — not shipped. Install with: pip install -e .[dev]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "aiosqlite>=0.20",
+]
+
 [tool.setuptools]
 packages = ["app"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+# One event loop for the whole session — the shared aiomysql engine's
+# connections must not hop between per-test loops.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]

@@ -149,6 +149,8 @@
       [selected, sideBySide],
     );
 
+    const dlg = useDialog({ onClose, enabled: open });
+
     if (!open) return null;
 
     const knownOptions = Array.from(new Set([..._DEFAULT_OPTIONS, ...selected]));
@@ -240,7 +242,7 @@
         display: "flex", alignItems: "flex-start", justifyContent: "center",
         paddingTop: 40, overflow: "auto",
       }}>
-        <div onClick={(e) => e.stopPropagation()} style={{
+        <div {...dlg} aria-label="AI Arena" onClick={(e) => e.stopPropagation()} style={{
           background: T.PLX_CARD_BG, borderRadius: 14, width: "min(1280px, 96%)",
           maxHeight: "92vh", boxShadow: "0 24px 60px rgba(17,24,39,.35)",
           overflow: "hidden", display: "flex", flexDirection: "column",
@@ -287,8 +289,8 @@
                 onClick={run}
                 disabled={running}
                 style={{
-                  height: 38, padding: "0 22px", borderRadius: 9999,
-                  background: PLX_GREEN, color: "#fff", border: "none",
+                  height: 38, padding: "0 22px", borderRadius: T.RADIUS_PILL,
+                  background: PLX_GREEN, color: T.PLX_ON_BRAND, border: "none",
                   fontWeight: 700, fontSize: 13,
                   cursor: running ? "wait" : "pointer",
                   opacity: running ? 0.6 : 1,
@@ -309,7 +311,7 @@
             </div>
           </div>
 
-          <div style={{ flex: 1, overflow: "auto", background: "#FAFBFC" }}>
+          <div style={{ flex: 1, overflow: "auto", background: T.PLX_SURFACE_50 }}>
             {!result && !running && (
               <div style={{ padding: 40, textAlign: "center", color: PLX_MUTED, fontSize: 13 }}>
                 JAN または商品名を入力し、比較したいモデルを選んで「実行」を押してください。
@@ -332,7 +334,7 @@
   // ──────────────────────────────────────────────────────────────────────
 
   const _arenaBtn = {
-    height: 28, padding: "0 10px", borderRadius: 6,
+    height: 28, padding: "0 10px", borderRadius: T.RADIUS_SM,
     border: `1px solid ${PLX_BORDER}`, background: T.PLX_CARD_BG,
     color: PLX_TEXT, fontSize: 11, fontWeight: 700, cursor: "pointer",
   };
@@ -414,7 +416,7 @@
             return (
               <button key={o.v} onClick={() => setMode(o.v)} style={{
                 fontSize: 11, fontWeight: 700, padding: "4px 12px",
-                borderRadius: 9999, border: `1px solid ${on ? PLX_GREEN : PLX_BORDER}`,
+                borderRadius: T.RADIUS_PILL, border: `1px solid ${on ? PLX_GREEN : PLX_BORDER}`,
                 background: on ? PLX_GREEN_50 : T.PLX_CARD_BG,
                 color: on ? PLX_GREEN : PLX_MUTED, cursor: "pointer",
               }}>{o.l}</button>
@@ -427,7 +429,7 @@
             style={{
               width: "100%", height: 38, padding: "0 14px", fontSize: 14,
               border: `1px solid ${PLX_BORDER}`, borderRadius: 8,
-              outline: "none", fontFamily: "ui-monospace, monospace",
+              fontFamily: "ui-monospace, monospace",
               boxSizing: "border-box",
             }} />
         ) : (
@@ -436,7 +438,7 @@
             style={{
               width: "100%", height: 38, padding: "0 14px", fontSize: 14,
               border: `1px solid ${PLX_BORDER}`, borderRadius: 8,
-              outline: "none", boxSizing: "border-box",
+              boxSizing: "border-box",
             }} />
         )}
       </div>
@@ -467,7 +469,7 @@
                   title={`最大 ${n} モデルを横並びで実行`}
                   style={{
                     fontSize: 11, fontWeight: 700, width: 28, height: 26,
-                    borderRadius: 6,
+                    borderRadius: T.RADIUS_SM,
                     border: `1px solid ${on ? PLX_GREEN : PLX_BORDER}`,
                     background: on ? PLX_GREEN_50 : T.PLX_CARD_BG,
                     color: on ? PLX_GREEN : PLX_TEXT,
@@ -484,7 +486,7 @@
             return (
               <button key={m} onClick={() => onToggle(m)} style={{
                 fontSize: 11, fontWeight: 700, padding: "4px 11px",
-                borderRadius: 9999, border: `1px solid ${on ? PLX_GREEN : PLX_BORDER}`,
+                borderRadius: T.RADIUS_PILL, border: `1px solid ${on ? PLX_GREEN : PLX_BORDER}`,
                 background: on ? PLX_GREEN_50 : T.PLX_CARD_BG,
                 color: on ? PLX_GREEN : PLX_TEXT,
                 cursor: "pointer", fontFamily: "ui-monospace, monospace",
@@ -502,12 +504,12 @@
             placeholder="+ 任意のモデル ID を追加 (例: gpt-5-mini, o4-mini)"
             style={{
               flex: 1, height: 28, padding: "0 10px", fontSize: 11,
-              border: `1px solid ${PLX_BORDER}`, borderRadius: 6,
-              outline: "none", fontFamily: "ui-monospace, monospace",
+              border: `1px solid ${PLX_BORDER}`, borderRadius: T.RADIUS_SM,
+              fontFamily: "ui-monospace, monospace",
             }}
           />
           <button onClick={onAddCustom} disabled={!customInput.trim()} style={{
-            height: 28, padding: "0 12px", borderRadius: 6,
+            height: 28, padding: "0 12px", borderRadius: T.RADIUS_SM,
             border: `1px solid ${PLX_BORDER}`, background: T.PLX_CARD_BG,
             color: PLX_TEXT, fontSize: 11, fontWeight: 700,
             cursor: customInput.trim() ? "pointer" : "not-allowed",
@@ -601,7 +603,7 @@
     if (r.is_mock) {
       return (
         <div style={{
-          marginTop: 6, padding: 8, background: "#F3F4F6", borderRadius: 6,
+          marginTop: 6, padding: 8, background: T.PLX_PILL_BG, borderRadius: T.RADIUS_SM,
           fontSize: 10, color: PLX_MUTED,
         }}>
           Cost: mock mode ($0)
@@ -612,10 +614,10 @@
     const unknownPricing = breakdown.some((b) => b.pricing_known === false);
     return (
       <div style={{
-        marginTop: 6, padding: 8, background: "#EFF6FF", borderRadius: 6,
-        border: "1px solid #BFDBFE",
+        marginTop: 6, padding: 8, background: T.PLX_BLUE_100, borderRadius: T.RADIUS_SM,
+        border: `1px solid ${T.PLX_BLUE_600}`,
       }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "#1E40AF", marginBottom: 4 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.PLX_BLUE_600, marginBottom: 4 }}>
           Cost (estimate)
           {unknownPricing && (
             <span style={{ fontWeight: 600, color: PLX_WARN, marginLeft: 6 }}>
@@ -628,7 +630,7 @@
         </div>
         {breakdown.map((b) => (
           <div key={`${b.step}-${b.model}`} style={{
-            fontSize: 10, color: "#1E3A8A", marginTop: 3,
+            fontSize: 10, color: T.PLX_BLUE_600, marginTop: 3,
             fontFamily: "ui-monospace, monospace",
           }}>
             {b.step}: {b.model} — in {b.input_tokens?.toLocaleString()} / out {b.output_tokens?.toLocaleString()}
@@ -668,12 +670,12 @@
             <span>{r.model}</span>
             {r.found
               ? <span style={{
-                  fontSize: 9, padding: "2px 7px", borderRadius: 9999,
+                  fontSize: 9, padding: "2px 7px", borderRadius: T.RADIUS_PILL,
                   background: PLX_GREEN_LIGHT, color: PLX_GREEN, fontWeight: 700,
                 }}>FOUND</span>
               : <span style={{
-                  fontSize: 9, padding: "2px 7px", borderRadius: 9999,
-                  background: "#FEE2E2", color: PLX_RED, fontWeight: 700,
+                  fontSize: 9, padding: "2px 7px", borderRadius: T.RADIUS_PILL,
+                  background: T.PLX_RED_100, color: PLX_RED, fontWeight: 700,
                 }}>NOT FOUND</span>}
           </div>
           <div style={{ fontSize: 10, color: PLX_MUTED, marginTop: 4 }}>
@@ -691,8 +693,8 @@
 
         {r.error_message && (
           <div style={{
-            background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 6,
-            padding: "8px 10px", fontSize: 11, color: "#991B1B",
+            background: T.PLX_RED_100, border: `1px solid ${T.PLX_RED_300}`, borderRadius: T.RADIUS_SM,
+            padding: "8px 10px", fontSize: 11, color: T.PLX_RED_600,
           }}>
             <b>エラー:</b> {r.error_message}
           </div>
@@ -717,14 +719,14 @@
 
         {(r.dropped_candidates || []).length > 0 && (
           <div style={{
-            marginTop: 6, padding: 8, background: "#FEF9E7", borderRadius: 6,
-            border: "1px solid #FCD34D",
+            marginTop: 6, padding: 8, background: T.PLX_AMBER_100, borderRadius: T.RADIUS_SM,
+            border: `1px solid ${T.PLX_AMBER_300}`,
           }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: "#92400E", marginBottom: 4 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: T.PLX_AMBER_700, marginBottom: 4 }}>
               ドロップされた候補 ({r.dropped_candidates.length})
             </div>
             {r.dropped_candidates.map((d, i) => (
-              <div key={i} style={{ fontSize: 10, color: "#92400E", marginTop: 2 }}>
+              <div key={i} style={{ fontSize: 10, color: T.PLX_AMBER_700, marginTop: 2 }}>
                 <code>{d.field_name}</code> = {d.value || "—"}
                 <div style={{ fontSize: 9, opacity: 0.8 }}>{d.reason}</div>
               </div>
@@ -742,7 +744,7 @@
             </button>
             {showNotes && (
               <pre style={{
-                marginTop: 4, padding: 8, background: "#F3F4F6", borderRadius: 6,
+                marginTop: 4, padding: 8, background: T.PLX_PILL_BG, borderRadius: T.RADIUS_SM,
                 fontSize: 10, lineHeight: 1.55, color: PLX_TEXT,
                 whiteSpace: "pre-wrap", wordBreak: "break-word",
                 maxHeight: 200, overflow: "auto",
@@ -759,7 +761,7 @@
     const verified = !!c.jan_verified;
     return (
       <div style={{
-        background: "#FAFBFC", border: `1px solid ${PLX_BORDER}`, borderRadius: 6,
+        background: T.PLX_SURFACE_50, border: `1px solid ${PLX_BORDER}`, borderRadius: T.RADIUS_SM,
         padding: "6px 8px", marginBottom: 4,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -768,9 +770,9 @@
           </div>
           {verified && (
             <span title="ソース URL に JAN が含まれています" style={{
-              fontSize: 9, fontWeight: 700, color: "#0F766E",
-              background: "#CCFBF1", border: "1px solid #5EEAD4",
-              padding: "1px 6px", borderRadius: 9999, flexShrink: 0,
+              fontSize: 9, fontWeight: 700, color: T.PLX_TEAL_700,
+              background: T.PLX_TEAL_100, border: `1px solid ${T.PLX_TEAL_300}`,
+              padding: "1px 6px", borderRadius: T.RADIUS_PILL, flexShrink: 0,
             }}>✓ JAN</span>
           )}
         </div>

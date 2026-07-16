@@ -115,12 +115,12 @@ function ReceiptIssue({ saleId }) {
                 }}>
                   <span style={{ color: T.PLX_INK_900 }}>
                     {l.name} × {l.quantity}
-                    {l.is_reduced && <span style={{ marginLeft: 6, color: T.PLX_AMBER_600, fontWeight: 700 }}>※</span>}
+                    {l.is_reduced && <span style={{ marginLeft: 6, color: T.PLX_AMBER_700, fontWeight: 700 }}>※</span>}
                   </span>
                   <span style={{
-                    fontSize: 11, fontWeight: 700, color: l.is_reduced ? T.PLX_AMBER_600 : T.PLX_INK_500,
+                    fontSize: 11, fontWeight: 700, color: l.is_reduced ? T.PLX_AMBER_700 : T.PLX_INK_500,
                     background: l.is_reduced ? T.PLX_AMBER_100 : T.PLX_SURFACE_50,
-                    padding: "2px 8px", borderRadius: 9999,
+                    padding: "2px 8px", borderRadius: T.RADIUS_PILL,
                   }}>{l.tax_rate_pct}%{l.is_reduced ? " (軽減)" : ""}</span>
                   <span style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums", minWidth: 70, textAlign: "right" }}>
                     {yen(l.line_total)}
@@ -241,7 +241,7 @@ function ReceiptPreview({ data, format, recipient, purpose, fmtDate, yen, has10,
         <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 6, padding: "3px 0" }}>
           <span>
             {l.name}
-            {l.is_reduced && <span style={{ marginLeft: 4, color: T.PLX_AMBER_600 }}>※</span>}
+            {l.is_reduced && <span style={{ marginLeft: 4, color: T.PLX_AMBER_700 }}>※</span>}
             <span style={{ color: T.PLX_INK_500 }}> ×{l.quantity}</span>
           </span>
           <span style={{ fontVariantNumeric: "tabular-nums" }}>{yen(l.line_total)}</span>
@@ -268,7 +268,7 @@ function ReceiptPreview({ data, format, recipient, purpose, fmtDate, yen, has10,
         {has8 && (
           <>
             <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 6, padding: "3px 0" }}>
-              <span>8%対象 (税抜 {yen(d.subtotal_8_tax_excl)}) <span style={{ color: T.PLX_AMBER_600 }}>※</span></span>
+              <span>8%対象 (税抜 {yen(d.subtotal_8_tax_excl)}) <span style={{ color: T.PLX_AMBER_700 }}>※</span></span>
               <span style={{ fontVariantNumeric: "tabular-nums" }}>{yen(d.subtotal_8_tax_incl)}</span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 6, padding: "3px 0", color: T.PLX_INK_700 }}>

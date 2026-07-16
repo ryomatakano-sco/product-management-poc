@@ -11,24 +11,30 @@
         href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;900&display=swap">
 
   <style>
-    /* paylight X — Design Tokens (inline so we don't need a build step) */
+    /* paylight X — boot-splash tokens only.
+       The real token system is `T` in lib/theme.js (navy brand). These CSS
+       custom properties exist ONLY for the pre-React boot splash; they must
+       mirror the current _LIGHT palette. The old teal brand set
+       (--color-primary #1AA68A etc.) was removed 2026-07-15 — it was a stale
+       second palette that caused a teal flash before React painted navy. */
     :root {
-      --color-primary: #1AA68A;
-      --color-primary-dark: #0E8A72;
-      --color-primary-light: #E6F7F2;
-      --color-primary-50: #F4FBF8;
-      --color-accent-blue: #2EA7E0;
-      --color-text: #1F2937;
-      --color-text-muted: #6B7280;
-      --color-text-subtle: #9CA3AF;
-      --color-bg: #FFFFFF;
-      --color-surface: #F8FAF9;
-      --color-border: #E5E7EB;
-      --color-warn: #D97706;
-      --color-warn-bg: #FEF3C7;
+      --color-text: #002041;         /* = PLX_INK_900 (light) */
+      --color-text-muted: #575757;   /* = PLX_INK_500 (light) */
+      --color-surface: #F2F3F5;      /* = PLX_SURFACE_50 (light) */
+      /* Focus ring color — theme_runtime.js re-sets this per palette so the
+         global :focus-visible rule below flips with dark mode. */
+      --plx-focus: #0077D9;
 
       --font-sans: "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
       --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    /* WCAG 2.4.7 — the one sanctioned global focus rule. Inline styles can't
+       express :focus-visible, so every interactive element gets its visible
+       keyboard-focus ring from here; components must never remove an outline
+       without this rule still applying. */
+    :focus-visible {
+      outline: 2px solid var(--plx-focus);
+      outline-offset: 2px;
     }
     * { box-sizing: border-box; }
     html, body, #root { height: 100%; margin: 0; }

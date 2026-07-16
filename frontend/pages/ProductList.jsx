@@ -147,8 +147,8 @@ function ProductList({ initialQuery }) {
     <div style={{ display: "inline-flex", gap: 8 }}>
       <button onClick={() => setShowImport(true)} style={btnSecondary}>⬆ インポート</button>
       <button data-tour="product-add" onClick={() => navigate("/products/new")} style={{
-        height: 38, padding: "0 18px", borderRadius: 9999,
-        background: PLX_GREEN, color: "#fff", border: "none",
+        height: 38, padding: "0 18px", borderRadius: T.RADIUS_PILL,
+        background: PLX_GREEN, color: T.PLX_ON_BRAND, border: "none",
         fontWeight: 700, fontSize: 13, cursor: "pointer",
         display: "inline-flex", alignItems: "center", gap: 6,
         boxShadow: "0 6px 16px rgba(26,166,138,.25)",
@@ -263,7 +263,7 @@ function ProductList({ initialQuery }) {
               <button key={t.id} onClick={() => setActiveTags((s) =>
                 s.includes(t.name) ? s.filter((x) => x !== t.name) : [...s, t.name],
               )} style={{
-                fontSize: 11, fontWeight: 600, padding: "5px 11px", borderRadius: 9999,
+                fontSize: 11, fontWeight: 600, padding: "5px 11px", borderRadius: T.RADIUS_PILL,
                 border: `1px solid ${on ? PLX_GREEN : PLX_BORDER}`,
                 background: on ? PLX_GREEN_LIGHT : T.PLX_CARD_BG,
                 color: on ? PLX_GREEN : PLX_TEXT, cursor: "pointer",
@@ -276,8 +276,8 @@ function ProductList({ initialQuery }) {
       {/* Bulk action bar — appears when rows are selected (mockup pattern) */}
       {selected.length > 0 && (
         <div style={{
-          marginTop: 16, padding: "10px 16px", borderRadius: 12,
-          background: PLX_GREEN, color: "#fff",
+          marginTop: 16, padding: "10px 16px", borderRadius: T.RADIUS_LG,
+          background: PLX_GREEN, color: T.PLX_ON_BRAND,
           display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
         }}>
           <span style={{ fontSize: 13, fontWeight: 700 }}>{selected.length} 件選択中</span>
@@ -286,26 +286,26 @@ function ProductList({ initialQuery }) {
             height: 32, padding: "0 10px", borderRadius: 8, border: "none",
             // Fixed pair — the bar behind is always green, and PLX_TEXT goes
             // near-white in dark mode which made this white-on-white (audit F3).
-            fontSize: 12, color: "#111827", background: "#fff",
+            fontSize: 12, color: T.PLX_INK_900, background: T.PLX_CARD_BG,
           }}>
             <option value="">カテゴリを選択…</option>
             {(categoriesQ.data?.items ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           <button onClick={bulkChangeCategory} disabled={bulkBusy || !bulkCategory} style={{
             height: 32, padding: "0 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,.6)",
-            background: "transparent", color: "#fff", fontSize: 12, fontWeight: 700,
+            background: "transparent", color: T.PLX_ON_BRAND, fontSize: 12, fontWeight: 700,
             cursor: bulkBusy || !bulkCategory ? "not-allowed" : "pointer",
             opacity: bulkBusy || !bulkCategory ? 0.5 : 1,
           }}>{bulkBusy ? "適用中…" : "一括カテゴリ変更"}</button>
           <button onClick={bulkArchive} disabled={bulkBusy} style={{
             height: 32, padding: "0 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,.6)",
-            background: "transparent", color: "#fff", fontSize: 12, fontWeight: 700,
+            background: "transparent", color: T.PLX_ON_BRAND, fontSize: 12, fontWeight: 700,
             cursor: bulkBusy ? "not-allowed" : "pointer", opacity: bulkBusy ? 0.5 : 1,
           }}>{bulkBusy ? "処理中…" : "🗄 一括アーカイブ"}</button>
           <div style={{ flex: 1 }} />
           <button onClick={() => setSelected([])} style={{
             height: 32, padding: "0 12px", borderRadius: 8, border: "none",
-            background: "transparent", color: "#fff", fontSize: 12, fontWeight: 600,
+            background: "transparent", color: T.PLX_ON_BRAND, fontSize: 12, fontWeight: 600,
             cursor: "pointer", textDecoration: "underline",
           }}>選択をクリア</button>
         </div>
@@ -354,7 +354,8 @@ function ProductList({ initialQuery }) {
           const low = av <= threshold;
           const days = daysUntil(p.expiry_date);
           return (
-            <div key={p.id} onClick={() => navigate(`/products/${p.id}`)} style={{
+            <div key={p.id} onClick={() => navigate(`/products/${p.id}`)}
+              {...plxClickable(() => navigate(`/products/${p.id}`))} style={{
               display: "grid", gridTemplateColumns: "40px 1.7fr 0.65fr 0.85fr 0.95fr 0.7fr 0.65fr 0.95fr 0.75fr 22px",
               padding: "14px 18px", alignItems: "center", cursor: "pointer", gap: 6,
               borderBottom: i < pagedItems.length - 1 ? `1px solid ${PLX_BORDER}` : "none",
@@ -368,7 +369,7 @@ function ProductList({ initialQuery }) {
                   style={{ accentColor: PLX_GREEN, cursor: "pointer" }} />
               </span>
               <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
-                <ProductThumb url={p.thumbnail_url} size={36} iconSize={16} />
+                <ProductThumb url={p.thumbnail_url} size={36} iconSize={16} alt={p.name} />
 
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 700,
@@ -389,7 +390,7 @@ function ProductList({ initialQuery }) {
                       {p.tags.slice(0, 2).map((t) => (
                         <span key={t} style={{ fontSize: 9, fontWeight: 700,
                           color: PLX_GREEN, background: PLX_GREEN_LIGHT,
-                          padding: "2px 6px", borderRadius: 9999,
+                          padding: "2px 6px", borderRadius: T.RADIUS_PILL,
                         }}>{t}</span>
                       ))}
                     </div>
@@ -437,8 +438,8 @@ function ProductList({ initialQuery }) {
                       title="この下書きをそのまま公開します"
                       style={{
                         fontSize: 10, fontWeight: 700, padding: "3px 9px",
-                        borderRadius: 9999, border: "none",
-                        background: PLX_GREEN, color: "#fff",
+                        borderRadius: T.RADIUS_PILL, border: "none",
+                        background: PLX_GREEN, color: T.PLX_ON_BRAND,
                         cursor: publishing === p.id ? "wait" : "pointer",
                         opacity: publishing === p.id ? 0.6 : 1,
                         whiteSpace: "nowrap",
@@ -591,7 +592,7 @@ function ProductImportModal({ onClose, onImported }) {
 // 種別 pill: 物販 (green) / 消耗品 (blue). Yoshioka 2026-05-11.
 function KindPill({ itemType }) {
   if (itemType === "consumable") {
-    return <Pill color="#2563EB" bg={PLX_BLUE_LIGHT}>消耗品</Pill>;
+    return <Pill color={T.PLX_BLUE_600} bg={PLX_BLUE_LIGHT}>消耗品</Pill>;
   }
   return <Pill color={PLX_GREEN} bg={PLX_GREEN_LIGHT}>物販</Pill>;
 }
@@ -603,7 +604,7 @@ function ExpiryIndicator({ days }) {
       <div style={{ marginTop: 3, display: "flex", justifyContent: "flex-end" }}>
         <span style={{
           fontSize: 9, fontWeight: 700, color: PLX_RED, background: PLX_RED_LIGHT,
-          padding: "2px 7px", borderRadius: 9999,
+          padding: "2px 7px", borderRadius: T.RADIUS_PILL,
         }}>期限切れ</span>
       </div>
     );
@@ -628,7 +629,7 @@ function ExpiryIndicator({ days }) {
 function QuickChip({ on, onClick, dot, check, label, color, bg, count }) {
   return (
     <button onClick={onClick} style={{
-      fontSize: 11, fontWeight: 700, padding: "5px 11px", borderRadius: 9999,
+      fontSize: 11, fontWeight: 700, padding: "5px 11px", borderRadius: T.RADIUS_PILL,
       border: `1px solid ${on ? color : PLX_BORDER}`,
       background: on ? bg : T.PLX_CARD_BG, color: on ? color : PLX_TEXT,
       cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6,
@@ -643,11 +644,11 @@ function QuickChip({ on, onClick, dot, check, label, color, bg, count }) {
       <span>{label}</span>
       {count != null && (
         <span style={{
-          minWidth: 16, height: 16, padding: "0 5px", borderRadius: 9999,
+          minWidth: 16, height: 16, padding: "0 5px", borderRadius: T.RADIUS_PILL,
           display: "inline-flex", alignItems: "center", justifyContent: "center",
           fontSize: 10, fontWeight: 800,
           background: on ? color : PLX_BORDER,
-          color: on ? "#fff" : PLX_TEXT,
+          color: on ? T.PLX_ON_BRAND : PLX_TEXT,
         }}>{count}</span>
       )}
     </button>
@@ -675,9 +676,9 @@ function MatchReasonPills({ reasons }) {
         if (!meta) return null;
         return (
           <span key={r} title={`検索が ${meta.label} で一致しました`} style={{
-            fontSize: 9, fontWeight: 700, color: "#0F766E",
-            background: "#CCFBF1", padding: "2px 7px", borderRadius: 9999,
-            border: "1px solid #5EEAD4",
+            fontSize: 9, fontWeight: 700, color: T.PLX_TEAL_700,
+            background: T.PLX_TEAL_100, padding: "2px 7px", borderRadius: T.RADIUS_PILL,
+            border: `1px solid ${T.PLX_TEAL_300}`,
             display: "inline-flex", alignItems: "center", gap: 3,
           }}>
             <span style={{ fontSize: 10 }}>{meta.emoji}</span>
@@ -723,8 +724,8 @@ function NoResultsState({ query }) {
           navigate("/products/new");
         }}
         style={{
-          height: 40, padding: "0 22px", borderRadius: 9999,
-          background: PLX_GREEN, color: "#fff", border: "none",
+          height: 40, padding: "0 22px", borderRadius: T.RADIUS_PILL,
+          background: PLX_GREEN, color: T.PLX_ON_BRAND, border: "none",
           fontWeight: 700, fontSize: 13, cursor: "pointer",
           boxShadow: "0 6px 16px rgba(26,166,138,.25)",
           display: "inline-flex", alignItems: "center", gap: 8,

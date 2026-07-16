@@ -18,6 +18,7 @@
 //   Ctrl+K / Cmd+K / "/"    — keyboard
 
 (function () {
+  // Entity-kind accent hues: constant identity colors by design, not theme.
   const KIND_META = {
     product:  { label: "商品",     emoji: "📦", color: T.PLX_GREEN },
     vendor:   { label: "仕入先",   emoji: "🏢", color: "#2563EB" },
@@ -133,6 +134,8 @@
       navigate(hit.href);
     };
 
+    const dlg = useDialog({ onClose, enabled: open });
+
     if (!open) return null;
 
     return (
@@ -142,16 +145,16 @@
         display: "flex", alignItems: "flex-start", justifyContent: "center",
         paddingTop: 100,
       }}>
-        <div onClick={(e) => e.stopPropagation()} style={{
+        <div {...dlg} aria-label="横断検索" onClick={(e) => e.stopPropagation()} style={{
           background: T.PLX_CARD_BG, borderRadius: 14, width: 640, maxWidth: "92%",
           maxHeight: "70vh", boxShadow: "0 24px 60px rgba(17,24,39,.32)",
           overflow: "hidden", display: "flex", flexDirection: "column",
-          border: `1px solid ${T.PLX_LINE_200 || "#E5E7EB"}`,
+          border: `1px solid ${T.PLX_LINE_200}`,
         }}>
           {/* Input row */}
           <div style={{
             display: "flex", alignItems: "center", gap: 10,
-            padding: "14px 18px", borderBottom: `1px solid ${T.PLX_LINE_200 || "#E5E7EB"}`,
+            padding: "14px 18px", borderBottom: `1px solid ${T.PLX_LINE_200}`,
           }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={PLX_MUTED}
               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -164,15 +167,15 @@
               onKeyDown={onKeyDown}
               placeholder="商品 / 仕入先 / 発注書 / JAN / SKU を横断検索…"
               style={{
-                flex: 1, height: 28, border: "none", outline: "none",
+                flex: 1, height: 28, border: "none", 
                 fontSize: 16, fontWeight: 500, color: PLX_TEXT,
                 background: "transparent",
               }}
             />
             <kbd style={{
-              fontSize: 10, color: PLX_MUTED, background: "#F3F4F6",
+              fontSize: 10, color: PLX_MUTED, background: T.PLX_PILL_BG,
               padding: "2px 6px", borderRadius: 4, fontFamily: "ui-monospace",
-              border: `1px solid ${T.PLX_LINE_200 || "#E5E7EB"}`,
+              border: `1px solid ${T.PLX_LINE_200}`,
             }}>Esc</kbd>
           </div>
 
@@ -219,8 +222,8 @@
                 onMouseEnter={() => setActiveIndex(hits.length)}
                 style={{
                   margin: "8px 8px 4px", padding: "10px 14px",
-                  background: activeIndex === hits.length ? PLX_GREEN_50 : "#F9FAFB",
-                  border: `1px dashed ${activeIndex === hits.length ? PLX_GREEN : T.PLX_LINE_200 || "#E5E7EB"}`,
+                  background: activeIndex === hits.length ? PLX_GREEN_50 : T.PLX_SURFACE_50,
+                  border: `1px dashed ${activeIndex === hits.length ? PLX_GREEN : T.PLX_LINE_200}`,
                   borderRadius: 10, cursor: "pointer",
                   display: "flex", alignItems: "center", gap: 12,
                 }}
@@ -236,7 +239,7 @@
                 </div>
                 <span style={{
                   fontSize: 10, color: PLX_MUTED, background: T.PLX_CARD_BG,
-                  border: `1px solid ${T.PLX_LINE_200 || "#E5E7EB"}`,
+                  border: `1px solid ${T.PLX_LINE_200}`,
                   padding: "2px 6px", borderRadius: 4,
                 }}>Enter</span>
               </div>
@@ -246,7 +249,7 @@
           {/* Footer hint */}
           <div style={{
             padding: "8px 14px", fontSize: 10, color: PLX_MUTED,
-            borderTop: `1px solid ${T.PLX_LINE_200 || "#E5E7EB"}`,
+            borderTop: `1px solid ${T.PLX_LINE_200}`,
             display: "flex", gap: 14, alignItems: "center",
           }}>
             <span>↑↓ で移動</span>
@@ -285,8 +288,8 @@
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
           {recent.map((s, i) => (
             <button key={i} onClick={() => onPick(s)} style={{
-              fontSize: 12, padding: "5px 10px", borderRadius: 9999,
-              background: "#F3F4F6", border: "none", cursor: "pointer",
+              fontSize: 12, padding: "5px 10px", borderRadius: T.RADIUS_PILL,
+              background: T.PLX_PILL_BG, border: "none", cursor: "pointer",
               color: PLX_TEXT,
             }}>{s}</button>
           ))}
@@ -354,7 +357,7 @@
               {active && (
                 <span style={{
                   fontSize: 10, color: PLX_MUTED, background: T.PLX_CARD_BG,
-                  border: `1px solid ${T.PLX_LINE_200 || "#E5E7EB"}`,
+                  border: `1px solid ${T.PLX_LINE_200}`,
                   padding: "2px 6px", borderRadius: 4,
                 }}>↵</span>
               )}

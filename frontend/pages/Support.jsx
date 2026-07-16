@@ -73,7 +73,7 @@ function Support() {
               <span style={{ fontSize: 14, fontWeight: 600, color: T.PLX_INK_900, flex: 1 }}>{f.question}</span>
               <span style={{
                 fontSize: 10, color: T.PLX_INK_500, background: T.PLX_SURFACE_100,
-                padding: "2px 8px", borderRadius: 9999,
+                padding: "2px 8px", borderRadius: T.RADIUS_PILL,
               }}>{f.category}</span>
             </button>
             {expandedId === f.id && (
@@ -226,7 +226,7 @@ function ContactForm() {
 
 function QuickLink({ icon, title, desc, onClick }) {
   return (
-    <div onClick={onClick} style={{
+    <div onClick={onClick} {...plxClickable(onClick)} style={{
       background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
       padding: 20, cursor: "pointer",
       display: "flex", alignItems: "center", gap: 14,

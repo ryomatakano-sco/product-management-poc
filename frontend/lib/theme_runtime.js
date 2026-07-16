@@ -48,6 +48,10 @@
       document.body.style.color      = palette.PLX_INK_900;
     }
     document.documentElement.setAttribute("data-theme", theme);
+    // Keep the global :focus-visible rule (index.html) in sync with the
+    // palette — inline styles can't express :focus-visible, so the focus
+    // ring is the one CSS-custom-property escape hatch (a11y 2026-07-15).
+    document.documentElement.style.setProperty("--plx-focus", palette.PLX_FOCUS_RING);
   }
   _apply(current);
 

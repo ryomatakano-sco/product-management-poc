@@ -86,7 +86,7 @@ function PurchaseOrders() {
   const selectStyle = {
     height: 34, padding: "0 10px", borderRadius: T.RADIUS_MD,
     border: `1px solid ${T.PLX_LINE_200}`, background: T.PLX_CARD_BG,
-    fontSize: 12, color: T.PLX_INK_900, cursor: "pointer", outline: "none",
+    fontSize: 12, color: T.PLX_INK_900, cursor: "pointer", 
   };
 
   async function handleExport() {
@@ -186,7 +186,7 @@ function PurchaseOrders() {
             style={{
               width: "100%", height: 34, paddingLeft: 32, paddingRight: 10,
               borderRadius: T.RADIUS_MD, border: `1px solid ${T.PLX_LINE_200}`,
-              fontSize: 12, color: T.PLX_INK_900, background: T.PLX_SURFACE_50, outline: "none",
+              fontSize: 12, color: T.PLX_INK_900, background: T.PLX_SURFACE_50, 
               boxSizing: "border-box",
             }}
           />
@@ -254,6 +254,7 @@ function PurchaseOrders() {
             onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
             <span
               onClick={() => navigate(`/purchase-orders/${po.id}`)}
+              {...plxClickable(() => navigate(`/purchase-orders/${po.id}`))}
               style={{ fontFamily: T.FONT_MONO, fontWeight: 700, color: T.PLX_BLUE_600, cursor: "pointer" }}
               onMouseEnter={(e) => e.currentTarget.style.textDecoration = "underline"}
               onMouseLeave={(e) => e.currentTarget.style.textDecoration = "none"}>
@@ -269,7 +270,7 @@ function PurchaseOrders() {
                 && po.estimated_arrival < new Date().toISOString().slice(0, 10) && (
                 <span style={{
                   fontSize: 9, fontWeight: 700, color: T.PLX_RED_600,
-                  background: T.PLX_RED_100, padding: "1px 7px", borderRadius: 9999,
+                  background: T.PLX_RED_100, padding: "1px 7px", borderRadius: T.RADIUS_PILL,
                 }}>遅延</span>
               )}
             </span>
@@ -347,10 +348,10 @@ function POKpiCard({ label, value, badge, badgeTone, tone, delta, deltaUnit }) {
   const badgeColors = {
     green: { bg: T.PLX_GREEN_100, color: T.PLX_GREEN_700 },
     blue:  { bg: T.PLX_BLUE_100,  color: T.PLX_BLUE_600  },
-    amber: { bg: T.PLX_AMBER_100, color: T.PLX_AMBER_600 },
+    amber: { bg: T.PLX_AMBER_100, color: T.PLX_AMBER_700 },
   };
   const bc = badgeColors[badgeTone] || badgeColors.green;
-  const valueColor = tone === "amber" ? T.PLX_AMBER_600 : tone === "muted" ? T.PLX_INK_500 : T.PLX_INK_900;
+  const valueColor = tone === "amber" ? T.PLX_AMBER_700 : tone === "muted" ? T.PLX_INK_500 : T.PLX_INK_900;
   const deltaText = delta == null ? null
     : deltaUnit === "¥"
       ? `${delta >= 0 ? "+" : "−"}¥${formatYen(Math.abs(delta))}`
@@ -386,7 +387,7 @@ function POStatusPill({ status }) {
   switch (status) {
     case "draft":              return <Pill color={T.PLX_INK_500}  bg={T.PLX_SURFACE_100}>下書き</Pill>;
     case "ordered":            return <Pill color={T.PLX_BLUE_600} bg={T.PLX_BLUE_100}>送信済</Pill>;
-    case "partially_received": return <Pill color={T.PLX_AMBER_600} bg={T.PLX_AMBER_100}>一部入荷</Pill>;
+    case "partially_received": return <Pill color={T.PLX_AMBER_700} bg={T.PLX_AMBER_100}>一部入荷</Pill>;
     case "received":           return <Pill color={T.PLX_GREEN_700} bg={T.PLX_GREEN_100}>入荷済</Pill>;
     case "cancelled":          return <Pill color={T.PLX_RED_600}   bg={T.PLX_RED_100}>キャンセル</Pill>;
     default:                   return <Pill color={T.PLX_INK_500}   bg={T.PLX_SURFACE_100}>{status}</Pill>;
@@ -649,7 +650,7 @@ function PurchaseOrderDetail({ id }) {
               {canCancel && (
                 <button onClick={handleCancel} disabled={busy} style={{
                   padding: "5px 12px", borderRadius: T.RADIUS_MD,
-                  border: `1px solid ${T.PLX_RED_300 || "#fca5a5"}`,
+                  border: `1px solid ${T.PLX_RED_300}`,
                   background: T.PLX_CARD_BG, fontSize: 12, fontWeight: 600,
                   color: T.PLX_RED_600, cursor: busy ? "not-allowed" : "pointer",
                   opacity: busy ? 0.6 : 1, display: "inline-flex", alignItems: "center", gap: 5,
@@ -661,8 +662,8 @@ function PurchaseOrderDetail({ id }) {
           {po.status === "draft" && (
             <div style={{
               padding: "9px 14px", borderRadius: T.RADIUS_MD, marginBottom: 10,
-              background: T.PLX_AMBER_100, border: `1px solid ${T.PLX_AMBER_300 || "#fcd34d"}`,
-              color: T.PLX_AMBER_700 || "#b45309", fontSize: 12, lineHeight: 1.6,
+              background: T.PLX_AMBER_100, border: `1px solid ${T.PLX_AMBER_300}`,
+              color: T.PLX_AMBER_700, fontSize: 12, lineHeight: 1.6,
             }}>
               {"下書きの発注書は入荷を記録できません。「📤 送信」で発注済みにすると、部分入荷（一部だけ届いた場合）も含めて入荷を記録できます。"}
             </div>
@@ -701,7 +702,7 @@ function PurchaseOrderDetail({ id }) {
                 <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>¥{formatYen(it.unit_cost)}</span>
                 <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{it.quantity_ordered}</span>
                 <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700,
-                  color: it.quantity_received >= it.quantity_ordered ? T.PLX_GREEN_700 : it.quantity_received > 0 ? T.PLX_AMBER_600 : T.PLX_INK_500 }}>
+                  color: it.quantity_received >= it.quantity_ordered ? T.PLX_GREEN_700 : it.quantity_received > 0 ? T.PLX_AMBER_700 : T.PLX_INK_500 }}>
                   {it.quantity_received}
                 </span>
                 <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>¥{formatYen(it.line_total)}</span>
@@ -786,6 +787,7 @@ function PurchaseOrderDetail({ id }) {
 // Print-friendly 発注書 sheet. Fixed monochrome styling (independent of the
 // app theme — dark mode must not produce a dark PDF).
 function POPrintSheet({ po, company }) {
+  // Print sheet: always rendered light for paper — hardcoded hex by design.
   const ink = "#111827", muted = "#6b7280", line = "#d1d5db";
   const yen = (v) => `¥${formatYen(v)}`;
   return (
@@ -882,8 +884,7 @@ function POPrintSheet({ po, company }) {
   );
 }
 
-const STEPPER_NAVY = "#1e3a5f";
-const STEPPER_NAVY_LIGHT = "#e8f0f8";
+// Stepper colors read from T at render time (see PoStepper below).
 
 function POStatusStepper({ status }) {
   const steps = [
@@ -901,9 +902,9 @@ function POStatusStepper({ status }) {
       {steps.map((step, i) => {
         const done   = !cancelled && i <= currentIdx;
         const active = !cancelled && i === currentIdx;
-        const dotBg     = cancelled ? "#f1f5f9" : done ? STEPPER_NAVY : "#fff";
-        const dotBorder = cancelled ? "#cbd5e1" : done ? STEPPER_NAVY : "#cbd5e1";
-        const lineColor = cancelled ? "#e2e8f0" : i < currentIdx ? STEPPER_NAVY : "#e2e8f0";
+        const dotBg     = cancelled ? T.PLX_SURFACE_100 : done ? T.PLX_GREEN_600 : T.PLX_CARD_BG;
+        const dotBorder = cancelled ? T.PLX_LINE_200 : done ? T.PLX_GREEN_600 : T.PLX_LINE_200;
+        const lineColor = cancelled ? T.PLX_LINE_200 : i < currentIdx ? T.PLX_GREEN_600 : T.PLX_LINE_200;
         return (
           <React.Fragment key={step.key}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 54 }}>
@@ -911,14 +912,14 @@ function POStatusStepper({ status }) {
                 width: 24, height: 24, borderRadius: "50%",
                 background: dotBg, border: `2px solid ${dotBorder}`,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                color: "#fff", fontSize: 12, fontWeight: 700, marginBottom: 6,
-                boxShadow: done && !cancelled ? `0 0 0 3px ${STEPPER_NAVY_LIGHT}` : "none",
+                color: T.PLX_ON_BRAND, fontSize: 12, fontWeight: 700, marginBottom: 6,
+                boxShadow: done && !cancelled ? `0 0 0 3px ${T.PLX_GREEN_050}` : "none",
               }}>
                 {done && !cancelled ? "✓" : ""}
               </div>
               <span style={{
                 fontSize: 10, fontWeight: active ? 700 : 500,
-                color: active ? STEPPER_NAVY : cancelled ? "#94a3b8" : done ? "#475569" : "#94a3b8",
+                color: active ? T.PLX_GREEN_600 : cancelled ? T.PLX_INK_400 : done ? T.PLX_INK_700 : T.PLX_INK_400,
                 whiteSpace: "nowrap",
               }}>{step.label}</span>
             </div>
@@ -947,7 +948,7 @@ function POEditView({ po, form, updateField, updateItem, deleteItem, addBlankIte
   const inputStyle = {
     width: "100%", height: 36, padding: "0 10px", borderRadius: T.RADIUS_MD,
     border: `1px solid ${T.PLX_LINE_200}`, fontSize: 13, color: T.PLX_INK_900,
-    boxSizing: "border-box", outline: "none", background: T.PLX_CARD_BG,
+    boxSizing: "border-box", background: T.PLX_CARD_BG,
   };
   const visibleItems = form.items.filter((it) => !it._deleted);
 
@@ -972,7 +973,7 @@ function POEditView({ po, form, updateField, updateItem, deleteItem, addBlankIte
           <span style={{
             display: "inline-flex", alignItems: "center", gap: 4,
             fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 99,
-            background: T.PLX_AMBER_100, color: T.PLX_AMBER_600,
+            background: T.PLX_AMBER_100, color: T.PLX_AMBER_700,
           }}>✎ 編集中</span>
         </div>
 
@@ -1016,7 +1017,7 @@ function POEditView({ po, form, updateField, updateItem, deleteItem, addBlankIte
       }}>
         <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{
-            fontSize: 11, fontWeight: 700, color: T.PLX_AMBER_600,
+            fontSize: 11, fontWeight: 700, color: T.PLX_AMBER_700,
             display: "inline-flex", alignItems: "center", gap: 5,
           }}>✎ 編集モード</span>
           <span style={{ fontSize: 11, color: T.PLX_INK_500 }}>変更は保存するまで反映されません</span>
@@ -1081,7 +1082,7 @@ function POEditView({ po, form, updateField, updateItem, deleteItem, addBlankIte
                     style={{
                       width: "100%", height: 36, padding: "0 10px", borderRadius: T.RADIUS_MD,
                       border: `1px solid ${T.PLX_LINE_200}`, background: T.PLX_CARD_BG,
-                      fontSize: 12, color: T.PLX_INK_900, boxSizing: "border-box", outline: "none",
+                      fontSize: 12, color: T.PLX_INK_900, boxSizing: "border-box", 
                     }}>
                     <option value="" disabled>商品を選択してください…</option>
                     {products
@@ -1103,7 +1104,7 @@ function POEditView({ po, form, updateField, updateItem, deleteItem, addBlankIte
                         width: "100%", padding: "8px 10px", borderRadius: T.RADIUS_MD,
                         border: `1px solid ${T.PLX_LINE_200}`, background: T.PLX_CARD_BG,
                         fontSize: 12, fontWeight: 600, color: T.PLX_INK_900,
-                        boxSizing: "border-box", outline: "none",
+                        boxSizing: "border-box", 
                       }}
                       onFocus={(e) => e.target.style.borderColor = T.PLX_BLUE_600}
                       onBlur={(e) => e.target.style.borderColor = T.PLX_LINE_200}
@@ -1117,7 +1118,7 @@ function POEditView({ po, form, updateField, updateItem, deleteItem, addBlankIte
                         marginTop: 6, padding: "4px 10px", borderRadius: T.RADIUS_MD,
                         border: `1px solid ${T.PLX_LINE_200}`, background: T.PLX_CARD_BG,
                         fontFamily: T.FONT_MONO, fontSize: 10, color: T.PLX_INK_500,
-                        outline: "none", width: 160,
+                        width: 160,
                       }}
                       onFocus={(e) => e.target.style.borderColor = T.PLX_BLUE_600}
                       onBlur={(e) => e.target.style.borderColor = T.PLX_LINE_200}
@@ -1189,7 +1190,7 @@ function POCreateModal({ vendors, branches, onClose, onCreated }) {
   const inputStyle = {
     width: "100%", height: 36, padding: "0 10px", borderRadius: T.RADIUS_MD,
     border: `1px solid ${T.PLX_LINE_200}`, fontSize: 13, color: T.PLX_INK_900,
-    boxSizing: "border-box", outline: "none", background: T.PLX_CARD_BG,
+    boxSizing: "border-box", background: T.PLX_CARD_BG,
   };
   const labelStyle = { fontSize: 11, fontWeight: 600, color: T.PLX_INK_500, marginBottom: 4, display: "block" };
 
@@ -1229,17 +1230,18 @@ function POCreateModal({ vendors, branches, onClose, onCreated }) {
     }
   }
 
+  const dlg = useDialog({ onClose, labelledBy: "po-create-title" });
   return (
     <div style={{
       position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000,
       display: "flex", alignItems: "center", justifyContent: "center",
     }} onClick={onClose}>
-      <div style={{
+      <div {...dlg} style={{
         background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, boxShadow: T.SHADOW_LG || "0 8px 32px rgba(0,0,0,0.18)",
         padding: 24, width: 720, maxWidth: "94vw", maxHeight: "86vh", overflowY: "auto",
       }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>発注書を作成</h3>
+          <h3 id="po-create-title" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>発注書を作成</h3>
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: T.PLX_INK_400 }}>✕</button>
         </div>
 
@@ -1386,17 +1388,18 @@ function POReceiveModal({ po, onClose, onDone }) {
     } finally { setBusy(false); }
   }
 
+  const dlg = useDialog({ onClose, labelledBy: "po-receive-title" });
   return (
     <div style={{
       position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000,
       display: "flex", alignItems: "center", justifyContent: "center",
     }} onClick={onClose}>
-      <div style={{
+      <div {...dlg} style={{
         background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, boxShadow: T.SHADOW_LG || "0 8px 32px rgba(0,0,0,0.18)",
         padding: 24, width: 520, maxWidth: "90vw", maxHeight: "80vh", overflowY: "auto",
       }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>入荷を記録</h3>
+          <h3 id="po-receive-title" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>入荷を記録</h3>
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: T.PLX_INK_400 }}>✕</button>
         </div>
         {items.length === 0 && <div style={{ color: T.PLX_INK_400, fontSize: 13, marginBottom: 16 }}>明細がありません</div>}
