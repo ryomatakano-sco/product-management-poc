@@ -1,7 +1,10 @@
 // Dashboard — landing page (Yoshioka 2026-05-11).
-// AI summary (server returns canned text + real KPI counts) + KPI tiles +
-// "要対応の商品" list (top 5 lowest-stock products) + 最近の活動 (mock) +
-// category breakdown (mock).
+// Every section is wired to real endpoints: AI summary + KPI tiles +
+// 要対応の商品 (GET /dashboard/summary), 月別入出庫 (GET /dashboard/
+// monthly-flow), 滞留在庫 (GET /dashboard/slow-movers), 最近の活動
+// (inventory adjustments via /dashboard/summary), category breakdown
+// (real category_breakdown data). Sections with no data render explicit
+// empty states — nothing here is mocked.
 
 // Tone colors read from T at render time (module-scope consts would freeze
 // the light palette and break dark mode).
@@ -507,8 +510,8 @@ function AttentionSkeleton() {
   );
 }
 
-// ── Activity list — static mock for PoC ────────────────────────────────────
-// TODO: wire to inventory_adjustments + audit log after demo.
+// ── Activity list — real data (summary.recent_activity = 5 most recent
+// inventory adjustments, see backend dashboard.py) ─────────────────────────
 
 // Map a backend `kind` (e.g. inventory adjustment reason enum) to a small
 // icon name. The set is intentionally short — we don't need a perfect
