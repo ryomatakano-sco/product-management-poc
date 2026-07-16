@@ -71,32 +71,15 @@ async def get_dashboard_summary(db: DB, store_id: StoreId) -> dict:
     # ── KPI 2: low_stock — any variant at/below ITS OWN threshold ──
     # Single source of truth with the notifier / auto-draft / inventory page
     # (was a hardcoded 10, which disagreed with per-variant thresholds).
-    low_stock = (await db.execute(
-        select(func.count(func.distinct(Product.id)))
-        .join(ProductVariant, ProductVariant.product_id == Product.id)
-        .where(
-            Product.store_id == store_id,
-            Product.status == ProductStatus.active,
-            (ProductVariant.on_hand - ProductVariant.committed - ProductVariant.unavailable)
-                <= func.coalesce(ProductVariant.low_stock_threshold, 10),
-        )
-    )).scalar_one()
+    from app.services.summary import count_expiring_consumables, count_low_stock_products
+    low_stock = await count_low_stock_products(db, store_id)
 
     # ── KPI 3: consumables expiring within 30 days ──
     # Effective expiry = earliest ACTIVE lot, falling back to the manual
     # field — the manual date alone goes stale as new lots arrive
     # (services/expiry.py, warehouse review 2026-07-15).
-    from app.services.expiry import effective_expiry_expr, effective_expiry_map
-    _eff = effective_expiry_expr()
-    expiring_soon = (await db.execute(
-        select(func.count(Product.id)).where(
-            Product.store_id == store_id,
-            Product.item_type == ItemType.consumable,
-            _eff.is_not(None),
-            _eff <= in_30_days,
-            _eff >= today,
-        )
-    )).scalar_one()
+    from app.services.expiry import effective_expiry_map
+    expiring_soon = await count_expiring_consumables(db, store_id, today)
 
     # ── KPI 4: this-month sales total (sum of qty * unit_price for the month) ──
     # Month boundary = JST calendar month start converted to UTC-naive to
