@@ -870,7 +870,7 @@ function SaleDetailModal({ saleId, onClose, onRefunded }) {
           {isRefunded && (
             <div style={{
               display: "flex", alignItems: "center", gap: 8, padding: "10px 14px",
-              background: T.PLX_AMBER_100, color: T.PLX_AMBER_600, borderRadius: T.RADIUS_MD,
+              background: T.PLX_AMBER_100, color: T.PLX_AMBER_700, borderRadius: T.RADIUS_MD,
               fontSize: 12, fontWeight: 600, marginBottom: 14,
             }}>
               ⚠ この販売は {fmt(s.refunded_at)} に返品されました

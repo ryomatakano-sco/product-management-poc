@@ -235,7 +235,7 @@ function Inventory({ query }) {
             <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600,
               color: r.on_hand === 0 ? T.PLX_RED_600 : T.PLX_INK_900 }}>{r.on_hand}</span>
             <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700,
-              color: r.available <= 10 ? T.PLX_AMBER_600 : T.PLX_INK_900 }}>{r.available}</span>
+              color: r.available <= 10 ? T.PLX_AMBER_700 : T.PLX_INK_900 }}>{r.available}</span>
             <span style={{ fontSize: 11, color: T.PLX_INK_500 }}>
               {r.earliest_expiry_date ? formatJpDate(r.earliest_expiry_date) : "—"}
             </span>
@@ -582,7 +582,7 @@ function RecentAdjustments({ refreshKey }) {
 }
 
 function StatusBadge({ status }) {
-  if (status === "low_stock")     return <Pill color={T.PLX_AMBER_600} bg={T.PLX_AMBER_100}>● 在庫低下</Pill>;
+  if (status === "low_stock")     return <Pill color={T.PLX_AMBER_700} bg={T.PLX_AMBER_100}>● 在庫低下</Pill>;
   if (status === "expiring_soon") return <Pill color={T.PLX_RED_600} bg={T.PLX_RED_100}>● 期限間近</Pill>;
   if (status === "out_of_stock")  return <Pill color={T.PLX_RED_600} bg={T.PLX_RED_100}>在庫切れ</Pill>;
   return <Pill color={T.PLX_GREEN_700} bg={T.PLX_GREEN_100}>通常</Pill>;
@@ -590,7 +590,7 @@ function StatusBadge({ status }) {
 
 function KpiTile({ label, value, unit, tone, onClick, clickable, extra }) {
   const color = tone === "red" ? T.PLX_RED_600 :
-                tone === "amber" ? T.PLX_AMBER_600 :
+                tone === "amber" ? T.PLX_AMBER_700 :
                 tone === "muted" ? T.PLX_INK_500 :
                 T.PLX_GREEN_600;
   return (
@@ -615,7 +615,7 @@ function KpiTile({ label, value, unit, tone, onClick, clickable, extra }) {
 
 function Chip({ on, onClick, label, tone }) {
   const color = tone === "red" ? T.PLX_RED_600 :
-                tone === "amber" ? T.PLX_AMBER_600 :
+                tone === "amber" ? T.PLX_AMBER_700 :
                 T.PLX_GREEN_700;
   const bg = tone === "red" ? T.PLX_RED_100 :
              tone === "amber" ? T.PLX_AMBER_100 :
@@ -707,7 +707,7 @@ function ApprovalQueue({ refreshKey, onDecided }) {
               }}>✕ 却下</button>
             </span>
           ) : (
-            <span style={{ color: T.PLX_AMBER_600, fontWeight: 700, fontSize: 11 }}>承認待ち</span>
+            <span style={{ color: T.PLX_AMBER_700, fontWeight: 700, fontSize: 11 }}>承認待ち</span>
           )}
         </div>
       ))}

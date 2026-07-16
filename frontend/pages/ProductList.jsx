@@ -369,7 +369,7 @@ function ProductList({ initialQuery }) {
                   style={{ accentColor: PLX_GREEN, cursor: "pointer" }} />
               </span>
               <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
-                <ProductThumb url={p.thumbnail_url} size={36} iconSize={16} />
+                <ProductThumb url={p.thumbnail_url} size={36} iconSize={16} alt={p.name} />
 
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 700,

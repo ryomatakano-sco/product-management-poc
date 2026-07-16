@@ -770,7 +770,7 @@ function ProductCreate({ editId }) {
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
               {existingImages.map((img) => (
                 <div key={`ex-${img.id}`} style={{ position: "relative" }}>
-                  <img src={img.url} alt="" style={{
+                  <img src={img.url} alt="商品画像" style={{
                     width: 84, height: 84, objectFit: "cover", borderRadius: 10,
                     border: `1px solid ${PLX_BORDER}`,
                   }} />
@@ -783,7 +783,7 @@ function ProductCreate({ editId }) {
               ))}
               {pendingImages.map((f, i) => (
                 <div key={`pd-${i}`} style={{ position: "relative" }}>
-                  <img src={URL.createObjectURL(f)} alt="" style={{
+                  <img src={URL.createObjectURL(f)} alt={f.name} style={{
                     width: 84, height: 84, objectFit: "cover", borderRadius: 10,
                     border: `2px dashed ${PLX_GREEN}`,
                   }} />

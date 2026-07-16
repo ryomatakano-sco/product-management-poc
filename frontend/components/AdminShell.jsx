@@ -108,7 +108,7 @@ function PlxSidebar({ current }) {
       </div>
 
       {/* Nav groups */}
-      <div data-tour="nav" style={{ padding: "12px 8px 8px", flex: 1, overflowY: "auto" }}>
+      <nav aria-label="メイン" data-tour="nav" style={{ padding: "12px 8px 8px", flex: 1, overflowY: "auto" }}>
         {groups.map((g) => (
           <div key={g.label} style={{ marginBottom: 14 }}>
             <div style={{
@@ -120,7 +120,7 @@ function PlxSidebar({ current }) {
             ))}
           </div>
         ))}
-      </div>
+      </nav>
 
       {/* Footer — logged-in user (window.PLX_ME set by the app.jsx auth gate) */}
       <div style={{
@@ -195,7 +195,8 @@ function SbItem({ spec, active }) {
     fontSize: 13, fontWeight: active ? 600 : 500,
   };
   return (
-    <a href={spec.to ? "#" + spec.to : "#"} onClick={(e) => { if (!spec.to) e.preventDefault(); }} style={style}>
+    <a href={spec.to ? "#" + spec.to : "#"} aria-current={active ? "page" : undefined}
+      onClick={(e) => { if (!spec.to) e.preventDefault(); }} style={style}>
       {active && (
         <span style={{
           position: "absolute", left: -4, top: 6, bottom: 6, width: 3,
@@ -574,7 +575,7 @@ function PlxThemeToggle() {
     >
       {isDark ? (
         // sun
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.PLX_AMBER_600}
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.PLX_AMBER_700}
           strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="4"/>
           <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>

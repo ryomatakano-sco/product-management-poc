@@ -348,10 +348,10 @@ function POKpiCard({ label, value, badge, badgeTone, tone, delta, deltaUnit }) {
   const badgeColors = {
     green: { bg: T.PLX_GREEN_100, color: T.PLX_GREEN_700 },
     blue:  { bg: T.PLX_BLUE_100,  color: T.PLX_BLUE_600  },
-    amber: { bg: T.PLX_AMBER_100, color: T.PLX_AMBER_600 },
+    amber: { bg: T.PLX_AMBER_100, color: T.PLX_AMBER_700 },
   };
   const bc = badgeColors[badgeTone] || badgeColors.green;
-  const valueColor = tone === "amber" ? T.PLX_AMBER_600 : tone === "muted" ? T.PLX_INK_500 : T.PLX_INK_900;
+  const valueColor = tone === "amber" ? T.PLX_AMBER_700 : tone === "muted" ? T.PLX_INK_500 : T.PLX_INK_900;
   const deltaText = delta == null ? null
     : deltaUnit === "¥"
       ? `${delta >= 0 ? "+" : "−"}¥${formatYen(Math.abs(delta))}`
@@ -387,7 +387,7 @@ function POStatusPill({ status }) {
   switch (status) {
     case "draft":              return <Pill color={T.PLX_INK_500}  bg={T.PLX_SURFACE_100}>下書き</Pill>;
     case "ordered":            return <Pill color={T.PLX_BLUE_600} bg={T.PLX_BLUE_100}>送信済</Pill>;
-    case "partially_received": return <Pill color={T.PLX_AMBER_600} bg={T.PLX_AMBER_100}>一部入荷</Pill>;
+    case "partially_received": return <Pill color={T.PLX_AMBER_700} bg={T.PLX_AMBER_100}>一部入荷</Pill>;
     case "received":           return <Pill color={T.PLX_GREEN_700} bg={T.PLX_GREEN_100}>入荷済</Pill>;
     case "cancelled":          return <Pill color={T.PLX_RED_600}   bg={T.PLX_RED_100}>キャンセル</Pill>;
     default:                   return <Pill color={T.PLX_INK_500}   bg={T.PLX_SURFACE_100}>{status}</Pill>;
@@ -702,7 +702,7 @@ function PurchaseOrderDetail({ id }) {
                 <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>¥{formatYen(it.unit_cost)}</span>
                 <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{it.quantity_ordered}</span>
                 <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700,
-                  color: it.quantity_received >= it.quantity_ordered ? T.PLX_GREEN_700 : it.quantity_received > 0 ? T.PLX_AMBER_600 : T.PLX_INK_500 }}>
+                  color: it.quantity_received >= it.quantity_ordered ? T.PLX_GREEN_700 : it.quantity_received > 0 ? T.PLX_AMBER_700 : T.PLX_INK_500 }}>
                   {it.quantity_received}
                 </span>
                 <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>¥{formatYen(it.line_total)}</span>
@@ -973,7 +973,7 @@ function POEditView({ po, form, updateField, updateItem, deleteItem, addBlankIte
           <span style={{
             display: "inline-flex", alignItems: "center", gap: 4,
             fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 99,
-            background: T.PLX_AMBER_100, color: T.PLX_AMBER_600,
+            background: T.PLX_AMBER_100, color: T.PLX_AMBER_700,
           }}>✎ 編集中</span>
         </div>
 
@@ -1017,7 +1017,7 @@ function POEditView({ po, form, updateField, updateItem, deleteItem, addBlankIte
       }}>
         <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{
-            fontSize: 11, fontWeight: 700, color: T.PLX_AMBER_600,
+            fontSize: 11, fontWeight: 700, color: T.PLX_AMBER_700,
             display: "inline-flex", alignItems: "center", gap: 5,
           }}>✎ 編集モード</span>
           <span style={{ fontSize: 11, color: T.PLX_INK_500 }}>変更は保存するまで反映されません</span>

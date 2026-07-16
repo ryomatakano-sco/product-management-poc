@@ -895,7 +895,7 @@ function ProductImageManager({ product, onChanged }) {
         <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
           {images.slice(1).map((img) => (
             <div key={img.id} style={{ position: "relative" }}>
-              <img src={img.url} alt="" style={{
+              <img src={img.url} alt="商品画像" style={{
                 width: 46, height: 46, objectFit: "cover", borderRadius: 8,
                 border: `1px solid ${PLX_BORDER}`,
               }} />

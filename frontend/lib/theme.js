@@ -47,11 +47,11 @@ const _LIGHT = {
   PLX_OLIVE_600: "#B9C25B",
   PLX_OLIVE_500: "#C9D275",
   PLX_OLIVE_100: "#F2F5DA",
-  PLX_BLUE_600:   "#0D99FF",
+  PLX_BLUE_600:   "#0B6EC0",
   PLX_BLUE_100:   "#E0F1FF",
   PLX_AMBER_600:  "#F9C22C",
   PLX_AMBER_100:  "#FEF4D4",
-  PLX_RED_600:    "#D94646",
+  PLX_RED_600:    "#B93131",
   PLX_RED_100:    "#FBE3E3",
   PLX_PURPLE_600: "#9C56C0",
   PLX_PURPLE_100: "#F1E6F8",
@@ -78,7 +78,7 @@ const _LIGHT = {
   PLX_SIDEBAR_INK_DIM:   "#7C8BA6",
   PLX_SIDEBAR_ACTIVE_BG: "#003A77",
   // ── a11y tokens (remediation 2026-07-15) ──
-  PLX_FOCUS_RING: "#0D99FF",   // keyboard focus ring (≥3:1 on white)
+  PLX_FOCUS_RING: "#0077D9",   // keyboard focus ring (≥3:1 on white)
   PLX_PILL_BG:    "#F2F3F5",   // neutral pill bg (replaces hardcoded #F3F4F6)
   // Amber readable as TEXT/indicator: #F9C22C was 1.49:1 on white. Signal
   // surfaces keep the bright amber via PLX_AMBER_100 backgrounds.
@@ -165,7 +165,7 @@ const _DARK = {
   PLX_SIDEBAR_ACTIVE_BG: "#1F2630",
   // a11y tokens (dark counterparts)
   PLX_FOCUS_RING: "#3FB1FF",
-  PLX_PILL_BG:    "#2A323D",
+  PLX_PILL_BG:    "#212831",
   PLX_AMBER_700:  "#FBD25C",   // amber-as-text reads bright on dark
   RADIUS_SM:   _LIGHT.RADIUS_SM,
   RADIUS_MD:   _LIGHT.RADIUS_MD,

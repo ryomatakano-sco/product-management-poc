@@ -39,14 +39,15 @@
 function ToastContainer() {
   const [items, setItems] = React.useState([]);
   React.useEffect(() => window.__plxToastSubscribe(setItems), []);
-  if (!items.length) return null;
+  // No early return — a live region only announces reliably when it is
+  // already in the DOM before content arrives (WCAG 4.1.3).
   const palette = {
     success: { bg: PLX_GREEN_LIGHT, fg: T.PLX_GREEN_700, border: T.PLX_GREEN_300 },
     error:   { bg: T.PLX_RED_100, fg: T.PLX_RED_600,   border: T.PLX_RED_600 },
-    warn:    { bg: T.PLX_AMBER_100, fg: T.PLX_AMBER_600, border: T.PLX_AMBER_600 },
+    warn:    { bg: T.PLX_AMBER_100, fg: T.PLX_AMBER_700, border: T.PLX_AMBER_700 },
   };
   return (
-    <div style={{
+    <div role="status" aria-live="polite" style={{
       position: "fixed", right: 24, bottom: 24, zIndex: 9999,
       display: "flex", flexDirection: "column", gap: 10,
       pointerEvents: "none", // each toast re-enables its own pointer events
@@ -54,7 +55,7 @@ function ToastContainer() {
       {items.map((t) => {
         const p = palette[t.variant] || palette.success;
         return (
-          <div key={t.id} style={{
+          <div key={t.id} role={t.variant === "error" ? "alert" : undefined} style={{
             pointerEvents: "auto",
             minWidth: 280, maxWidth: 380,
             background: T.PLX_CARD_BG, border: `1px solid ${p.border}`,
