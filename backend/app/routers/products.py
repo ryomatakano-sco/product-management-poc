@@ -742,20 +742,13 @@ async def create_product(body: ProductCreate, db: DB, store_id: StoreId, user_na
             **idata.model_dump(),
         ))
 
-    # Tags — auto-create missing, use direct insert to avoid lazy load
-    for tag_name in body.tags:
-        tag = (
-            await db.execute(
-                select(Tag).where(Tag.store_id == store_id, Tag.name == tag_name)
-            )
-        ).scalar_one_or_none()
-        if not tag:
-            tag = Tag(store_id=store_id, name=tag_name)
-            db.add(tag)
-            await db.flush()
-        await db.execute(
-            sa_insert(ProductTag).values(product_id=product.id, tag_id=tag.id)
-        )
+    # Tags — batched get-or-create (services/tags.py), one link INSERT
+    if body.tags:
+        from app.services.tags import ensure_tags
+        tags = await ensure_tags(db, store_id, body.tags)
+        await db.execute(sa_insert(ProductTag), [
+            {"product_id": product.id, "tag_id": t.id} for t in tags
+        ])
 
     log_event(db, store_id=store_id, user_name=user_name,
               action="product_created", entity_type="product",

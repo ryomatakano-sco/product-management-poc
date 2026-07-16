@@ -467,18 +467,13 @@ async def create_purchase_order(body: PurchaseOrderCreate, db: DB, store_id: Sto
     po.subtotal = subtotal
     po.total = subtotal + po.shipping_cost
 
-    # Tags — use direct insert to avoid lazy load
-    for tag_name in body.tags:
-        tag = (
-            await db.execute(select(Tag).where(Tag.store_id == store_id, Tag.name == tag_name))
-        ).scalar_one_or_none()
-        if not tag:
-            tag = Tag(store_id=store_id, name=tag_name)
-            db.add(tag)
-            await db.flush()
-        await db.execute(
-            sa_insert(PurchaseOrderTag).values(purchase_order_id=po.id, tag_id=tag.id)
-        )
+    # Tags — batched get-or-create (services/tags.py), one link INSERT
+    if body.tags:
+        from app.services.tags import ensure_tags
+        tags = await ensure_tags(db, store_id, body.tags)
+        await db.execute(sa_insert(PurchaseOrderTag), [
+            {"purchase_order_id": po.id, "tag_id": t.id} for t in tags
+        ])
 
     if body.status == POStatus.ordered:
         po.ordered_at = datetime.now(timezone.utc)
@@ -539,17 +534,12 @@ async def update_purchase_order(po_id: int, body: PurchaseOrderUpdate, db: DB, s
                 PurchaseOrderTag.purchase_order_id == po.id
             )
         )
-        for tag_name in body.tags:
-            tag = (
-                await db.execute(select(Tag).where(Tag.store_id == store_id, Tag.name == tag_name))
-            ).scalar_one_or_none()
-            if not tag:
-                tag = Tag(store_id=store_id, name=tag_name)
-                db.add(tag)
-                await db.flush()
-            await db.execute(
-                sa_insert(PurchaseOrderTag).values(purchase_order_id=po.id, tag_id=tag.id)
-            )
+        if body.tags:
+            from app.services.tags import ensure_tags
+            tags = await ensure_tags(db, store_id, body.tags)
+            await db.execute(sa_insert(PurchaseOrderTag), [
+                {"purchase_order_id": po.id, "tag_id": t.id} for t in tags
+            ])
 
     await db.commit()
     return _po_to_read(await _get_po(po.id, store_id, db))

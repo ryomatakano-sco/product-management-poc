@@ -170,10 +170,40 @@ def _session_to_read(
     )
 
 
+async def _enforce_daily_cap(db, store_id: int) -> None:
+    """429 once a store has created `ai_daily_cap` sessions since JST
+    midnight (review C5) — each session is real OpenAI spend."""
+    from datetime import datetime
+
+    from sqlalchemy import func as _func
+
+    from app.config import settings as _settings
+    from app.services.tz import JST, jst_to_utc_naive
+
+    day_start_utc = jst_to_utc_naive(
+        datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
+    )
+    n = (await db.execute(
+        select(_func.count(AiSuggestionSession.id)).where(
+            AiSuggestionSession.store_id == store_id,
+            AiSuggestionSession.created_at >= day_start_utc,
+        )
+    )).scalar_one()
+    if n >= _settings.ai_daily_cap:
+        raise HTTPException(
+            429,
+            detail=(
+                f"本日のAI検索回数が上限（{_settings.ai_daily_cap}回）に達しました。"
+                "明日また実行できます。上限は AI_DAILY_CAP で変更できます。"
+            ),
+        )
+
+
 @router.post("", response_model=AiSuggestionRead, status_code=201)
 async def create_ai_suggestion(body: AiSuggestionRequest, db: DB, store_id: StoreId):
     if not body.jan and not body.title:
         raise HTTPException(400, detail="At least one of 'jan' or 'title' is required")
+    await _enforce_daily_cap(db, store_id)
 
     # Validate + normalise the JAN before any model call. NFKC strips full-
     # width digits to ASCII, the mod-10 check digit rejects typos. Saves an
@@ -275,8 +305,13 @@ async def get_ai_suggestion(session_id: int, db: DB, store_id: StoreId):
 
 
 @router.post("/compare", response_model=AiSuggestionCompare)
-async def compare_ai_suggestion(body: AiSuggestionCompareRequest):
+async def compare_ai_suggestion(body: AiSuggestionCompareRequest, db: DB, store_id: StoreId):
     """Run the same lookup against N models in parallel.
+
+    Auth: StoreId was MISSING here until review C5 — this endpoint spends
+    real OpenAI money (up to 6 models per call) and the server binds
+    0.0.0.0, so it was callable by anyone on the LAN. It now requires the
+    same session/loopback auth as everything else, plus the daily cap.
 
     Used by the DevPanel model arena to A/B which model produces the best
     recall/quality. Not user-facing. Caller-supplied model ids are passed
@@ -291,6 +326,7 @@ async def compare_ai_suggestion(body: AiSuggestionCompareRequest):
 
     if not body.jan and not body.title:
         raise HTTPException(400, detail="At least one of 'jan' or 'title' is required")
+    await _enforce_daily_cap(db, store_id)
     if not body.models:
         raise HTTPException(400, detail="At least one model id is required")
     if len(body.models) > 6:
