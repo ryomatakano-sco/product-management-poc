@@ -685,6 +685,7 @@ async def create_product(body: ProductCreate, db: DB, store_id: StoreId, user_na
     # Variants — ensure at least one default
     has_default = False
     first_variant: ProductVariant | None = None
+    created_variants: list[ProductVariant] = []
     for vdata in body.variants:
         v = ProductVariant(
             product_id=product.id,
@@ -696,6 +697,7 @@ async def create_product(body: ProductCreate, db: DB, store_id: StoreId, user_na
         if v.is_default:
             has_default = True
         db.add(v)
+        created_variants.append(v)
 
     if not body.variants:
         # Auto-create default variant
@@ -710,6 +712,27 @@ async def create_product(body: ProductCreate, db: DB, store_id: StoreId, user_na
         # `pass` left multi-variant API creates with NO default variant,
         # blanking SKU/price in every list view).
         first_variant.is_default = True
+
+    # Initial stock entered on the create form must exist at a branch, not
+    # only as the variant's denormalized total — the sale/adjust guards read
+    # the per-branch rows (mig 012), so without this a product created with
+    # stock could never be sold (found by tests/test_sales.py).
+    if any(v.on_hand for v in created_variants):
+        from app.models.inventory import VariantBranchStock
+        from app.services.stock import StockError, resolve_branch_id
+
+        await db.flush()  # variant ids
+        try:
+            main_branch = await resolve_branch_id(db, store_id, None)
+        except StockError as e:
+            await db.rollback()
+            raise HTTPException(400, detail=e.message)
+        for v in created_variants:
+            if v.on_hand:
+                db.add(VariantBranchStock(
+                    store_id=store_id, variant_id=v.id,
+                    branch_id=main_branch, on_hand=v.on_hand,
+                ))
 
     # Images
     for idata in body.images:
