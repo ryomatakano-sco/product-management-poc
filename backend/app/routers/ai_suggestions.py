@@ -96,6 +96,53 @@ def wrong_product_drop(jan: str | None, candidates) -> bool:
     return any(jan_verified_for(jan, getattr(c, "source_url", None)) for c in candidates)
 
 
+_TOKEN_RE = None
+
+
+def _title_tokens(s: str) -> set[str]:
+    """Significant tokens of a product title: ASCII alnum runs (brands like
+    GUM / Ora2 / DENT, model numbers) and JP script runs of 2+ chars,
+    NFKC-normalized and casefolded."""
+    global _TOKEN_RE
+    import re
+    import unicodedata
+
+    if _TOKEN_RE is None:
+        _TOKEN_RE = re.compile(r"[a-z0-9]{2,}|[぀-ゟ゠-ヿ一-鿿]{2,}")
+    s = unicodedata.normalize("NFKC", s or "").casefold()
+    return set(_TOKEN_RE.findall(s))
+
+
+def title_mismatch_drop(title: str | None, jan: str | None, candidates) -> bool:
+    """A4 guard for title (商品名) searches — the JAN path got the strict-
+    citation + wrong-product guards, the title path had NOTHING, so a name
+    query could silently surface a completely different product.
+
+    Rule (mirrors wrong_product_drop's fire-only-on-evidence philosophy):
+    on a title-only search, if NO title/brand candidate shares even one
+    significant token with the query, the whole result set is about some
+    other product — drop it all (the UI then shows the honest no-result
+    path). One overlapping candidate anywhere → keep everything, because
+    partial agreement means the agent found the right product family.
+    """
+    if jan or not title:
+        return False
+    import unicodedata
+
+    q = _title_tokens(title)
+    if not q:
+        return False
+    for c in candidates:
+        if getattr(c, "field_name", None) in ("title", "brand"):
+            v = unicodedata.normalize("NFKC", (getattr(c, "value", "") or "")).casefold()
+            if any(t in v for t in q):
+                return False
+    # No name/brand candidate at all → nothing to judge; keep (recall first).
+    if not any(getattr(c, "field_name", None) in ("title", "brand") for c in candidates):
+        return False
+    return True
+
+
 async def _load_master_lists(db, store_id: int) -> tuple[list[str], list[str]]:
     """Fetch the store's category names + active vendor names for prompt injection.
 
@@ -246,8 +293,23 @@ async def create_ai_suggestion(body: AiSuggestionRequest, db: DB, store_id: Stor
         # different product (the Ora2-search-returns-GUM bug) — drop them.
         drop_unverified = wrong_product_drop(jan, result.candidates)
 
+        # Title-plausibility guard (A4): a name search whose results share no
+        # token with the query is a wrong product — suppress all candidates.
+        # Local list, NOT result.candidates mutation: real outcomes live in
+        # the lookup cache and must stay intact.
+        candidates_to_persist = list(result.candidates)
+        # Mock results are canned (same product for every query) — judging
+        # them against the query would suppress every mock title search.
+        if not getattr(outcome, "is_mock", False) and title_mismatch_drop(title, jan, candidates_to_persist):
+            logger.warning("title guard fired: query=%r produced unrelated candidates — suppressing", title)
+            candidates_to_persist = []
+            session.error_message = (
+                "検索結果が入力された商品名と一致しないため、候補を表示しません"
+                "（別商品の可能性があります）。名称を変えて再検索してください。"
+            )
+
         # Persist candidates as field_options
-        for i, candidate in enumerate(result.candidates):
+        for i, candidate in enumerate(candidates_to_persist):
             # Anti-hallucination: only strict-citation fields require a source_url.
             # Lenient fields (title, brand, description, category, indications, etc.)
             # are kept even without an inline citation — the search agent's

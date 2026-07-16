@@ -750,6 +750,17 @@ async def create_product(body: ProductCreate, db: DB, store_id: StoreId, user_na
             {"product_id": product.id, "tag_id": t.id} for t in tags
         ])
 
+    # A5 telemetry: AI top-candidate vs saved value, per field. Best-effort —
+    # never blocks the save (see services/ai_telemetry.py).
+    if body.ai_session_id and session:
+        from app.services.ai_telemetry import record_ai_corrections
+        default_v = next((v for v in created_variants if v.is_default),
+                         created_variants[0] if created_variants else None)
+        await record_ai_corrections(
+            db, store_id=store_id, product=product,
+            default_variant=default_v, session=session,
+        )
+
     log_event(db, store_id=store_id, user_name=user_name,
               action="product_created", entity_type="product",
               entity_id=product.id, detail=product.name)
