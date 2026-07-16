@@ -86,6 +86,10 @@ class Product(Base, TimestampMixin):
     default_amount_at_payment: Mapped[float | None] = mapped_column(
         Numeric(10, 2), nullable=True, comment="Legacy: default price (税込)"
     )
+    # Attribution (mig 019, same display-name-snapshot pattern as mig 016)
+    created_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    updated_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
     is_insurable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_pinned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     tax_rate: Mapped[TaxRate] = mapped_column(

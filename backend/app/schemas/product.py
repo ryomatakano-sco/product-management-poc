@@ -215,6 +215,8 @@ class ProductDetail(BaseModel):
 
     id: int
     store_id: int
+    created_by: str | None = None
+    updated_by: str | None = None
     name: str
     name_kana: str | None
     description: str | None

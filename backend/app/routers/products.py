@@ -10,6 +10,7 @@ from sqlalchemy import case, exists, func, insert as sa_insert, literal, or_, se
 from sqlalchemy.orm import selectinload
 
 from app.deps import DB, StoreId, CurrentUserName
+from app.services.audit import log_event
 from app.models.category import Category
 from app.models.product import ItemType, Product, ProductImage, ProductStatus, ProductVariant
 from app.models.sale import SalesRecord
@@ -636,6 +637,7 @@ async def get_product(product_id: int, db: DB, store_id: StoreId):
 async def create_product(body: ProductCreate, db: DB, store_id: StoreId, user_name: CurrentUserName = None):
     product = Product(
         internal_code=await _next_internal_code(db, store_id, body.item_type),
+        created_by=user_name,
         store_id=store_id,
         name=body.name,
         name_kana=body.name_kana,
@@ -732,6 +734,9 @@ async def create_product(body: ProductCreate, db: DB, store_id: StoreId, user_na
             sa_insert(ProductTag).values(product_id=product.id, tag_id=tag.id)
         )
 
+    log_event(db, store_id=store_id, user_name=user_name,
+              action="product_created", entity_type="product",
+              entity_id=product.id, detail=product.name)
     await db.commit()
 
     # Return full detail
@@ -739,7 +744,8 @@ async def create_product(body: ProductCreate, db: DB, store_id: StoreId, user_na
 
 
 @router.patch("/{product_id}", response_model=ProductDetail)
-async def update_product(product_id: int, body: ProductUpdate, db: DB, store_id: StoreId):
+async def update_product(product_id: int, body: ProductUpdate, db: DB, store_id: StoreId,
+                         user_name: CurrentUserName = None):
     product = (
         await db.execute(
             select(Product).where(Product.id == product_id, Product.store_id == store_id)
@@ -747,14 +753,23 @@ async def update_product(product_id: int, body: ProductUpdate, db: DB, store_id:
     ).scalar_one_or_none()
     if not product:
         raise HTTPException(404, detail="Product not found")
+    changed = []
     for key, val in body.model_dump(exclude_unset=True).items():
+        if getattr(product, key, None) != val:
+            changed.append(key)
         setattr(product, key, val)
+    if changed:
+        product.updated_by = user_name
+        log_event(db, store_id=store_id, user_name=user_name,
+                  action="product_updated", entity_type="product",
+                  entity_id=product.id, detail=", ".join(changed))
     await db.commit()
     return await get_product(product_id, db, store_id)
 
 
 @router.delete("/{product_id}", response_model=ProductDetail)
-async def delete_product(product_id: int, db: DB, store_id: StoreId):
+async def delete_product(product_id: int, db: DB, store_id: StoreId,
+                         user_name: CurrentUserName = None):
     """Soft delete via status='archived'."""
     product = (
         await db.execute(
@@ -764,6 +779,10 @@ async def delete_product(product_id: int, db: DB, store_id: StoreId):
     if not product:
         raise HTTPException(404, detail="Product not found")
     product.status = ProductStatus.archived
+    product.updated_by = user_name
+    log_event(db, store_id=store_id, user_name=user_name,
+              action="product_archived", entity_type="product",
+              entity_id=product.id, detail=product.name)
     await db.commit()
     return await get_product(product_id, db, store_id)
 

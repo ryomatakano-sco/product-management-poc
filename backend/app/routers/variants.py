@@ -3,7 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import func, select
 
-from app.deps import DB, StoreId
+from app.deps import DB, StoreId, CurrentUserName
+from app.services.audit import log_event
 from app.models.inventory import InventoryField
 from app.models.product import Product, ProductVariant
 from app.schemas.product import VariantCreate, VariantRead, VariantUpdate
@@ -61,7 +62,8 @@ async def create_variant(product_id: int, body: VariantCreate, db: DB, store_id:
 
 
 @router.patch("/variants/{variant_id}", response_model=VariantRead)
-async def update_variant(variant_id: int, body: VariantUpdate, db: DB, store_id: StoreId):
+async def update_variant(variant_id: int, body: VariantUpdate, db: DB, store_id: StoreId,
+                         user_name: CurrentUserName = None):
     variant = (
         await db.execute(
             select(ProductVariant).where(
@@ -71,8 +73,15 @@ async def update_variant(variant_id: int, body: VariantUpdate, db: DB, store_id:
     ).scalar_one_or_none()
     if not variant:
         raise HTTPException(404, detail="Variant not found")
+    changed = []
     for key, val in body.model_dump(exclude_unset=True).items():
+        if getattr(variant, key, None) != val:
+            changed.append(key)
         setattr(variant, key, val)
+    if changed:
+        log_event(db, store_id=store_id, user_name=user_name,
+                  action="variant_updated", entity_type="variant",
+                  entity_id=variant.id, detail=", ".join(changed))
     await db.commit()
     await db.refresh(variant)
     return variant
