@@ -341,9 +341,16 @@ function plxClickable(onActivate) {
 // (WCAG 4.1.2 / 2.4.3): Escape closes, focus moves in on open, Tab cycles
 // inside, and focus returns to the opener on unmount. Returns props to
 // spread on the dialog container.
-function useDialog({ onClose, labelledBy }) {
+function useDialog({ onClose, labelledBy, enabled = true }) {
   const ref = React.useRef(null);
   React.useEffect(() => {
+    if (!enabled) return;
+    // Only the top of the dialog stack handles keys — nested dialogs
+    // (e.g. barcode scanner inside the AI modal) must not close the parent.
+    const stack = (window._PLX_DLG_STACK = window._PLX_DLG_STACK || []);
+    const token = {};
+    stack.push(token);
+    const isTop = () => stack[stack.length - 1] === token;
     const opener = document.activeElement;
     const node = ref.current;
     const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -354,6 +361,7 @@ function useDialog({ onClose, labelledBy }) {
       (first || node).focus?.();
     }
     const onKey = (e) => {
+      if (!isTop()) return;
       if (e.key === "Escape") {
         e.stopPropagation();
         onClose?.();
@@ -372,10 +380,11 @@ function useDialog({ onClose, labelledBy }) {
     };
     document.addEventListener("keydown", onKey, true);
     return () => {
+      stack.splice(stack.indexOf(token), 1);
       document.removeEventListener("keydown", onKey, true);
       opener?.focus?.();  // restore focus to the trigger
     };
-  }, [onClose]);
+  }, [onClose, enabled]);
   return {
     ref,
     role: "dialog",

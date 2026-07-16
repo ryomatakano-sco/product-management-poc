@@ -1210,6 +1210,7 @@ function AiAssistModal({ onClose, onApply, seed }) {
         (n, arr) => n + (arr || []).filter((o) => o.is_new).length, 0)
     : 0;
 
+  const dlg = useDialog({ onClose });
   return (
     <div onClick={onClose} style={{
       position: "fixed", inset: 0, background: "rgba(17,24,39,.45)",
@@ -1226,7 +1227,7 @@ function AiAssistModal({ onClose, onApply, seed }) {
       {pairOpen && (
         <PhoneScanSession onClose={() => setPairOpen(false)} />
       )}
-      <div onClick={(e) => e.stopPropagation()} style={{
+      <div {...dlg} aria-label="AIアシスト" onClick={(e) => e.stopPropagation()} style={{
         background: T.PLX_CARD_BG, borderRadius: 18, width: 680, maxHeight: "86%",
         boxShadow: "0 24px 60px rgba(17,24,39,.22)", overflow: "hidden",
         display: "flex", flexDirection: "column",
@@ -1805,8 +1806,9 @@ function PhoneScanSession({ onClose }) {
 
   const localhostQr = /^https?:\/\/(localhost|127\.|\[::1\])/.test(phoneUrl);
 
+  const dlg = useDialog({ onClose });
   return (
-    <div onClick={(e) => e.stopPropagation()} style={{
+    <div {...dlg} aria-label="スマホでスキャン" onClick={(e) => e.stopPropagation()} style={{
       position: "fixed", inset: 0, background: "rgba(17,24,39,0.85)",
       zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
     }}>
@@ -2098,8 +2100,9 @@ function BarcodeScanner({ onDetected, onClose, validate, onReject, continuous })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const dlg = useDialog({ onClose });
   return (
-    <div onClick={(e) => e.stopPropagation()} style={{
+    <div {...dlg} aria-label="バーコードスキャン" onClick={(e) => e.stopPropagation()} style={{
       position: "fixed", inset: 0, background: "rgba(17,24,39,0.85)",
       zIndex: 100, display: "flex", flexDirection: "column",
       alignItems: "center", justifyContent: "center", padding: 20,
@@ -2220,13 +2223,14 @@ function ConfirmSaveModal({ isEdit, status, before, after, refData, onCancel, on
   const displayRows = isEdit ? rows.filter((r) => r.changed) : rows.filter((r) => r.a !== "" && r.a != null);
   const hasChanges = displayRows.length > 0;
 
+  const dlg = useDialog({ onClose: onCancel });
   return (
     <div onClick={onCancel} style={{
       position: "fixed", inset: 0, background: "rgba(17,24,39,0.45)",
       backdropFilter: "blur(4px)", zIndex: 80,
       display: "flex", alignItems: "center", justifyContent: "center",
     }}>
-      <div onClick={(e) => e.stopPropagation()} style={{
+      <div {...dlg} aria-label="保存内容の確認" onClick={(e) => e.stopPropagation()} style={{
         background: T.PLX_CARD_BG, borderRadius: 16, width: 600, maxWidth: "92%",
         maxHeight: "82vh", boxShadow: "0 24px 60px rgba(17,24,39,.22)",
         overflow: "hidden", display: "flex", flexDirection: "column",

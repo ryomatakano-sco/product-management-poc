@@ -371,13 +371,14 @@ function ProductDetail({ productId }) {
 // If another page needs it, move to components/Atoms.jsx and expose on window.
 // ─────────────────────────────────────────────────────────────────────────────
 function ConfirmDeleteModal({ title, message, confirmLabel, onConfirm, onCancel, disabled }) {
+  const dlg = useDialog({ onClose: onCancel });
   return (
     <div onClick={onCancel} style={{
       position: "fixed", inset: 0, background: "rgba(17,24,39,0.45)",
       backdropFilter: "blur(4px)", zIndex: 60,
       display: "flex", alignItems: "center", justifyContent: "center",
     }}>
-      <div onClick={(e) => e.stopPropagation()} style={{
+      <div {...dlg} aria-label={title} onClick={(e) => e.stopPropagation()} style={{
         background: T.PLX_CARD_BG, borderRadius: 16, width: 420, maxWidth: "90%",
         boxShadow: "0 24px 60px rgba(17,24,39,.22)", padding: 24,
       }}>
@@ -716,13 +717,14 @@ function InventoryAdjustModal({ variant, onClose, onApplied }) {
     cursor: "pointer", fontWeight: 700, fontSize: 16, color: PLX_TEXT,
   };
 
+  const dlg = useDialog({ onClose });
   return (
     <div onClick={onClose} style={{
       position: "fixed", inset: 0, background: "rgba(17,24,39,.4)",
       backdropFilter: "blur(4px)", display: "flex",
       alignItems: "center", justifyContent: "center", zIndex: 50,
     }}>
-      <div onClick={(e) => e.stopPropagation()} style={{
+      <div {...dlg} aria-label="在庫調整" onClick={(e) => e.stopPropagation()} style={{
         background: T.PLX_CARD_BG, borderRadius: 16, padding: "24px 28px", width: 480,
         boxShadow: "0 24px 60px rgba(17,24,39,.18)",
       }}>

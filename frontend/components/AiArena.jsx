@@ -149,6 +149,8 @@
       [selected, sideBySide],
     );
 
+    const dlg = useDialog({ onClose, enabled: open });
+
     if (!open) return null;
 
     const knownOptions = Array.from(new Set([..._DEFAULT_OPTIONS, ...selected]));
@@ -240,7 +242,7 @@
         display: "flex", alignItems: "flex-start", justifyContent: "center",
         paddingTop: 40, overflow: "auto",
       }}>
-        <div onClick={(e) => e.stopPropagation()} style={{
+        <div {...dlg} aria-label="AI Arena" onClick={(e) => e.stopPropagation()} style={{
           background: T.PLX_CARD_BG, borderRadius: 14, width: "min(1280px, 96%)",
           maxHeight: "92vh", boxShadow: "0 24px 60px rgba(17,24,39,.35)",
           overflow: "hidden", display: "flex", flexDirection: "column",

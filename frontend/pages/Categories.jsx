@@ -404,24 +404,21 @@ function CategoryFormModal({ editing, allCategories, onClose, onSaved }) {
 // module if/when we grow a real component library.
 
 function Modal({ title, onClose, children }) {
-  React.useEffect(() => {
-    const onEsc = (e) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onEsc);
-    return () => window.removeEventListener("keydown", onEsc);
-  }, [onClose]);
+  // useDialog (Atoms) owns Escape, the focus trap, and focus restore.
+  const dlg = useDialog({ onClose, labelledBy: "plx-modal-title" });
   return (
     <div onClick={onClose} style={{
       position: "fixed", inset: 0, zIndex: 100,
       background: "rgba(15,27,45,0.45)",
       display: "flex", alignItems: "center", justifyContent: "center",
     }}>
-      <div onClick={(e) => e.stopPropagation()} style={{
+      <div {...dlg} onClick={(e) => e.stopPropagation()} style={{
         background: T.PLX_CARD_BG, width: 560, maxWidth: "92%", maxHeight: "90%",
         overflowY: "auto", borderRadius: T.RADIUS_LG, boxShadow: T.SHADOW_LG,
         padding: 24,
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{title}</h3>
+          <h3 id="plx-modal-title" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{title}</h3>
           <button onClick={onClose} aria-label="閉じる" style={{
             background: "transparent", border: "none", cursor: "pointer",
             fontSize: 20, color: T.PLX_INK_500, padding: "4px 8px",

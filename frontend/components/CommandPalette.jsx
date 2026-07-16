@@ -133,6 +133,8 @@
       navigate(hit.href);
     };
 
+    const dlg = useDialog({ onClose, enabled: open });
+
     if (!open) return null;
 
     return (
@@ -142,7 +144,7 @@
         display: "flex", alignItems: "flex-start", justifyContent: "center",
         paddingTop: 100,
       }}>
-        <div onClick={(e) => e.stopPropagation()} style={{
+        <div {...dlg} aria-label="横断検索" onClick={(e) => e.stopPropagation()} style={{
           background: T.PLX_CARD_BG, borderRadius: 14, width: 640, maxWidth: "92%",
           maxHeight: "70vh", boxShadow: "0 24px 60px rgba(17,24,39,.32)",
           overflow: "hidden", display: "flex", flexDirection: "column",

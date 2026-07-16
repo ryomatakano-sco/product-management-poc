@@ -1230,17 +1230,18 @@ function POCreateModal({ vendors, branches, onClose, onCreated }) {
     }
   }
 
+  const dlg = useDialog({ onClose, labelledBy: "po-create-title" });
   return (
     <div style={{
       position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000,
       display: "flex", alignItems: "center", justifyContent: "center",
     }} onClick={onClose}>
-      <div style={{
+      <div {...dlg} style={{
         background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, boxShadow: T.SHADOW_LG || "0 8px 32px rgba(0,0,0,0.18)",
         padding: 24, width: 720, maxWidth: "94vw", maxHeight: "86vh", overflowY: "auto",
       }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>発注書を作成</h3>
+          <h3 id="po-create-title" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>発注書を作成</h3>
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: T.PLX_INK_400 }}>✕</button>
         </div>
 
@@ -1387,17 +1388,18 @@ function POReceiveModal({ po, onClose, onDone }) {
     } finally { setBusy(false); }
   }
 
+  const dlg = useDialog({ onClose, labelledBy: "po-receive-title" });
   return (
     <div style={{
       position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000,
       display: "flex", alignItems: "center", justifyContent: "center",
     }} onClick={onClose}>
-      <div style={{
+      <div {...dlg} style={{
         background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, boxShadow: T.SHADOW_LG || "0 8px 32px rgba(0,0,0,0.18)",
         padding: 24, width: 520, maxWidth: "90vw", maxHeight: "80vh", overflowY: "auto",
       }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>入荷を記録</h3>
+          <h3 id="po-receive-title" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>入荷を記録</h3>
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: T.PLX_INK_400 }}>✕</button>
         </div>
         {items.length === 0 && <div style={{ color: T.PLX_INK_400, fontSize: 13, marginBottom: 16 }}>明細がありません</div>}
