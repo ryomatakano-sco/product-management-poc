@@ -203,6 +203,7 @@ function LogoUploader({ logoUrl, onChanged }) {
       ) : (
         <div
           onClick={() => inputRef.current?.click()}
+          {...plxClickable(() => inputRef.current?.click())}
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={(e) => { e.preventDefault(); setDragOver(false); doUpload(e.dataTransfer.files?.[0]); }}
@@ -275,10 +276,12 @@ function NotificationsSettings() {
 
 function ToggleRow({ label, on, onChange }) {
   return (
-    <div onClick={onChange} style={{
-      display: "flex", alignItems: "center", justifyContent: "space-between",
-      padding: "12px 0", borderBottom: `1px solid ${T.PLX_LINE_100}`, cursor: "pointer",
-    }}>
+    <div onClick={onChange} role="switch" aria-checked={!!on} tabIndex={0}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onChange(); } }}
+      style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "12px 0", borderBottom: `1px solid ${T.PLX_LINE_100}`, cursor: "pointer",
+      }}>
       <span style={{ fontSize: 13, color: T.PLX_INK_900 }}>{label}</span>
       <span style={{
         width: 38, height: 22, borderRadius: 9999,

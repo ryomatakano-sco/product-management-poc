@@ -254,6 +254,7 @@ function PurchaseOrders() {
             onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
             <span
               onClick={() => navigate(`/purchase-orders/${po.id}`)}
+              {...plxClickable(() => navigate(`/purchase-orders/${po.id}`))}
               style={{ fontFamily: T.FONT_MONO, fontWeight: 700, color: T.PLX_BLUE_600, cursor: "pointer" }}
               onMouseEnter={(e) => e.currentTarget.style.textDecoration = "underline"}
               onMouseLeave={(e) => e.currentTarget.style.textDecoration = "none"}>

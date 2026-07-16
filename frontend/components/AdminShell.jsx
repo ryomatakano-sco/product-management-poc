@@ -494,7 +494,7 @@ function NotificationBell() {
       {open && (
         <>
           {/* click-away scrim */}
-          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 60 }} />
+          <div onClick={() => setOpen(false)} aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: 60 }} />
           <div style={{
             position: "absolute", top: 42, right: 0, width: 360, zIndex: 61,
             background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG,
@@ -520,7 +520,8 @@ function NotificationBell() {
                 </div>
               )}
               {items.map((n) => (
-                <div key={n.id} onClick={() => openItem(n)} style={{
+                <div key={n.id} onClick={() => openItem(n)}
+                  {...(n.link_path ? plxClickable(() => openItem(n)) : {})} style={{
                   padding: "10px 14px", cursor: n.link_path ? "pointer" : "default",
                   display: "flex", gap: 10, alignItems: "flex-start",
                   background: n.read_at ? "transparent" : T.PLX_GREEN_050 || T.PLX_SURFACE_50,

@@ -328,6 +328,7 @@ function plxClickable(onActivate) {
     role: "button",
     tabIndex: 0,
     onKeyDown: (e) => {
+      if (e.target !== e.currentTarget) return;  // nested controls handle their own keys
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         onActivate(e);

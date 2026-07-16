@@ -332,7 +332,8 @@ function KpiTile({ icon, label, value, unit, delta, tone = "green", clickable, o
     tone === "muted" ? "#F3F4F6" :
                        PLX_GREEN_LIGHT;
   return (
-    <div onClick={clickable ? onClick : undefined} style={{
+    <div onClick={clickable ? onClick : undefined}
+      {...(clickable ? plxClickable(onClick) : {})} style={{
       background: T.PLX_CARD_BG, borderRadius: 14, border: `1px solid ${PLX_BORDER}`,
       padding: "16px 18px", height: 104,
       cursor: clickable ? "pointer" : "default",
@@ -416,7 +417,8 @@ function AttentionTable({ rows }) {
         const days = daysUntil(p.expiry_date);
         const lowAvail = (p.total_available ?? 0) <= 10;
         return (
-          <div key={p.id} onClick={() => navigate(`/products/${p.id}`)} style={{
+          <div key={p.id} onClick={() => navigate(`/products/${p.id}`)}
+            {...plxClickable(() => navigate(`/products/${p.id}`))} style={{
             display: "grid", gridTemplateColumns: "2.1fr 0.8fr 0.7fr 1fr 18px",
             padding: "11px 14px", alignItems: "center", cursor: "pointer", borderRadius: 8,
             borderBottom: i < rows.length - 1 ? `1px solid ${PLX_BORDER}` : "none",
@@ -645,6 +647,7 @@ function CategoryBars({ rows: rawRows }) {
       {rows.map((r) => (
         <div key={r.category_id}
           onClick={() => navigate(`/products?category_id=${r.category_id}`)}
+          {...plxClickable(() => navigate(`/products?category_id=${r.category_id}`))}
           title={`在庫金額 ¥${formatYen(r.stock_value_jpy)}`}
           style={{
             display: "grid", gridTemplateColumns: "140px 1fr 130px",
@@ -758,7 +761,8 @@ function SlowMoversTable({ items }) {
         <span style={{ textAlign: "right" }}>最終販売</span>
       </div>
       {items.map((r) => (
-        <div key={r.id} onClick={() => navigate(`/products/${r.id}`)} style={{
+        <div key={r.id} onClick={() => navigate(`/products/${r.id}`)}
+          {...plxClickable(() => navigate(`/products/${r.id}`))} style={{
           display: "grid", gridTemplateColumns: "1.8fr 0.5fr 0.8fr 0.9fr",
           padding: "7px 0", fontSize: 12, alignItems: "center", cursor: "pointer",
           borderTop: `1px solid ${PLX_BORDER}`,

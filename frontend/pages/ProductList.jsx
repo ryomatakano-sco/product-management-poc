@@ -354,7 +354,8 @@ function ProductList({ initialQuery }) {
           const low = av <= threshold;
           const days = daysUntil(p.expiry_date);
           return (
-            <div key={p.id} onClick={() => navigate(`/products/${p.id}`)} style={{
+            <div key={p.id} onClick={() => navigate(`/products/${p.id}`)}
+              {...plxClickable(() => navigate(`/products/${p.id}`))} style={{
               display: "grid", gridTemplateColumns: "40px 1.7fr 0.65fr 0.85fr 0.95fr 0.7fr 0.65fr 0.95fr 0.75fr 22px",
               padding: "14px 18px", alignItems: "center", cursor: "pointer", gap: 6,
               borderBottom: i < pagedItems.length - 1 ? `1px solid ${PLX_BORDER}` : "none",

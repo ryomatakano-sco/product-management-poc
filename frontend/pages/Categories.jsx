@@ -160,6 +160,8 @@ function TreeNode({ node, depth, selectedId, onSelect, onEdit, onDelete }) {
     <>
       <div
         onClick={() => onSelect(node.id)}
+        {...plxClickable(() => onSelect(node.id))}
+        aria-current={isActive ? "true" : undefined}
         style={{
           display: "flex", alignItems: "center", gap: 8,
           padding: `8px 12px 8px ${12 + depth * 20}px`,

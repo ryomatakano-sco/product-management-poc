@@ -210,7 +210,8 @@ function Inventory({ query }) {
           />
         )}
         {items.map((r, i) => (
-          <div key={`${r.product.id}-${i}`} onClick={() => navigate(`/products/${r.product.id}`)} style={{
+          <div key={`${r.product.id}-${i}`} onClick={() => navigate(`/products/${r.product.id}`)}
+            {...plxClickable(() => navigate(`/products/${r.product.id}`))} style={{
             display: "grid",
             gridTemplateColumns: "2.2fr 0.7fr 0.7fr 0.7fr 0.9fr 1fr 0.8fr",
             columnGap: 16,
@@ -551,7 +552,8 @@ function RecentAdjustments({ refreshKey }) {
         <div style={{ padding: 24, textAlign: "center", color: T.PLX_INK_400, fontSize: 12 }}>調整履歴はまだありません。</div>
       )}
       {rows.map((a, i) => (
-        <div key={a.id} onClick={() => a.product_id && navigate(`/products/${a.product_id}`)} style={{
+        <div key={a.id} onClick={() => a.product_id && navigate(`/products/${a.product_id}`)}
+          {...(a.product_id ? plxClickable(() => navigate(`/products/${a.product_id}`)) : {})} style={{
           display: "grid", gridTemplateColumns: "1.1fr 2fr 0.9fr 0.6fr 2fr",
           padding: "11px 18px", alignItems: "center", fontSize: 12, columnGap: 14,
           borderBottom: i < rows.length - 1 ? `1px solid ${T.PLX_LINE_100}` : "none",
@@ -592,7 +594,8 @@ function KpiTile({ label, value, unit, tone, onClick, clickable, extra }) {
                 tone === "muted" ? T.PLX_INK_500 :
                 T.PLX_GREEN_600;
   return (
-    <div onClick={clickable ? onClick : undefined} style={{
+    <div onClick={clickable ? onClick : undefined}
+      {...(clickable ? plxClickable(onClick) : {})} style={{
       background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG,
       border: `1px solid ${T.PLX_LINE_200}`, boxShadow: T.SHADOW_SM,
       padding: 18, cursor: clickable ? "pointer" : "default",

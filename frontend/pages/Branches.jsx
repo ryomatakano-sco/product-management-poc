@@ -50,6 +50,7 @@ function BranchCard({ branch, onEdit }) {
       boxShadow: T.SHADOW_SM, padding: 22, cursor: "pointer",
     }}
       onClick={() => navigate(`/branches/${branch.id}`)}
+      {...plxClickable(() => navigate(`/branches/${branch.id}`))}
       onMouseEnter={(e) => e.currentTarget.style.boxShadow = T.SHADOW_MD}
       onMouseLeave={(e) => e.currentTarget.style.boxShadow = T.SHADOW_SM}
     >

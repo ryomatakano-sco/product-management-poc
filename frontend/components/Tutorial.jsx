@@ -272,7 +272,7 @@ function TutorialTour({ onExit }) {
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 10500 }}>
       {/* Click-catcher: swallows stray clicks so the tour stays in control. */}
-      <div style={{ position: "fixed", inset: 0 }} onClick={(e) => e.stopPropagation()} />
+      <div style={{ position: "fixed", inset: 0 }} aria-hidden="true" onClick={(e) => e.stopPropagation()} />
 
       {/* Spotlight hole (or full dim while settling / on centered steps). */}
       {hole ? (

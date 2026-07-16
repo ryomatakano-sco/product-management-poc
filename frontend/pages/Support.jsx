@@ -226,7 +226,7 @@ function ContactForm() {
 
 function QuickLink({ icon, title, desc, onClick }) {
   return (
-    <div onClick={onClick} style={{
+    <div onClick={onClick} {...plxClickable(onClick)} style={{
       background: T.PLX_CARD_BG, borderRadius: T.RADIUS_LG, border: `1px solid ${T.PLX_LINE_200}`,
       padding: 20, cursor: "pointer",
       display: "flex", alignItems: "center", gap: 14,

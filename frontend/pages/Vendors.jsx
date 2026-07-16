@@ -84,7 +84,8 @@ function Vendors() {
           <PlxEmptyState title="該当する仕入先がありません" message="検索条件を変更してください。" />
         )}
         {rows.map((v, i) => (
-          <div key={v.id} onClick={() => navigate(`/vendors/${v.id}`)} style={{
+          <div key={v.id} onClick={() => navigate(`/vendors/${v.id}`)}
+            {...plxClickable(() => navigate(`/vendors/${v.id}`))} style={{
             display: "grid", gridTemplateColumns: "1.6fr 1fr 1.2fr 0.7fr 0.9fr 1.1fr 0.6fr",
             padding: "14px 18px", alignItems: "center", fontSize: 12, cursor: "pointer",
             borderBottom: i < rows.length - 1 ? `1px solid ${T.PLX_LINE_100}` : "none",
@@ -306,7 +307,8 @@ function VendorProductsTab({ vendorId }) {
         <PlxEmptyState title="この仕入先の商品はありません" message="商品登録時に仕入先を設定すると、ここに表示されます。" />
       )}
       {rows.map((p, i) => (
-        <div key={p.id} onClick={() => navigate(`/products/${p.id}`)} style={{
+        <div key={p.id} onClick={() => navigate(`/products/${p.id}`)}
+          {...plxClickable(() => navigate(`/products/${p.id}`))} style={{
           display: "grid", gridTemplateColumns: "2fr 0.8fr 1fr 0.8fr 0.7fr 0.8fr",
           padding: "13px 18px", alignItems: "center", fontSize: 12, cursor: "pointer",
           borderBottom: i < rows.length - 1 ? `1px solid ${T.PLX_LINE_100}` : "none",
@@ -352,7 +354,8 @@ function VendorPosTab({ vendorId }) {
         <PlxEmptyState title="この仕入先への発注はまだありません" message="発注書ページから新しい発注書を作成できます。" />
       )}
       {rows.map((po, i) => (
-        <div key={po.id} onClick={() => navigate(`/purchase-orders/${po.id}`)} style={{
+        <div key={po.id} onClick={() => navigate(`/purchase-orders/${po.id}`)}
+          {...plxClickable(() => navigate(`/purchase-orders/${po.id}`))} style={{
           display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 0.6fr 0.9fr 0.9fr",
           padding: "13px 18px", alignItems: "center", fontSize: 12, cursor: "pointer",
           borderBottom: i < rows.length - 1 ? `1px solid ${T.PLX_LINE_100}` : "none",
