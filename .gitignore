@@ -73,3 +73,7 @@ backend/.env
 
 # Uploaded media (logo etc.) — runtime data, not source
 backend/media/
+
+# Internal process notes — never commit (see docs/audits/improvement-report.md)
+docs/*prompt*.md
+docs/internal/
