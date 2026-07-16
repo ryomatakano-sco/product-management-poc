@@ -118,7 +118,7 @@ function ReceiptIssue({ saleId }) {
                     {l.is_reduced && <span style={{ marginLeft: 6, color: T.PLX_AMBER_700, fontWeight: 700 }}>※</span>}
                   </span>
                   <span style={{
-                    fontSize: 11, fontWeight: 700, color: l.is_reduced ? T.PLX_AMBER_600 : T.PLX_INK_500,
+                    fontSize: 11, fontWeight: 700, color: l.is_reduced ? T.PLX_AMBER_700 : T.PLX_INK_500,
                     background: l.is_reduced ? T.PLX_AMBER_100 : T.PLX_SURFACE_50,
                     padding: "2px 8px", borderRadius: T.RADIUS_PILL,
                   }}>{l.tax_rate_pct}%{l.is_reduced ? " (軽減)" : ""}</span>
