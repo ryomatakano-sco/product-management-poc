@@ -16,9 +16,22 @@
 // _DARK below too, otherwise toggling dark mode leaves that key undefined.
 // ─────────────────────────────────────────────────────────────────────
 const _LIGHT = {
+  // ── Brand ladder (canonical, color-neutral names — a11y remediation
+  //    2026-07-15). PLX_NAVY_* and PLX_GREEN_* below are DEPRECATED aliases
+  //    kept for the transition; new code must use PLX_BRAND_*. "GREEN"
+  //    holding navy hex was a latent bug waiting for the next rebrand.
+  PLX_BRAND_900: "#002041",
+  PLX_BRAND_800: "#002E5C",
+  PLX_BRAND_700: "#003A77",  // primary brand
+  PLX_BRAND_600: "#0E509A",
+  PLX_BRAND_500: "#3A77BF",
+  PLX_BRAND_300: "#94B3D3",
+  PLX_BRAND_100: "#DCE6F1",
+  PLX_BRAND_050: "#EEF3F9",
+  // DEPRECATED — aliases of PLX_BRAND_* (same hex). Migrate then remove.
   PLX_NAVY_900: "#002041",
   PLX_NAVY_800: "#002E5C",
-  PLX_NAVY_700: "#003A77",  // primary brand
+  PLX_NAVY_700: "#003A77",
   PLX_NAVY_600: "#0E509A",
   PLX_NAVY_500: "#3A77BF",
   PLX_NAVY_300: "#94B3D3",
@@ -45,7 +58,9 @@ const _LIGHT = {
   PLX_INK_900: "#002041",
   PLX_INK_700: "#495B6E",
   PLX_INK_500: "#575757",
-  PLX_INK_400: "#999999",
+  // #999999 was 2.85:1 on white (WCAG 1.4.3 fail for hints/placeholders);
+  // #6E6E6E is 5.0:1 on white and 4.6:1 on PLX_PILL_BG.
+  PLX_INK_400: "#6E6E6E",
   PLX_INK_300: "#C0C4CC",
   PLX_LINE_200:    "#DDDDDD",
   PLX_LINE_100:    "#E8EAEC",
@@ -62,6 +77,12 @@ const _LIGHT = {
   PLX_SIDEBAR_INK:       "#D6DEEC",
   PLX_SIDEBAR_INK_DIM:   "#7C8BA6",
   PLX_SIDEBAR_ACTIVE_BG: "#003A77",
+  // ── a11y tokens (remediation 2026-07-15) ──
+  PLX_FOCUS_RING: "#0D99FF",   // keyboard focus ring (≥3:1 on white)
+  PLX_PILL_BG:    "#F2F3F5",   // neutral pill bg (replaces hardcoded #F3F4F6)
+  // Amber readable as TEXT/indicator: #F9C22C was 1.49:1 on white. Signal
+  // surfaces keep the bright amber via PLX_AMBER_100 backgrounds.
+  PLX_AMBER_700:  "#8A6116",
   RADIUS_SM:   "6px",
   RADIUS_MD:   "8px",
   RADIUS_LG:   "12px",
@@ -85,6 +106,16 @@ const _LIGHT = {
 // against PLX_SURFACE_0 = #0F1419 → contrast ~14.2:1).
 // ─────────────────────────────────────────────────────────────────────
 const _DARK = {
+  // Brand ladder (canonical) — see _LIGHT for the deprecation note.
+  PLX_BRAND_900: "#94B3D3",
+  PLX_BRAND_800: "#7AA0CA",
+  PLX_BRAND_700: "#5C8DBD",
+  PLX_BRAND_600: "#3A77BF",
+  PLX_BRAND_500: "#0E509A",
+  PLX_BRAND_300: "#003A77",
+  PLX_BRAND_100: "#002E5C",
+  PLX_BRAND_050: "#002041",
+  // DEPRECATED aliases — same hex as PLX_BRAND_*.
   PLX_NAVY_900: "#94B3D3",      // top of brand ladder lifts to mid-tone
   PLX_NAVY_800: "#7AA0CA",
   PLX_NAVY_700: "#5C8DBD",      // primary brand — lighter so it pops
@@ -114,7 +145,8 @@ const _DARK = {
   PLX_INK_900: "#ECEEF1",       // body text (was navy, now near-white)
   PLX_INK_700: "#B4BDC9",
   PLX_INK_500: "#8F98A4",
-  PLX_INK_400: "#6A7480",
+  // Lifted from #6A7480 (3.1:1 on #0F1419) → 4.7:1 for hint text.
+  PLX_INK_400: "#8B95A1",
   PLX_INK_300: "#3F4853",
   PLX_LINE_200:    "#2A323D",   // borders darken
   PLX_LINE_100:    "#1F2630",
@@ -131,6 +163,10 @@ const _DARK = {
   PLX_SIDEBAR_INK:       "#D6DEEC",
   PLX_SIDEBAR_INK_DIM:   "#7C8BA6",
   PLX_SIDEBAR_ACTIVE_BG: "#1F2630",
+  // a11y tokens (dark counterparts)
+  PLX_FOCUS_RING: "#3FB1FF",
+  PLX_PILL_BG:    "#2A323D",
+  PLX_AMBER_700:  "#FBD25C",   // amber-as-text reads bright on dark
   RADIUS_SM:   _LIGHT.RADIUS_SM,
   RADIUS_MD:   _LIGHT.RADIUS_MD,
   RADIUS_LG:   _LIGHT.RADIUS_LG,
@@ -159,6 +195,9 @@ window._PLX_PALETTES = { light: _LIGHT, dark: _DARK };
 // or just switch to `T.PLX_GREEN_600` directly. For our PoC the live
 // getters are sufficient — at-render reads always hit the getter.
 // ─────────────────────────────────────────────────────────────────────
+// DEPRECATED map — these bare-window aliases (and the PLX_GREEN_*/PLX_NAVY_*
+// ladders) are transition shims for the PLX_BRAND_* rename (2026-07-15).
+// New code: use T.PLX_BRAND_* / T.PLX_INK_* directly.
 const _LEGACY_TO_TOKEN = {
   PLX_GREEN:       "PLX_GREEN_600",
   PLX_GREEN_DARK:  "PLX_GREEN_700",
